@@ -109,48 +109,137 @@ class SharpEdge:
         
         return ev_percentage
 
-    def get_fair_odds_and_ev(self, odds_data, exchange_data=None, offered_odds=None):
+    def analyze_moneyline_market(self, odds_data, exchange_data=None):
+        """Analyze moneyline market and return fair odds + EV opportunities."""
+        return self.get_fair_odds_and_ev(odds_data, exchange_data)
+
+    def analyze_spread_market(self, spreads_data, exchange_data=None):
         """
-        Main method that processes all odds data and calculates fair odds + EV.
+        Analyze point spread market.
         
         Parameters:
-        - odds_data (dict): Regular sportsbook odds
-                           Format: {"Pinnacle": (1.91, 1.91), "Circa": (1.92, 1.90), ...}
-        - exchange_data (dict, optional): Exchange odds with liquidity
-                                         Format: {"ProphetX": {"odds": (1.93, 1.93), "liquidity": 1200}, ...}
-        - offered_odds (float, optional): Specific odds to calculate EV against
+        - spreads_data (dict): {book_name: {"home_odds": 1.91, "home_point": -3.5, 
+                                           "away_odds": 1.91, "away_point": 3.5}}
+        """
+        market_probs = []
+        books_used = 0
         
-        Returns:
-        - dict: {
-            "fair_prob": float,
-            "fair_odds_decimal": float,
-            "fair_odds_american": str,
-            "ev_percentage": float (or None if no offered_odds provided),
-            "books_used": int,
-            "exchanges_used": int
+        for book, spread_info in spreads_data.items():
+            if book not in self.weights:
+                continue
+            
+            try:
+                # Extract odds for both sides of the spread
+                home_odds = spread_info["home_odds"]
+                away_odds = spread_info["away_odds"]
+                
+                # Devig the spread odds (two-way market)
+                devigged = self.devig_multiplicative((home_odds, away_odds))
+                
+                market_probs.append({
+                    'prob': devigged[0],  # Home team covering spread
+                    'weight': self.weights[book]
+                })
+                books_used += 1
+            except (ValueError, ZeroDivisionError):
+                continue
+        
+        if not market_probs:
+            raise ValueError("No valid spread odds data found")
+        
+        fair_prob = self.calculate_fair_probability(market_probs)
+        fair_odds_decimal = 1 / fair_prob
+        fair_odds_american = self.decimal_to_american(fair_odds_decimal)
+        
+        return {
+            "fair_prob": fair_prob,
+            "fair_odds_decimal": fair_odds_decimal,
+            "fair_odds_american": fair_odds_american,
+            "books_used": books_used,
+            "exchanges_used": 0  # No exchange data for now
         }
+
+    def analyze_totals_market(self, totals_data, exchange_data=None):
+        """
+        Analyze over/under totals market.
+        
+        Parameters:
+        - totals_data (dict): {book_name: {"over_odds": 1.91, "under_odds": 1.91, "point": 45.5}}
+        """
+        market_probs = []
+        books_used = 0
+        
+        for book, totals_info in totals_data.items():
+            if book not in self.weights:
+                continue
+            
+            try:
+                # Extract odds for over/under
+                over_odds = totals_info["over_odds"]
+                under_odds = totals_info["under_odds"]
+                
+                # Devig the totals odds (two-way market)
+                devigged = self.devig_multiplicative((over_odds, under_odds))
+                
+                market_probs.append({
+                    'prob': devigged[0],  # Over probability
+                    'weight': self.weights[book]
+                })
+                books_used += 1
+            except (ValueError, ZeroDivisionError):
+                continue
+        
+        if not market_probs:
+            raise ValueError("No valid totals odds data found")
+        
+        fair_prob = self.calculate_fair_probability(market_probs)
+        fair_odds_decimal = 1 / fair_prob
+        fair_odds_american = self.decimal_to_american(fair_odds_decimal)
+        
+        return {
+            "fair_prob": fair_prob,
+            "fair_odds_decimal": fair_odds_decimal,
+            "fair_odds_american": fair_odds_american,
+            "books_used": books_used,
+            "exchanges_used": 0
+        }
+
+    def get_fair_odds_and_ev(self, odds_data, exchange_data=None, offered_odds=None, game_info=None):
+        """
+        Enhanced method that returns comprehensive analysis results.
         """
         market_probs = []
         books_used = 0
         exchanges_used = 0
-
-        # Process regular sportsbook odds
+        book_contributions = {}  # Track each book's contribution
+        
+        # Process regular sportsbook odds (keep existing logic)
         for book, odds in odds_data.items():
             if book not in self.weights:
                 continue
             
             try:
                 devigged = self.devig_multiplicative(odds)
+                weight = self.weights[book]
+                
                 market_probs.append({
-                    'prob': devigged[0],  # Probability for the "for" side
-                    'weight': self.weights[book]
+                    'prob': devigged[0],
+                    'weight': weight
                 })
+                
+                # Track book contributions for transparency
+                book_contributions[book] = {
+                    'probability': devigged[0],
+                    'weight': weight,
+                    'original_odds': odds,
+                    'devigged_odds': [1/devigged[0], 1/devigged[1]],
+                    'book_type': self._classify_book_type(book)
+                }
                 books_used += 1
             except (ValueError, ZeroDivisionError):
-                # Skip invalid odds
                 continue
 
-        # Process exchange data conditionally (based on liquidity)
+        # Process exchanges (keep existing logic)
         if exchange_data:
             for exchange, data in exchange_data.items():
                 if (exchange in self.exchange_weights and 
@@ -158,32 +247,103 @@ class SharpEdge:
                     
                     try:
                         devigged = self.devig_multiplicative(data["odds"])
+                        weight = self.exchange_weights[exchange]
+                        
                         market_probs.append({
                             'prob': devigged[0],
-                            'weight': self.exchange_weights[exchange]
+                            'weight': weight
                         })
+                        
+                        book_contributions[exchange] = {
+                            'probability': devigged[0],
+                            'weight': weight,
+                            'liquidity': data.get("liquidity", 0),
+                            'original_odds': data["odds"],
+                            'book_type': 'exchange'
+                        }
                         exchanges_used += 1
                     except (ValueError, ZeroDivisionError):
                         continue
 
-        # Calculate fair probability and odds
         if not market_probs:
-            raise ValueError("No valid odds data found to calculate fair probability")
+            raise ValueError("No valid odds data found")
         
+        # Calculate fair probability and total weights
+        total_weight = sum(book['weight'] for book in market_probs)
         fair_prob = self.calculate_fair_probability(market_probs)
         fair_odds_decimal = 1 / fair_prob
         fair_odds_american = self.decimal_to_american(fair_odds_decimal)
 
-        # Calculate EV if offered odds provided
-        ev_percentage = None
+        # Calculate comprehensive EV analysis
+        ev_analysis = None
         if offered_odds:
-            ev_percentage = self.calculate_ev(offered_odds, fair_prob)
+            ev_analysis = self._calculate_comprehensive_ev(offered_odds, fair_prob, fair_odds_decimal)
 
         return {
             "fair_prob": fair_prob,
             "fair_odds_decimal": fair_odds_decimal,
             "fair_odds_american": fair_odds_american,
-            "ev_percentage": ev_percentage,
+            "ev_analysis": ev_analysis,
             "books_used": books_used,
-            "exchanges_used": exchanges_used
+            "exchanges_used": exchanges_used,
+            "book_contributions": book_contributions  # Return book contributions for transparency
+        }
+
+    def _classify_book_type(self, book_name):
+        """
+        Classify book type for analysis transparency.
+        
+        Parameters:
+        - book_name (str): Name of the sportsbook
+        
+        Returns:
+        - str: Book classification (sharp, recreational, hybrid)
+        """
+        sharp_books = ['Pinnacle', 'Circa', 'BetOnline', 'BookMaker']
+        recreational_books = ['FanDuel', 'DraftKings', 'Caesars', 'BetMGM']
+        
+        if book_name in sharp_books:
+            return 'sharp'
+        elif book_name in recreational_books:
+            return 'recreational'
+        else:
+            return 'hybrid'
+
+    def _calculate_comprehensive_ev(self, offered_odds, fair_prob, fair_odds_decimal):
+        """
+        Calculate comprehensive EV analysis.
+        
+        Parameters:
+        - offered_odds (float): Odds offered by the book
+        - fair_prob (float): Fair probability from model
+        - fair_odds_decimal (float): Fair decimal odds
+        
+        Returns:
+        - dict: Comprehensive EV analysis
+        """
+        ev_percentage = self.calculate_ev(offered_odds, fair_prob)
+        
+        # Calculate edge metrics
+        odds_edge = ((offered_odds / fair_odds_decimal) - 1) * 100
+        prob_edge = fair_prob - (1 / offered_odds)
+        
+        # Classify EV quality
+        if ev_percentage >= 3.0:
+            ev_quality = 'excellent'
+        elif ev_percentage >= 1.5:
+            ev_quality = 'good'
+        elif ev_percentage >= 0.5:
+            ev_quality = 'marginal'
+        else:
+            ev_quality = 'poor'
+        
+        return {
+            'ev_percentage': ev_percentage,
+            'ev_quality': ev_quality,
+            'odds_edge_percentage': odds_edge,
+            'probability_edge': prob_edge,
+            'offered_odds': offered_odds,
+            'fair_odds': fair_odds_decimal,
+            'implied_prob_offered': 1 / offered_odds,
+            'fair_probability': fair_prob
         }
