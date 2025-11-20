@@ -1,7 +1,10 @@
 #!/bin/bash
+cd /home/ec2-user/sharpEdge/app
 
-echo "Pulling latest changes..."
+echo "Pulling latest code..."
 git pull
 
-echo "Starting app..."
-python3 app/app.py
+echo "Restarting service..."
+sudo systemctl restart flask-app
+
+echo "Done."
