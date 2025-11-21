@@ -15,7 +15,18 @@ dynamo_client = DynamoDBClient(region_name=region, table_name=table_name)
 
 @app.route("/")
 def hello_world():
-    return "SharpEdge Default Route"
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>SharpEdge</title>
+    </head>
+    <body>
+        <h1>SharpEdge Default Route</h1>
+    </body>
+    </html>
+    """
+
 
 # ---- Odds API Routes ----
 
@@ -63,4 +74,4 @@ def storeBets():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=6061, debug=True)
