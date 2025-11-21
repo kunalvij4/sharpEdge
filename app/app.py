@@ -23,6 +23,7 @@ def hello_world():
     </head>
     <body>
         <h1>SharpEdge Default Route</h1>
+        <h2>This route is for testing purposes</h2>
     </body>
     </html>
     """
