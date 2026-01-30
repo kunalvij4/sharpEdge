@@ -16,7 +16,7 @@ def lambda_handler(event, context):
     odds = OddsAPI(api_key=ODDS_API_KEY)
     db = DynamoDBClient(table_name=TABLE_NAME)
 
-    # Pull both leagues
+    # Pull both leagues (all moneyline spreads and totals)
     nfl = odds.get_nfl_all_markets()
     nba = odds.get_nba_all_markets()
 
