@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Retrieve odds every 120 minutes and store snapshots in DynamoDB.
+
+Parameters:
+  OddsApiKey:
+    Type: String
+    NoEcho: true
+
+Resources:
+  RetrieveOddsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: retrieveOdds/
+      Handler: app.lambda_handler
+      Runtime: python3.11
+      Timeout: 30
+      MemorySize: 256
+
+      Environment:
+        Variables:
+          TABLE_NAME: AllOdds
+          ODDS_API_KEY: !Ref OddsApiKey
+
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AllOddsTable
+
+      Events:
+        EveryFiveMinutes:
+          Type: Schedule
+          Properties:
+            Schedule: rate(120 minutes)
+            Enabled: true
+
+  AllOddsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AllOdds
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: game_id
+          AttributeType: S
+        - AttributeName: retrieved_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: game_id
+          KeyType: HASH
+        - AttributeName: retrieved_at
+          KeyType: RANGE

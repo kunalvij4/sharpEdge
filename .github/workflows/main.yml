@@ -22,3 +22,62 @@ jobs:
             cd /home/ec2-user/sharpEdge
             git fetch --all
             ./deploy.sh
+
+  deploy_lambda_retrieve_odds:
+    name: Deploy SAM (retrieveOdds)
+    runs-on: ubuntu-latest
+
+    # Only run this job if something changed under lambda/retrieveOdds
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Detect changes in retrieveOdds
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            retrieveOdds:
+              - 'lambda/retrieveOdds/**'
+
+      - name: Stop if no lambda changes
+        if: steps.changes.outputs.retrieveOdds != 'true'
+        run: echo "No changes in lambda/retrieveOdds; skipping SAM deploy."
+
+      - name: Configure AWS credentials
+        if: steps.changes.outputs.retrieveOdds == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Python
+        if: steps.changes.outputs.retrieveOdds == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install SAM CLI
+        if: steps.changes.outputs.retrieveOdds == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install aws-sam-cli
+
+      - name: SAM build
+        if: steps.changes.outputs.retrieveOdds == 'true'
+        working-directory: lambda/retrieveOdds
+        run: sam build --template-file template.yaml
+
+      - name: SAM deploy
+        if: steps.changes.outputs.retrieveOdds == 'true'
+        working-directory: lambda/retrieveOdds
+        run: |
+          sam deploy \
+            --template-file .aws-sam/build/template.yaml \
+            --stack-name retrieve-odds-stack \
+            --region "${{ secrets.AWS_REGION }}" \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides OddsApiKey="${{ secrets.ODDS_API_KEY }}"
