@@ -19,7 +19,7 @@ Resources:
 
       Environment:
         Variables:
-          TABLE_NAME: AllOdds
+          TABLE_NAME: !Ref AllOddsTable
           ODDS_API_KEY: !Ref OddsApiKey
 
       Policies:
@@ -36,7 +36,7 @@ Resources:
   AllOddsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: AllOdds
+      TableName: !Sub "${AWS::StackName}-AllOdds"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: game_id
