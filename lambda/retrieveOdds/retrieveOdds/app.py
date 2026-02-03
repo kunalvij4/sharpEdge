@@ -1,6 +1,8 @@
 import os
 import json
 from datetime import datetime, timezone
+import gzip
+import boto3
 
 from odds_api import OddsAPI
 from dynamo_client import DynamoDBClient
@@ -8,7 +10,66 @@ from dynamo_client import DynamoDBClient
 
 ODDS_API_KEY = os.environ["ODDS_API_KEY"]          # required
 TABLE_NAME = os.environ["TABLE_NAME"]              # required
+s3 = boto3.client("s3")
 
+def _s3_put_json_gz(bucket: str, key: str, payload: dict) -> None:
+    body = gzip.compress(json.dumps(payload).encode("utf-8"))
+    s3.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=body,
+        ContentType="application/json",
+        ContentEncoding="gzip",
+    )
+
+
+def _extract_market(games: dict, market: str) -> dict:
+    """
+    games is your parsed dict keyed by game_id.
+    market is like 'moneyline' / 'spreads' / 'totals' / 'props'.
+    Returns a dict with only that market for each game (if present).
+    """
+    out = {}
+    for game_id, g in games.items():
+        markets = (g.get("markets") or {})
+        if market in markets:
+            out[game_id] = {
+                "sport": g.get("sport"),
+                "home_team": g.get("home_team"),
+                "away_team": g.get("away_team"),
+                "commence_time": g.get("commence_time"),
+                "market": market,
+                "data": markets[market],
+            }
+    return out
+
+
+def write_s3_cache_for_league(league: str, retrieved_at: str, all_games: dict) -> None:
+    """
+    Writes:
+      cache/<LEAGUE>/moneyline.json.gz
+      cache/<LEAGUE>/props.json.gz
+    """
+    bucket = os.environ["CACHE_BUCKET"]
+    prefix = os.environ.get("CACHE_PREFIX", "cache").rstrip("/")
+
+    # Moneyline cache (moneyline market only)
+    moneyline_only = _extract_market(all_games, "moneyline")
+
+    # Props cache (placeholder until you add props markets)
+    props_only = _extract_market(all_games, "props")  # will be {} for now
+
+    _s3_put_json_gz(
+        bucket=bucket,
+        key=f"{prefix}/{league}/moneyline.json.gz",
+        payload={"retrieved_at": retrieved_at, "league": league, "wager_type": "moneyline", "games": moneyline_only},
+    )
+
+    _s3_put_json_gz(
+        bucket=bucket,
+        key=f"{prefix}/{league}/props.json.gz",
+        payload={"retrieved_at": retrieved_at, "league": league, "wager_type": "props", "games": props_only},
+    )
 
 def lambda_handler(event, context):
     retrieved_at = datetime.now(timezone.utc).isoformat()
@@ -33,6 +94,10 @@ def lambda_handler(event, context):
             }
             db.store_item(item)
             total_items += 1
+
+    # Write S3 latest caches (league -> wager type)
+    write_s3_cache_for_league("NFL", retrieved_at, nfl)
+    write_s3_cache_for_league("NBA", retrieved_at, nba)
 
     write_games(nfl, "NFL")
     write_games(nba, "NBA")

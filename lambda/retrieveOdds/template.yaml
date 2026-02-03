@@ -21,10 +21,16 @@ Resources:
         Variables:
           TABLE_NAME: !Ref AllOddsTable
           ODDS_API_KEY: !Ref OddsApiKey
+          CACHE_BUCKET: !Ref OddsCacheBucket
+          CACHE_PREFIX: cache
+
 
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AllOddsTable
+        - S3WritePolicy:
+            BucketName: !Ref OddsCacheBucket
+
 
       Events:
         EveryFiveMinutes:
@@ -32,6 +38,15 @@ Resources:
           Properties:
             Schedule: rate(120 minutes)
             Enabled: true
+
+  OddsCacheBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # Let CloudFormation name it (avoids “already exists” errors)
+      # If you want a name, use stack-scoped:
+      # BucketName: !Sub "${AWS::StackName}-odds-cache"
+      VersioningConfiguration:
+        Status: Enabled
 
   AllOddsTable:
     Type: AWS::DynamoDB::Table
