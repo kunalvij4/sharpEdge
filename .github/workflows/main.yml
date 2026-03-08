@@ -5,23 +5,23 @@ on:
     branches: [ "main" ]   # or whatever branch you deploy
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
+  # deploy:
+  #   runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout repo (not strictly needed for SSH, but fine)
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout repo (not strictly needed for SSH, but fine)
+  #       uses: actions/checkout@v4
 
-      - name: SSH and deploy
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd /home/ec2-user/sharpEdge
-            git fetch --all
-            ./deploy.sh
+  #     - name: SSH and deploy
+  #       uses: appleboy/ssh-action@v1.0.0
+  #       with:
+  #         host: ${{ secrets.EC2_HOST }}
+  #         username: ${{ secrets.EC2_USER }}
+  #         key: ${{ secrets.EC2_SSH_KEY }}
+  #         script: |
+  #           cd /home/ec2-user/sharpEdge
+  #           git fetch --all
+  #           ./deploy.sh
 
   deploy_lambda_retrieve_odds:
     name: Deploy SAM (retrieveOdds)
