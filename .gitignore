@@ -1,3 +1,6 @@
 *.pyc
 *.db
 *.env
+frontend/node_modules
+frontend/build
+frontend/README.md
