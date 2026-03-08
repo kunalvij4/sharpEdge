@@ -38,6 +38,24 @@ Resources:
           Properties:
             Schedule: rate(120 minutes)
             Enabled: true
+    
+  CalculateEVFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: calculateEV/
+      Handler: app.lambda_handler
+      Runtime: python3.11
+      Timeout: 30
+      MemorySize: 512
+
+      Events:
+        HourlySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 hour)
+
+      Policies:
+        - AmazonS3FullAccess
 
   OddsCacheBucket:
     Type: AWS::S3::Bucket
