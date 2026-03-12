@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Percent, TrendingUp, DollarSign, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { Percent, TrendingUp, DollarSign, ChevronDown } from "lucide-react";
+import JSZip from "jszip";
 
 interface BookOdds {
   name: string;
@@ -24,137 +25,69 @@ interface EVBet {
   other_books: BookOdds[];
 }
 
-const MOCK_EV_DATA: EVBet[] = [
-  { 
-    id: 1, 
-    sport: 'NBA', 
-    match: 'Lakers @ Warriors', 
-    market: 'Player Props', 
-    bet: 'LeBron James Over 25.5 Pts', 
-    opposite_bet: 'Under 25.5 Pts',
-    wager_display: 'Over 25.5',
-    opposite_wager_display: 'Under 25.5',
-    book: 'DraftKings', 
-    odds: '+110', 
-    ev: 4.5, 
-    kelly: 2.1, 
-    time: '7:30 PM',
-    other_books: [
-      { name: 'DraftKings', bet_odds: '+110', opposite_odds: '-140' },
-      { name: 'FanDuel', bet_odds: '-110', opposite_odds: '-110' },
-      { name: 'BetMGM', bet_odds: '-115', opposite_odds: '-105' },
-      { name: 'Caesars', bet_odds: '-120', opposite_odds: '-110' }
-    ]
-  },
-  { 
-    id: 2, 
-    sport: 'NFL', 
-    match: 'Jaguars @ Cardinals', 
-    market: 'Moneyline', 
-    bet: 'Jaguars ML', 
-    opposite_bet: 'Cardinals ML',
-    wager_display: 'Jaguars',
-    opposite_wager_display: 'Cardinals',
-    book: 'BetMGM', 
-    odds: '+140', 
-    ev: 3.2, 
-    kelly: 1.5, 
-    time: 'Sun, 4:05 PM',
-    other_books: [
-      { name: 'BetMGM', bet_odds: '+140', opposite_odds: '-165' },
-      { name: 'DraftKings', bet_odds: '+130', opposite_odds: '-155' },
-      { name: 'FanDuel', bet_odds: '+135', opposite_odds: '-160' },
-      { name: 'Bovada', bet_odds: '+125', opposite_odds: '-150' }
-    ]
-  },
-  { 
-    id: 3, 
-    sport: 'NHL', 
-    match: 'Bruins @ Maple Leafs', 
-    market: 'Total Goals', 
-    bet: 'Over 6.5', 
-    opposite_bet: 'Under 6.5',
-    wager_display: 'Over 6.5',
-    opposite_wager_display: 'Under 6.5',
-    book: 'FanDuel', 
-    odds: '-105', 
-    ev: 2.8, 
-    kelly: 1.2, 
-    time: '7:00 PM',
-    other_books: [
-      { name: 'FanDuel', bet_odds: '-105', opposite_odds: '-115' },
-      { name: 'BetRivers', bet_odds: '-115', opposite_odds: '-105' },
-      { name: 'DraftKings', bet_odds: '-120', opposite_odds: '+100' },
-      { name: 'BetUS', bet_odds: '-118', opposite_odds: '-102' }
-    ]
-  },
-  { 
-    id: 4, 
-    sport: 'NBA', 
-    match: 'Celtics @ Heat', 
-    market: 'Spread', 
-    bet: 'Celtics -4.5', 
-    opposite_bet: 'Heat +4.5',
-    wager_display: 'Celtics -4.5',
-    opposite_wager_display: 'Heat +4.5',
-    book: 'Caesars', 
-    odds: '-110', 
-    ev: 2.1, 
-    kelly: 1.0, 
-    time: '8:00 PM',
-    other_books: [
-      { name: 'Caesars', bet_odds: '-110', opposite_odds: '-110' },
-      { name: 'BetMGM', bet_odds: '-120', opposite_odds: '+100' },
-      { name: 'FanDuel', bet_odds: '-125', opposite_odds: '+105' },
-      { name: 'DraftKings', bet_odds: '-115', opposite_odds: '-105' }
-    ]
-  },
-  { 
-    id: 5, 
-    sport: 'UFC', 
-    match: 'Jones vs Miocic', 
-    market: 'Method of Victory', 
-    bet: 'Jones by KO/TKO', 
-    opposite_bet: 'Any Other Result',
-    wager_display: 'Jones KO/TKO',
-    opposite_wager_display: 'Field',
-    book: 'BetRivers', 
-    odds: '+250', 
-    ev: 6.7, 
-    kelly: 1.8, 
-    time: 'Sat, 11:00 PM',
-    other_books: [
-      { name: 'BetRivers', bet_odds: '+250', opposite_odds: '-300' },
-      { name: 'DraftKings', bet_odds: '+210', opposite_odds: '-280' },
-      { name: 'FanDuel', bet_odds: '+200', opposite_odds: '-275' },
-      { name: 'BetMGM', bet_odds: '+215', opposite_odds: '-290' }
-    ]
-  },
-  { 
-    id: 6, 
-    sport: 'NCAAB', 
-    match: 'Duke @ UNC', 
-    market: 'Total Points', 
-    bet: 'Under 145.5', 
-    opposite_bet: 'Over 145.5',
-    wager_display: 'Under 145.5',
-    opposite_wager_display: 'Over 145.5',
-    book: 'PointsBet', 
-    odds: '-110', 
-    ev: 1.9, 
-    kelly: 0.9, 
-    time: 'Sat, 6:00 PM',
-    other_books: [
-      { name: 'PointsBet', bet_odds: '-110', opposite_odds: '-110' },
-      { name: 'DraftKings', bet_odds: '-120', opposite_odds: '+100' },
-      { name: 'BetMGM', bet_odds: '-125', opposite_odds: '+105' },
-      { name: 'FanDuel', bet_odds: '-130', opposite_odds: '+110' }
-    ]
-  },
-];
+const EV_BASE_URL =
+  "https://retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v.s3.amazonaws.com/ev/";
+
+function decimalToAmerican(decimal: number): string {
+  if (decimal >= 2) {
+    return "+" + Math.round((decimal - 1) * 100);
+  } else {
+    return "-" + Math.round(100 / (decimal - 1));
+  }
+}
+
+async function fetchEVBets(): Promise<EVBet[]> {
+  const sports = ["NBA", "NFL", "NHL", "MLB", "NCAAB"];
+  const allBets: EVBet[] = [];
+
+  for (const sport of sports) {
+    try {
+      const res = await fetch(`${EV_BASE_URL}${sport}/moneyline_ev.json`);
+      if (!res.ok) continue;
+
+      const data = await res.json();
+
+      data.forEach((bet: any) => {
+        allBets.push({
+          id: bet.id,
+          sport: bet.sport,
+          match: bet.match,
+          market: bet.market,
+          bet: bet.bet,
+          opposite_bet: bet.opposite_bet,
+          wager_display: bet.wager_display,
+          opposite_wager_display: bet.opposite_wager_display,
+          book: bet.book,
+
+          odds: decimalToAmerican(bet.odds),
+
+          ev: Number(bet.ev.toFixed(2)),
+          kelly: Number((bet.kelly * 100).toFixed(2)),
+
+          time: new Date(bet.time).toLocaleTimeString(),
+
+          other_books: bet.other_books.map((b: any) => ({
+            name: b.book,
+            bet_odds: decimalToAmerican(b.odds),
+            opposite_odds: ""
+          }))
+        });
+      });
+    } catch (err) {
+      console.error("EV fetch error:", err);
+    }
+  }
+
+  return allBets;
+}
 
 const PositiveEV: React.FC = () => {
+  const [bets, setBets] = useState<EVBet[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchEVBets().then(setBets);
+  }, []);
 
   const toggleExpand = (id: number) => {
     setExpandedId(expandedId === id ? null : id);
@@ -176,7 +109,7 @@ const PositiveEV: React.FC = () => {
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {MOCK_EV_DATA.map((bet) => {
+          {bets.map((bet) => {
             const isExpanded = expandedId === bet.id;
             
             return (
