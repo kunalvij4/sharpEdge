@@ -61,7 +61,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: arbitrage-finder
-      Handler: arbitrage.lambda_handler
+      CodeUri: arbitrage/
+      Handler: app.lambda_handler
       Runtime: python3.11
       Timeout: 60
       MemorySize: 512
