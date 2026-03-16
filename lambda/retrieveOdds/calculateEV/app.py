@@ -101,10 +101,12 @@ def lambda_handler(event, context):
                         "opposite_wager_display": f"{away} ML",
                         "book": book,
                         "odds": home_odds,
+                        "away_odds": away_odds,
                         "ev": home_ev,
                         "kelly": kelly_fraction(fair_prob, home_odds),
                         "time": game["commence_time"],
-                        "other_books": other_books_home
+                        "other_books": other_books_home,
+                        "away_other_books": other_books_away
                     })
 
                     bet_id += 1
