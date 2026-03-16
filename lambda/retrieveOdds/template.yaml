@@ -56,6 +56,28 @@ Resources:
 
       Policies:
         - AmazonS3FullAccess
+  
+  ArbitrageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: arbitrage-finder
+      Handler: arbitrage.lambda_handler
+      Runtime: python3.11
+      Timeout: 60
+      MemorySize: 512
+      Policies:
+        - S3ReadPolicy:
+            BucketName: retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v
+        - S3WritePolicy:
+            BucketName: retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v
+      Environment:
+        Variables:
+          BUCKET_NAME: retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v
+      Events:
+        HourlySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 hour)
 
   OddsCacheBucket:
     Type: AWS::S3::Bucket
