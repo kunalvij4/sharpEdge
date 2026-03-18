@@ -7,7 +7,6 @@ import {
   Filter,
   Search
 } from "lucide-react";
-import pako from "pako";
 import {
   MarketResponse,
   MatchData,
