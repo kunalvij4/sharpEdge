@@ -80,6 +80,8 @@ def lambda_handler(event, context):
     # Pull both leagues (all moneyline spreads totals)
     nfl = odds.get_nfl_all_markets()
     nba = odds.get_nba_all_markets()
+    mlb = odds.get_mlb_all_markets()
+    nhl = odds.get_nhl_all_markets()
 
     total_items = 0
 
@@ -98,9 +100,13 @@ def lambda_handler(event, context):
     # Write S3 latest caches (league -> wager type)
     write_s3_cache_for_league("NFL", retrieved_at, nfl)
     write_s3_cache_for_league("NBA", retrieved_at, nba)
+    write_s3_cache_for_league("MLB", retrieved_at, mlb)
+    write_s3_cache_for_league("NHL", retrieved_at, nhl)
 
     write_games(nfl, "NFL")
     write_games(nba, "NBA")
+    write_games(mlb, "MLB")
+    write_games(nhl, "NHL")
 
     return {
         "statusCode": 200,

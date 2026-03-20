@@ -116,3 +116,11 @@ class OddsAPI:
     def get_nba_all_markets(self) -> Dict[str, Dict]:
         raw = self.get_odds("basketball_nba", markets="h2h,spreads,totals")
         return self.parse_all_markets_odds(raw)
+
+    def get_mlb_all_markets(self) -> Dict[str, Dict]:
+        raw = self.get_odds("baseball_mlb", markets="h2h,spreads,totals")
+        return self.parse_all_markets_odds(raw)
+    
+    def get_nhl_all_markets(self) -> Dict[str, Dict]:
+        raw = self.get_odds("icehockey_nhl", markets="h2h,spreads,totals")
+        return self.parse_all_markets_odds(raw)
