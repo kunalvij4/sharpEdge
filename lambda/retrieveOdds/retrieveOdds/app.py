@@ -117,6 +117,8 @@ def lambda_handler(event, context):
                 "items_written": total_items,
                 "nfl_games": len(nfl),
                 "nba_games": len(nba),
+                "mlb_games": len(mlb),
+                "nhl_games": len(nhl),
             }
         ),
     }

@@ -8,11 +8,9 @@ from nfl_weights import NFLWeightingEngine
 
 s3 = boto3.client("s3")
 
-SOURCE_BUCKET = "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v"
-SOURCE_KEY = "cache/NBA/moneyline.json.gz"
+BUCKET = "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v"
 
-DEST_BUCKET = "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v"
-DEST_KEY = "ev/NBA/moneyline_ev.json"
+SPORTS = ["NBA", "NFL", "NHL", "MLB"]
 
 
 def kelly_fraction(prob, odds):
@@ -23,20 +21,22 @@ def kelly_fraction(prob, odds):
     return max((b * prob - q) / b, 0)
 
 
-def load_odds():
-    obj = s3.get_object(Bucket=SOURCE_BUCKET, Key=SOURCE_KEY)
+def load_odds(sport):
+    key = f"cache/{sport}/moneyline.json.gz"
+
+    obj = s3.get_object(Bucket=BUCKET, Key=key)
 
     with gzip.GzipFile(fileobj=obj["Body"]) as gz:
         return json.load(gz)
 
 
-def lambda_handler(event, context):
+def process_sport(sport):
 
-    print("Loading odds from S3")
+    print(f"Processing {sport}")
 
-    data = load_odds()
+    data = load_odds(sport)
 
-    weighting = NFLWeightingEngine()
+    weighting = NFLWeightingEngine()  # TODO: swap per sport later
 
     ev_bets = []
     bet_id = 0
@@ -48,11 +48,10 @@ def lambda_handler(event, context):
             odds_data = {}
             available_books = list(game["data"]["odds_data"].keys())
 
-            # Build odds tuple format required by SharpEdge
+            # Build format for SharpEdge
             for book, odds in game["data"]["odds_data"].items():
                 odds_data[book] = (odds["home_odds"], odds["away_odds"])
 
-            # Get dynamic weights based on available books
             weights = weighting.get_nfl_weights("moneyline", available_books)
 
             model = SharpEdge(weights, exchange_weights={})
@@ -72,7 +71,6 @@ def lambda_handler(event, context):
                 home_ev = model.calculate_ev(home_odds, fair_prob)
                 away_ev = model.calculate_ev(away_odds, 1 - fair_prob)
 
-                # Build comparison odds for frontend
                 other_books_home = []
                 other_books_away = []
 
@@ -92,7 +90,7 @@ def lambda_handler(event, context):
                 if home_ev > 0:
                     ev_bets.append({
                         "id": bet_id,
-                        "sport": game["sport"],
+                        "sport": sport,
                         "match": f"{away} vs {home}",
                         "market": "moneyline",
                         "bet": home,
@@ -108,13 +106,12 @@ def lambda_handler(event, context):
                         "other_books": other_books_home,
                         "away_other_books": other_books_away
                     })
-
                     bet_id += 1
 
                 if away_ev > 0:
                     ev_bets.append({
                         "id": bet_id,
-                        "sport": game["sport"],
+                        "sport": sport,
                         "match": f"{away} vs {home}",
                         "market": "moneyline",
                         "bet": away,
@@ -128,26 +125,41 @@ def lambda_handler(event, context):
                         "time": game["commence_time"],
                         "other_books": other_books_away
                     })
-
                     bet_id += 1
 
         except Exception as e:
             print(f"Skipping game {game_id}: {str(e)}")
             continue
 
-    # Sort by EV descending
     ev_bets.sort(key=lambda x: x["ev"], reverse=True)
 
-    print(f"Found {len(ev_bets)} +EV bets")
+    print(f"{sport}: Found {len(ev_bets)} +EV bets")
+
+    # Save per sport
+    dest_key = f"ev/{sport}/moneyline_ev.json"
 
     s3.put_object(
-        Bucket=DEST_BUCKET,
-        Key=DEST_KEY,
+        Bucket=BUCKET,
+        Key=dest_key,
         Body=json.dumps(ev_bets).encode(),
         ContentType="application/json"
     )
 
+    return len(ev_bets)
+
+
+def lambda_handler(event, context):
+
+    total_bets = 0
+
+    for sport in SPORTS:
+        try:
+            count = process_sport(sport)
+            total_bets += count
+        except Exception as e:
+            print(f"Failed {sport}: {str(e)}")
+
     return {
         "status": "complete",
-        "bets_found": len(ev_bets)
+        "total_bets_found": total_bets
     }
