@@ -10,7 +10,9 @@ s3 = boto3.client("s3")
 
 BUCKET = "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v"
 
-SPORTS = ["NBA", "NFL", "NHL", "MLB"]
+# SPORTS = ["NBA", "NFL", "NHL", "MLB"]
+SPORTS = ["NBA", "MLB"]
+
 
 
 def kelly_fraction(prob, odds):

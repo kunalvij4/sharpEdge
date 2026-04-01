@@ -5,7 +5,8 @@ from collections import defaultdict
 s3 = boto3.client("s3")
 
 BUCKET = "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v"
-SPORTS = ["NBA","NFL","NHL","MLB","NCAAB"]
+# SPORTS = ["NBA","NFL","NHL","MLB","NCAAB"]
+SPORTS = ["NBA","MLB"]
 
 def decimal_to_implied_prob(odds):
     return 1 / odds
