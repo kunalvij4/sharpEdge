@@ -1,14 +1,25 @@
 import sys
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services.sharpedge_model import SharpEdge
 from app.db.crud import SharpEdgeDB
 from app.apis.odds_api import OddsAPI
 
+# Access the ODDS_API_KEY from the environment
+ODDS_API_KEY = os.getenv("ODDS_API_KEY")
+
+if ODDS_API_KEY is None:
+    raise ValueError("ODDS_API_KEY is not set in the .env file")
+
 # Initialize components
 db = SharpEdgeDB()
-odds_api = OddsAPI(api_key="1146a647b7e10a678f226f1a597aeea3")
+odds_api = OddsAPI(api_key=ODDS_API_KEY)
 
 # Define sportsbook weights
 weights = {

@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Retrieve odds every 120 minutes and store snapshots in DynamoDB.
+
+Parameters:
+  OddsApiKey:
+    Type: String
+    NoEcho: true
+
+Resources:
+  RetrieveOddsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: retrieveOdds/
+      Handler: app.lambda_handler
+      Runtime: python3.11
+      Timeout: 30
+      MemorySize: 256
+
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref AllOddsTable
+          ODDS_API_KEY: !Ref OddsApiKey
+          CACHE_BUCKET: !Ref OddsCacheBucket
+          CACHE_PREFIX: cache
+
+
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AllOddsTable
+        - S3WritePolicy:
+            BucketName: !Ref OddsCacheBucket
+
+
+      Events:
+        EveryFiveMinutes:
+          Type: Schedule
+          Properties:
+            Schedule: rate(120 minutes)
+            Enabled: true
+    
+  CalculateEVFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: calculateEV/
+      Handler: app.lambda_handler
+      Runtime: python3.11
+      Timeout: 30
+      MemorySize: 512
+
+      Events:
+        HourlySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 hour)
+
+      Policies:
+        - AmazonS3FullAccess
+  
+  ArbitrageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: arbitrage-finder
+      CodeUri: arbitrage/
+      Handler: app.lambda_handler
+      Runtime: python3.11
+      Timeout: 60
+      MemorySize: 512
+      Policies:
+        - S3ReadPolicy:
+            BucketName: retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v
+        - S3WritePolicy:
+            BucketName: retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v
+      Environment:
+        Variables:
+          BUCKET_NAME: retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v
+      Events:
+        HourlySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 hour)
+
+  OddsCacheBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # Let CloudFormation name it (avoids “already exists” errors)
+      # If you want a name, use stack-scoped:
+      # BucketName: !Sub "${AWS::StackName}-odds-cache"
+      VersioningConfiguration:
+        Status: Enabled
+
+  AllOddsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-AllOdds"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: game_id
+          AttributeType: S
+        - AttributeName: retrieved_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: game_id
+          KeyType: HASH
+        - AttributeName: retrieved_at
+          KeyType: RANGE

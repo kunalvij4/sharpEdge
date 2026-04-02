@@ -224,6 +224,18 @@ def analyze_spreads_and_totals(game, nfl_engine, model):
     
     # Reset to moneyline weights
     model.weights = nfl_engine.get_nfl_weights('moneyline')
+    # ...your existing function code here...
+    pass  # (keep your full function here)
+
+# Initialize AWS database connection
+try:
+    db = SharpEdgeDB()
+    print("✅ Connected to AWS DynamoDB")
+    connection_test = db.test_connection()
+    print(f"📊 AWS Status: {connection_test.get('connection', 'Unknown')}")
+except Exception as e:
+    print(f"❌ AWS DynamoDB connection failed: {e}")
+    db = None
 
 print("🏈 Testing NFL Weighting System")
 print("=" * 50)

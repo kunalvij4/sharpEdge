@@ -85,6 +85,9 @@ class PlayerPropsModel:
                 "Need at least two Tier-1/Tier-2 books (FanDuel, DraftKings, NoVig, ProphetX)"
             )
     
+        """Return the prop-specific weights (for transparency/debugging)."""
+        return self.prop_weights.copy()
+    
     def decimal_to_american(self, decimal_odds: float) -> str:
         """Convert decimal odds to American format."""
         if decimal_odds < 1.0:
