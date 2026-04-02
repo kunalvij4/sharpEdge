@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timezone
 import gzip
 import boto3
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from odds_api import OddsAPI
 from dynamo_client import DynamoDBClient
@@ -22,6 +23,83 @@ def _s3_put_json_gz(bucket: str, key: str, payload: dict) -> None:
         ContentEncoding="gzip",
     )
 
+def fetch_and_attach_player_props(odds_api, sport_key: str, games: dict) -> dict:
+    """
+    Parallel fetch player props per event and structure as:
+    stat -> player -> line -> books
+    """
+
+    PLAYER_PROP_MARKETS = os.environ.get(
+        "PLAYER_PROPS_MARKETS",
+        "player_points,player_rebounds,player_assists,player_threes"
+    )
+
+    MAX_WORKERS = int(os.environ.get("PROP_FETCH_THREADS", 8))
+
+    def fetch_single_event(game_id, game):
+        try:
+            event_odds = odds_api.get_event_odds(
+                sport_key=sport_key,
+                event_id=game_id,
+                markets=PLAYER_PROP_MARKETS
+            )
+
+            structured = {}
+
+            for bookmaker in event_odds.get("bookmakers", []):
+                book_name = bookmaker.get("title")
+
+                for market in bookmaker.get("markets", []):
+                    stat = market.get("key")  # e.g. player_points
+
+                    for outcome in market.get("outcomes", []):
+                        player = outcome.get("description") or outcome.get("name")
+                        if not player:
+                            continue
+
+                        line = outcome.get("point")
+                        price = outcome.get("price")
+                        outcome_type = outcome.get("name", "").lower()
+
+                        if line is None:
+                            continue
+
+                        # INIT TREE
+                        structured.setdefault(stat, {})
+                        structured[stat].setdefault(player, {})
+                        structured[stat][player].setdefault(line, {})
+                        structured[stat][player][line].setdefault(book_name, {})
+
+                        # ASSIGN ODDS
+                        if "over" in outcome_type:
+                            structured[stat][player][line][book_name]["over_odds"] = price
+                        elif "under" in outcome_type:
+                            structured[stat][player][line][book_name]["under_odds"] = price
+                        elif "yes" in outcome_type:
+                            structured[stat][player][line][book_name]["yes_odds"] = price
+                        elif "no" in outcome_type:
+                            structured[stat][player][line][book_name]["no_odds"] = price
+
+            return game_id, structured
+
+        except Exception as e:
+            print(f"[ERROR] Props fetch failed for {game_id}: {e}")
+            return game_id, None
+
+    # 🚀 THREADPOOL EXECUTION
+    futures = []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        for game_id, game in games.items():
+            futures.append(executor.submit(fetch_single_event, game_id, game))
+
+        for future in as_completed(futures):
+            game_id, structured_props = future.result()
+
+            if structured_props:
+                games[game_id].setdefault("markets", {})
+                games[game_id]["markets"]["props"] = structured_props
+
+    return games
 
 def _extract_market(games: dict, market: str) -> dict:
     """
@@ -83,6 +161,8 @@ def lambda_handler(event, context):
     mlb = odds.get_mlb_all_markets()
     # nhl = odds.get_nhl_all_markets()
 
+    nba = fetch_and_attach_player_props(odds, "basketball_nba", nba)
+    # mlb = fetch_and_attach_player_props(odds, "baseball_mlb", mlb)
 
     total_items = 0
 

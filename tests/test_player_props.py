@@ -221,7 +221,7 @@ def map_prop_type(market_key: str) -> str:
     return market_key
 
 try:
-    # Player props must be fetched per-event
+    # Player props must be fetched per-event 
     events = odds_api.get_events(sport_key)
     if not events:
         print("❌ No events returned for this sport.")

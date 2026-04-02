@@ -124,3 +124,29 @@ class OddsAPI:
     def get_nhl_all_markets(self) -> Dict[str, Dict]:
         raw = self.get_odds("icehockey_nhl", markets="h2h,spreads,totals")
         return self.parse_all_markets_odds(raw)
+
+    def get_event_odds(
+        self,
+        sport: str,
+        event_id: str,
+        markets: str,
+        bookmakers: str = None,
+        odds_format: str = "decimal"
+    ) -> Dict:
+        """
+        Get odds for a specific event (required for player props).
+        """
+        url = f"{self.base_url}/sports/{sport}/events/{event_id}/odds"
+        params = {
+            "apiKey": self.api_key,
+            "regions": "us",
+            "markets": markets,
+            "oddsFormat": odds_format
+        }
+        if bookmakers:
+            params["bookmakers"] = bookmakers
+
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json()
+
