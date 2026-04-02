@@ -201,3 +201,39 @@ class OddsAPI:
         """Get current NBA games with ALL markets (moneyline, spreads, totals)."""
         raw_odds = self.get_odds("basketball_nba", markets="h2h,spreads,totals")
         return self.parse_all_markets_odds(raw_odds)
+    
+    def get_events(self, sport: str) -> List[Dict]:
+        """
+        Get upcoming events for a sport (needed for player props).
+        """
+        url = f"{self.base_url}/sports/{sport}/events"
+        params = {"apiKey": self.api_key}
+        
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json()
+
+    def get_event_odds(
+        self,
+        sport: str,
+        event_id: str,
+        markets: str,
+        bookmakers: str = None,
+        odds_format: str = "decimal"
+    ) -> Dict:
+        """
+        Get odds for a specific event (required for player props).
+        """
+        url = f"{self.base_url}/sports/{sport}/events/{event_id}/odds"
+        params = {
+            "apiKey": self.api_key,
+            "regions": "us",
+            "markets": markets,
+            "oddsFormat": odds_format
+        }
+        if bookmakers:
+            params["bookmakers"] = bookmakers
+
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json()

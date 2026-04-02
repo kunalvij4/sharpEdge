@@ -14,27 +14,18 @@ class PlayerPropsModel:
         self.main_line_weights = main_line_weights or {}
         self.min_books = min_books
         
-        # SPECIALIZED PLAYER PROP WEIGHTS
-        # Based on prop market sharpness and liquidity
+        # PLAYER PROP WEIGHTS (locked-in)
         self.prop_weights = {
-            # Top tier - Sharp on props OR high recreational volume
-            "FanDuel": 0.28,        # Huge recreational volume, softer prop lines
-            "Circa": 0.22,          # Sharp across all markets including props
-            
-            # Second tier - Moderate prop sharpness
-            "Pinnacle": 0.12,       # Sharp but lower prop liquidity
-            "Caesars": 0.12,        # Good prop volume, moderate sharpness
-            "PropBuilder": 0.10,    # Prop-focused book (if available)
-            
-            # Third tier - Less reliable on props
-            "DraftKings": 0.08,     # Large volume but can be slower to adjust props
-            "BetMGM": 0.06,         # Growing but still developing prop markets
-            "BetOnline": 0.02,      # Sharp on main lines, less prop focus
-            
-            # Books with minimal prop weight
-            "BookMaker": 0.00,      # Primarily main line focused
-            "WynnBET": 0.00,        # Limited prop offerings
+            "FanDuel": 0.35,
+            "DraftKings": 0.25,
+            "NoVig": 0.15,
+            "ProphetX": 0.10,
+            "Fanatics": 0.10,
+            "Others": 0.05
         }
+        
+        # Tier-1/Tier-2 (sharp) books requirement
+        self.tier_books = {"FanDuel", "DraftKings", "NoVig", "ProphetX"}
         
         # Player prop market types and their characteristics
         self.prop_types = {
@@ -53,6 +44,47 @@ class PlayerPropsModel:
         }
     
     def get_effective_weights(self) -> Dict[str, float]:
+        """Return the base prop-specific weights (for transparency/debugging)."""
+        return self.prop_weights.copy()
+    
+    def _get_dynamic_weights(self, book_names: List[str]) -> Dict[str, float]:
+        """
+        Dynamic reweighting: renormalize only available books.
+        "Others" weight is split across books not explicitly listed.
+        """
+        available_books = set(book_names)
+        base = self.prop_weights.copy()
+        
+        explicit_books = {k for k in base.keys() if k != "Others"}
+        others_books = [b for b in available_books if b not in explicit_books]
+        
+        # Build raw weights for available books only
+        raw_weights: Dict[str, float] = {}
+        
+        for book in explicit_books:
+            if book in available_books:
+                raw_weights[book] = base[book]
+        
+        if others_books:
+            per_other = base["Others"] / len(others_books)
+            for b in others_books:
+                raw_weights[b] = per_other
+        
+        # Renormalize
+        total = sum(raw_weights.values())
+        if total <= 0:
+            return {}
+        
+        return {k: v / total for k, v in raw_weights.items()}
+    
+    def _validate_tier_books(self, book_names: List[str]) -> None:
+        """Require at least two Tier-1/Tier-2 books to compute fair probability."""
+        tier_count = sum(1 for b in set(book_names) if b in self.tier_books)
+        if tier_count < 2:
+            raise ValueError(
+                "Need at least two Tier-1/Tier-2 books (FanDuel, DraftKings, NoVig, ProphetX)"
+            )
+    
         """Return the prop-specific weights (for transparency/debugging)."""
         return self.prop_weights.copy()
     
@@ -92,17 +124,18 @@ class PlayerPropsModel:
         Returns:
         - float: Consensus line value
         """
+        dynamic_weights = self._get_dynamic_weights(list(prop_data.keys()))
+        
         weighted_lines = []
         total_weight = 0
         
         for book_name, data in prop_data.items():
-            if book_name in self.prop_weights and "line" in data and self.prop_weights[book_name] > 0:
-                weight = self.prop_weights[book_name]
+            if book_name in dynamic_weights and "line" in data and dynamic_weights[book_name] > 0:
+                weight = dynamic_weights[book_name]
                 weighted_lines.append(data["line"] * weight)
                 total_weight += weight
         
         if not weighted_lines or total_weight == 0:
-            # Fallback to simple median if no weighted books
             lines = [data["line"] for data in prop_data.values() if "line" in data]
             if lines:
                 return statistics.median(lines)
@@ -126,14 +159,20 @@ class PlayerPropsModel:
         if len(prop_data) < self.min_books:
             raise ValueError(f"Need at least {self.min_books} books for analysis")
         
+        self._validate_tier_books(list(prop_data.keys()))
+        dynamic_weights = self._get_dynamic_weights(list(prop_data.keys()))
+        
+        if not dynamic_weights:
+            raise ValueError("No valid weighted books available for prop analysis")
+        
         market_probs = []
         books_used = 0
         total_weight_used = 0
         consensus_line = self.calculate_consensus_line(prop_data)
         
-        # Calculate fair probability for "over" using PROP-SPECIFIC weights
+        # Calculate fair probability for "over" using dynamic prop weights
         for book_name, data in prop_data.items():
-            if book_name not in self.prop_weights or self.prop_weights[book_name] == 0:
+            if book_name not in dynamic_weights or dynamic_weights[book_name] == 0:
                 continue
             
             try:
@@ -143,7 +182,7 @@ class PlayerPropsModel:
                 # Devig the odds
                 devigged = self.devig_multiplicative((over_odds, under_odds))
                 
-                prop_weight = self.prop_weights[book_name]
+                prop_weight = dynamic_weights[book_name]
                 market_probs.append({
                     'prob': devigged[0],  # Over probability
                     'weight': prop_weight
@@ -177,7 +216,7 @@ class PlayerPropsModel:
             "books_used": books_used,
             "total_weight_used": total_weight_used,
             "prop_characteristics": self.prop_types.get(prop_type, {"variance": "unknown"}),
-            "weighting_scheme": "prop_specialized"  # Flag to show this used prop weights
+            "weighting_scheme": "prop_dynamic"
         }
     
     def analyze_yes_no_prop(self, prop_data: Dict[str, Dict], player_name: str, 
@@ -188,12 +227,18 @@ class PlayerPropsModel:
         if len(prop_data) < self.min_books:
             raise ValueError(f"Need at least {self.min_books} books for analysis")
         
+        self._validate_tier_books(list(prop_data.keys()))
+        dynamic_weights = self._get_dynamic_weights(list(prop_data.keys()))
+        
+        if not dynamic_weights:
+            raise ValueError("No valid weighted books available for prop analysis")
+        
         market_probs = []
         books_used = 0
         total_weight_used = 0
         
         for book_name, data in prop_data.items():
-            if book_name not in self.prop_weights or self.prop_weights[book_name] == 0:
+            if book_name not in dynamic_weights or dynamic_weights[book_name] == 0:
                 continue
             
             try:
@@ -203,7 +248,7 @@ class PlayerPropsModel:
                 # Devig the odds
                 devigged = self.devig_multiplicative((yes_odds, no_odds))
                 
-                prop_weight = self.prop_weights[book_name]
+                prop_weight = dynamic_weights[book_name]
                 market_probs.append({
                     'prob': devigged[0],  # Yes probability
                     'weight': prop_weight
@@ -236,7 +281,7 @@ class PlayerPropsModel:
             "books_used": books_used,
             "total_weight_used": total_weight_used,
             "prop_characteristics": self.prop_types.get(prop_type, {"variance": "unknown"}),
-            "weighting_scheme": "prop_specialized"
+            "weighting_scheme": "prop_dynamic"
         }
     
     def calculate_ev(self, offered_odds: float, fair_prob: float) -> float:
@@ -261,11 +306,12 @@ class PlayerPropsModel:
         """
         opportunities = []
         
+        dynamic_weights = self._get_dynamic_weights(list(prop_data.keys()))
+        
         if analysis["prop_type"] in ["first_touchdown", "anytime_touchdown"] or "yes_odds" in next(iter(prop_data.values()), {}):
             # Yes/No prop
             for book_name, data in prop_data.items():
-                # Check if this book has meaningful weight in our model
-                book_weight = self.prop_weights.get(book_name, 0)
+                book_weight = dynamic_weights.get(book_name, 0)
                 book_tier = "Sharp" if book_weight >= 0.15 else "Recreational" if book_weight > 0 else "Unweighted"
                 
                 # Check YES bet
@@ -305,7 +351,7 @@ class PlayerPropsModel:
         else:
             # Over/Under prop
             for book_name, data in prop_data.items():
-                book_weight = self.prop_weights.get(book_name, 0)
+                book_weight = dynamic_weights.get(book_name, 0)
                 book_tier = "Sharp" if book_weight >= 0.15 else "Recreational" if book_weight > 0 else "Unweighted"
                 
                 # Check OVER bet
@@ -315,7 +361,7 @@ class PlayerPropsModel:
                         "player": analysis["player"],
                         "prop_type": analysis["prop_type"],
                         "bet_type": "OVER",
-                        "line": analysis["consensus_line"],
+                        "line": analysis.get("consensus_line"),
                         "book_name": book_name,
                         "book_tier": book_tier,
                         "book_weight": book_weight,
@@ -333,7 +379,7 @@ class PlayerPropsModel:
                         "player": analysis["player"],
                         "prop_type": analysis["prop_type"],
                         "bet_type": "UNDER", 
-                        "line": analysis["consensus_line"],
+                        "line": analysis.get("consensus_line"),
                         "book_name": book_name,
                         "book_tier": book_tier,
                         "book_weight": book_weight,
@@ -344,6 +390,5 @@ class PlayerPropsModel:
                         "variance_level": analysis["prop_characteristics"]["variance"]
                     })
         
-        # Sort by EV percentage (highest first)
         opportunities.sort(key=lambda x: x['ev_percentage'], reverse=True)
         return opportunities
