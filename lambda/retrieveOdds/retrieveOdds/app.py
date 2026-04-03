@@ -55,7 +55,7 @@ def fetch_and_attach_player_props(odds_api, sport_key: str, games: dict) -> dict
                 print(f"[SKIP] No event_id for {game_id}")
                 return game_id, None
 
-            event_odds = safe_get_event_odds(
+            event_odds = OddsAPI.get_event_odds(
                 odds_api,
                 sport_key,
                 event_id,
@@ -87,13 +87,15 @@ def fetch_and_attach_player_props(odds_api, sport_key: str, games: dict) -> dict
 
                         structured.setdefault(stat, {})
                         structured[stat].setdefault(player, {})
-                        structured[stat][player].setdefault(line, {})
-                        structured[stat][player][line].setdefault(book_name, {})
+                        line_key = str(line)  # 🔥 FIX
+
+                        structured[stat][player].setdefault(line_key, {})
+                        structured[stat][player][line_key].setdefault(book_name, {})
 
                         if "over" in outcome_type:
-                            structured[stat][player][line][book_name]["over_odds"] = price
+                            structured[stat][player][line_key][book_name]["over_odds"] = price
                         elif "under" in outcome_type:
-                            structured[stat][player][line][book_name]["under_odds"] = price
+                            structured[stat][player][line_key][book_name]["under_odds"] = price
 
             return game_id, structured
 
