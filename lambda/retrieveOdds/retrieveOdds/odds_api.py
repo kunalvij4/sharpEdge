@@ -54,6 +54,7 @@ class OddsAPI:
 
             if base_game_id not in parsed_games:
                 parsed_games[base_game_id] = {
+                    "event_id": game["id"],
                     "sport": game["sport_title"],
                     "home_team": game["home_team"],
                     "away_team": game["away_team"],

@@ -1,6 +1,6 @@
 import os
 import json
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 import gzip
 import boto3
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -23,26 +23,47 @@ def _s3_put_json_gz(bucket: str, key: str, payload: dict) -> None:
         ContentEncoding="gzip",
     )
 
+def fetch_and_attach_player_props(odds_api, sport_key, event_id, markets, retries=3):
+    for i in range(retries):
+        try:
+            return odds_api.get_event_odds(
+                sport_key,
+                event_id,
+                markets=markets
+            )
+        except Exception as e:
+            if "429" in str(e):
+                sleep_time = 1.5 * (i + 1)
+                print(f"[RATE LIMIT] retrying {event_id} in {sleep_time}s...")
+                time.sleep(sleep_time)
+            else:
+                raise e
+    return None
+
+
 def fetch_and_attach_player_props(odds_api, sport_key: str, games: dict) -> dict:
-    """
-    Parallel fetch player props per event and structure as:
-    stat -> player -> line -> books
-    """
+    PLAYER_PROP_MARKETS = "player_points,player_rebounds,player_assists,player_threes"
 
-    PLAYER_PROP_MARKETS = os.environ.get(
-        "PLAYER_PROPS_MARKETS",
-        "player_points,player_rebounds,player_assists,player_threes"
-    )
-
-    MAX_WORKERS = int(os.environ.get("PROP_FETCH_THREADS", 8))
+    MAX_WORKERS = 4  # ✅ hardcoded
 
     def fetch_single_event(game_id, game):
         try:
-            event_odds = odds_api.get_event_odds(
-                sport_key=sport_key,
-                event_id=game_id,
-                markets=PLAYER_PROP_MARKETS
+            # ✅ USE REAL EVENT ID
+            event_id = game.get("event_id")
+
+            if not event_id:
+                print(f"[SKIP] No event_id for {game_id}")
+                return game_id, None
+
+            event_odds = safe_get_event_odds(
+                odds_api,
+                sport_key,
+                event_id,
+                PLAYER_PROP_MARKETS
             )
+
+            if not event_odds:
+                return game_id, None
 
             structured = {}
 
@@ -50,7 +71,7 @@ def fetch_and_attach_player_props(odds_api, sport_key: str, games: dict) -> dict
                 book_name = bookmaker.get("title")
 
                 for market in bookmaker.get("markets", []):
-                    stat = market.get("key")  # e.g. player_points
+                    stat = market.get("key")
 
                     for outcome in market.get("outcomes", []):
                         player = outcome.get("description") or outcome.get("name")
@@ -64,21 +85,15 @@ def fetch_and_attach_player_props(odds_api, sport_key: str, games: dict) -> dict
                         if line is None:
                             continue
 
-                        # INIT TREE
                         structured.setdefault(stat, {})
                         structured[stat].setdefault(player, {})
                         structured[stat][player].setdefault(line, {})
                         structured[stat][player][line].setdefault(book_name, {})
 
-                        # ASSIGN ODDS
                         if "over" in outcome_type:
                             structured[stat][player][line][book_name]["over_odds"] = price
                         elif "under" in outcome_type:
                             structured[stat][player][line][book_name]["under_odds"] = price
-                        elif "yes" in outcome_type:
-                            structured[stat][player][line][book_name]["yes_odds"] = price
-                        elif "no" in outcome_type:
-                            structured[stat][player][line][book_name]["no_odds"] = price
 
             return game_id, structured
 
@@ -86,11 +101,10 @@ def fetch_and_attach_player_props(odds_api, sport_key: str, games: dict) -> dict
             print(f"[ERROR] Props fetch failed for {game_id}: {e}")
             return game_id, None
 
-    # 🚀 THREADPOOL EXECUTION
-    futures = []
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        for game_id, game in games.items():
-            futures.append(executor.submit(fetch_single_event, game_id, game))
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(fetch_single_event, gid, g) for gid, g in games.items()]
 
         for future in as_completed(futures):
             game_id, structured_props = future.result()
