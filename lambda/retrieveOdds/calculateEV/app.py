@@ -6,13 +6,15 @@ from datetime import datetime
 from sharpedge_model import SharpEdge
 from nfl_weights import NFLWeightingEngine
 
+# ✅ NEW IMPORT (your props file)
+from sharpedge_props import process_props_sport
+
 s3 = boto3.client("s3")
 
 BUCKET = "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v"
 
 # SPORTS = ["NBA", "NFL", "NHL", "MLB"]
 SPORTS = ["NBA", "MLB"]
-
 
 
 def kelly_fraction(prob, odds):
@@ -153,15 +155,24 @@ def process_sport(sport):
 def lambda_handler(event, context):
 
     total_bets = 0
+    total_props = 0
 
     for sport in SPORTS:
         try:
+            # ✅ EXISTING MONEYLINE (UNCHANGED)
             count = process_sport(sport)
             total_bets += count
+
+            # ✅ NEW PROPS PIPELINE
+            props_count = process_props_sport(sport)
+            total_props += props_count
+
         except Exception as e:
             print(f"Failed {sport}: {str(e)}")
 
     return {
         "status": "complete",
-        "total_bets_found": total_bets
+        "moneyline_bets_found": total_bets,
+        "props_bets_found": total_props,
+        "total_bets_found": total_bets + total_props
     }
