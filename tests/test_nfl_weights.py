@@ -1,5 +1,9 @@
 import sys
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services.nfl_weights import NFLWeightingEngine
@@ -273,7 +277,7 @@ for market, threshold in nfl_engine.liquidity_requirements.items():
     print(f"  {market}: ${threshold:,}")
 
 # Test with live NFL data
-odds_api = OddsAPI(api_key="1146a647b7e10a678f226f1a597aeea3")
+odds_api = OddsAPI(api_key=os.getenv("ODDS_API_KEY"))
 print(f"\n🔄 Testing with live NFL data...")
 
 try:

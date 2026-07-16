@@ -45,7 +45,10 @@ class DatabaseConnection:
             # Get row counts for each table
             table_info = {}
             for table in tables:
-                cursor = conn.execute(f"SELECT COUNT(*) FROM {table}")
+                # Use parameterized identifier check to prevent SQL injection
+                if not table.isidentifier():
+                    continue
+                cursor = conn.execute(f'SELECT COUNT(*) FROM "{table}"')
                 table_info[table] = cursor.fetchone()[0]
             
             return {

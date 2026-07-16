@@ -1,8 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 import sys
 import os
+
+load_dotenv()
 
 # Add the root project directory to Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
@@ -48,6 +51,12 @@ async def lifespan(app: FastAPI):
         "DraftKings": 0.10
     }
     
+    # Exchange weights for betting exchanges
+    exchange_weights = {
+        "ProphetX": 0.10,
+        "NoVig": 0.10
+    }
+
     # Initialize with NFL moneyline weights (most common)
     sharpedge_model = SharpEdge(
         weights=nfl_moneyline_weights,  # Start with moneyline
@@ -69,7 +78,10 @@ async def lifespan(app: FastAPI):
     db = SharpEdgeDB()
     
     # Initialize odds API
-    odds_api = OddsAPI(api_key="1146a647b7e10a678f226f1a597aeea3")
+    api_key = os.getenv("ODDS_API_KEY")
+    if not api_key:
+        raise RuntimeError("ODDS_API_KEY environment variable is not set")
+    odds_api = OddsAPI(api_key=api_key)
     
     print("✅ SharpEdge API initialized with NFL-optimized weights!")
     
