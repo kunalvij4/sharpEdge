@@ -20,6 +20,7 @@ interface EVBet {
   odds: string;
   ev: number;
   kelly: number;
+  kelly_stake: number;
   time: string;
   other_books: BookOdds[];
 }
@@ -181,6 +182,7 @@ const PositiveEV: React.FC = () => {
               odds: decimalToAmerican(bet.odds),
               ev: Number(bet.ev.toFixed(2)),
               kelly: Number((bet.kelly * 100).toFixed(2)),
+              kelly_stake: Number(((bet.kelly_stake ?? bet.kelly * 0.25) * 100).toFixed(2)),
               time: new Date(bet.time).toLocaleTimeString(),
               other_books: books
             });
@@ -342,11 +344,11 @@ const PositiveEV: React.FC = () => {
                   <div className="flex justify-between py-2">
                     <div>
                       <span className="text-xs text-zinc-500">
-                        Kelly Stake
+                        Recommended Unit
                       </span>
                       <div className="flex items-center gap-1 text-sm font-bold text-zinc-200">
                         <Percent size={12} className="text-amber-500" />
-                        {bet.kelly}%
+                        {bet.kelly_stake}% of bankroll
                       </div>
                     </div>
 

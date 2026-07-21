@@ -17,12 +17,21 @@ BUCKET = "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v"
 SPORTS = ["NBA", "MLB"]
 
 
+KELLY_FRACTION = 0.25
+MAX_BET_PERCENT = 0.05
+
+
 def kelly_fraction(prob, odds):
     b = odds - 1
     if b <= 0:
         return 0
     q = 1 - prob
     return max((b * prob - q) / b, 0)
+
+
+def quarter_kelly(prob, odds):
+    full = kelly_fraction(prob, odds)
+    return min(full * KELLY_FRACTION, MAX_BET_PERCENT)
 
 
 def load_odds(sport):
@@ -106,6 +115,7 @@ def process_sport(sport):
                         "away_odds": away_odds,
                         "ev": home_ev,
                         "kelly": kelly_fraction(fair_prob, home_odds),
+                        "kelly_stake": quarter_kelly(fair_prob, home_odds),
                         "time": game["commence_time"],
                         "other_books": other_books_home,
                         "away_other_books": other_books_away
@@ -126,6 +136,7 @@ def process_sport(sport):
                         "odds": away_odds,
                         "ev": away_ev,
                         "kelly": kelly_fraction(1 - fair_prob, away_odds),
+                        "kelly_stake": quarter_kelly(1 - fair_prob, away_odds),
                         "time": game["commence_time"],
                         "other_books": other_books_away
                     })

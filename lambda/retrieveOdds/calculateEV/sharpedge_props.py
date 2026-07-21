@@ -10,12 +10,21 @@ s3 = boto3.client("s3")
 BUCKET = "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v"
 
 
+KELLY_FRACTION = 0.25
+MAX_BET_PERCENT = 0.05
+
+
 def kelly_fraction(prob, odds):
     b = odds - 1
     if b <= 0:
         return 0
     q = 1 - prob
     return max((b * prob - q) / b, 0)
+
+
+def quarter_kelly(prob, odds):
+    full = kelly_fraction(prob, odds)
+    return min(full * KELLY_FRACTION, MAX_BET_PERCENT)
 
 
 def load_props(sport):
@@ -100,6 +109,10 @@ def process_props_sport(sport):
                                     "odds": opp["offered_odds"],
                                     "ev": opp["ev_percentage"],
                                     "kelly": kelly_fraction(
+                                        opp["fair_prob"],
+                                        opp["offered_odds"]
+                                    ),
+                                    "kelly_stake": quarter_kelly(
                                         opp["fair_prob"],
                                         opp["offered_odds"]
                                     ),
