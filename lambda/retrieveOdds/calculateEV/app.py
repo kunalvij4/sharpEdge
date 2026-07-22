@@ -1,17 +1,16 @@
 import json
 import gzip
+import os
 import boto3
 from datetime import datetime
 
 from sharpedge_model import SharpEdge
 from nfl_weights import NFLWeightingEngine
-
-# ✅ NEW IMPORT (your props file)
 from sharpedge_props import process_props_sport
 
 s3 = boto3.client("s3")
 
-BUCKET = "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v"
+BUCKET = os.environ.get("CACHE_BUCKET", "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v")
 
 # SPORTS = ["NBA", "NFL", "NHL", "MLB"]
 SPORTS = ["NBA", "MLB"]

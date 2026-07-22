@@ -48,6 +48,10 @@ Resources:
       Timeout: 30
       MemorySize: 512
 
+      Environment:
+        Variables:
+          CACHE_BUCKET: !Ref OddsCacheBucket
+
       Events:
         HourlySchedule:
           Type: Schedule
@@ -55,7 +59,10 @@ Resources:
             Schedule: rate(1 hour)
 
       Policies:
-        - AmazonS3FullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref OddsCacheBucket
+        - S3WritePolicy:
+            BucketName: !Ref OddsCacheBucket
   
   ArbitrageFunction:
     Type: AWS::Serverless::Function
@@ -68,12 +75,12 @@ Resources:
       MemorySize: 512
       Policies:
         - S3ReadPolicy:
-            BucketName: retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v
+            BucketName: !Ref OddsCacheBucket
         - S3WritePolicy:
-            BucketName: retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v
+            BucketName: !Ref OddsCacheBucket
       Environment:
         Variables:
-          BUCKET_NAME: retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v
+          BUCKET_NAME: !Ref OddsCacheBucket
       Events:
         HourlySchedule:
           Type: Schedule

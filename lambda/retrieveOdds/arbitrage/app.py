@@ -1,10 +1,11 @@
 import json
+import os
 import boto3
 from collections import defaultdict
 
 s3 = boto3.client("s3")
 
-BUCKET = "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v"
+BUCKET = os.environ.get("BUCKET_NAME", "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v")
 # SPORTS = ["NBA","NFL","NHL","MLB","NCAAB"]
 SPORTS = ["NBA","MLB"]
 

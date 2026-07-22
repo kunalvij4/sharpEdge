@@ -1,5 +1,6 @@
 import json
 import gzip
+import os
 import boto3
 from datetime import datetime
 
@@ -7,7 +8,7 @@ from player_props_model import PlayerPropsModel
 
 s3 = boto3.client("s3")
 
-BUCKET = "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v"
+BUCKET = os.environ.get("CACHE_BUCKET", "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v")
 
 
 KELLY_FRACTION = 0.25
