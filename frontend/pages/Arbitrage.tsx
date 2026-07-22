@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, DollarSign, RefreshCw, ExternalLink, AlertCircle, Percent } from 'lucide-react';
+import { TrendingUp, RefreshCw, ExternalLink, AlertCircle } from 'lucide-react';
 
 interface ArbOpportunity {
   match: string;
@@ -12,9 +12,11 @@ interface ArbOpportunity {
   odds2: number;
   arb_margin: number;
   time: string;
+  sport?: string;
 }
 
 const SPORTS = [
+  { id: 'All', name: 'All' },
   { id: 'NBA', name: 'NBA' },
   { id: 'NFL', name: 'NFL' },
   { id: 'NHL', name: 'NHL' },
@@ -22,8 +24,11 @@ const SPORTS = [
   { id: 'NCAAB', name: 'NCAAB' }
 ];
 
+const ARB_BASE_URL = "https://retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v.s3.amazonaws.com/arbitrage";
+const SPORT_IDS = ["NBA", "NFL", "NHL", "MLB", "NCAAB"];
+
 const Arbitrage: React.FC = () => {
-  const [sport, setSport] = useState('NBA');
+  const [sport, setSport] = useState('All');
   const [data, setData] = useState<ArbOpportunity[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,17 +37,27 @@ const Arbitrage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const BASE_URL = "https://retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v.s3.amazonaws.com/arbitrage";
-      const url = `${BASE_URL}/${sport}/moneyline_arb.json`;
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error('Failed to fetch data');
+      const sportsToFetch = sport === 'All' ? SPORT_IDS : [sport];
+      const results: ArbOpportunity[] = [];
+
+      await Promise.all(sportsToFetch.map(async (s) => {
+        try {
+          const response = await fetch(`${ARB_BASE_URL}/${s}/moneyline_arb.json`);
+          if (!response.ok) return;
+          const json = await response.json();
+          json.forEach((arb: any) => results.push({ ...arb, sport: s }));
+        } catch {}
+      }));
+
+      results.sort((a, b) => b.arb_margin - a.arb_margin);
+      setData(results);
+
+      if (results.length === 0) {
+        setError(null);
       }
-      const json = await response.json();
-      setData(json);
     } catch (err) {
       console.error(err);
-      setError('Failed to load arbitrage opportunities. They might not be available for this sport right now.');
+      setError('Failed to load arbitrage opportunities. They might not be available right now.');
       setData([]);
     } finally {
       setLoading(false);
@@ -195,6 +210,7 @@ const Arbitrage: React.FC = () => {
                 <div className="flex flex-col gap-4 border-b border-zinc-800 bg-zinc-900/40 p-5 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="flex items-center gap-2 text-xs font-medium text-zinc-500">
+                      {arb.sport && <><span className="uppercase tracking-wider">{arb.sport}</span><span>•</span></>}
                       <span className="uppercase tracking-wider">{arb.market}</span>
                       <span>•</span>
                       <span>{dateStr}</span>

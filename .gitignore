@@ -6,4 +6,5 @@ __pycache__/
 .aws-sam/
 frontend/node_modules
 frontend/build
+frontend/dist
 frontend/README.md

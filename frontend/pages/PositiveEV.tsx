@@ -94,103 +94,138 @@ const BOOK_LINKS: Record<string, (bet: EVBet) => string> = {
     `https://www.mybookie.ag/sportsbook/nba/`,
 };
 
+const MARKET_FILTERS = ["All", "Moneyline", "Props"];
+
 const PositiveEV: React.FC = () => {
   const [bets, setBets] = useState<EVBet[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedSport, setSelectedSport] = useState<string>("All");
+  const [selectedMarket, setSelectedMarket] = useState<string>("All");
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     const allBets: EVBet[] = [];
+    let globalId = 0;
 
     try {
       for (const sport of SPORTS) {
+        // Fetch moneyline EV
         try {
           const res = await fetch(`${EV_BASE_URL}${sport}/moneyline_ev.json`);
-          if (!res.ok) continue;
+          if (res.ok) {
+            const data = await res.json();
 
-          const data = await res.json();
+            data.forEach((bet: any) => {
+              const oppositeEntry = data.find(
+                (b: any) =>
+                  b.match === bet.match &&
+                  b.bet === bet.opposite_bet
+              );
 
-          data.forEach((bet: any) => {
-            // find opposite EV entry for same match
-            const oppositeEntry = data.find(
-              (b: any) =>
-                b.match === bet.match &&
-                b.bet === bet.opposite_bet
-            );
+              const books: BookOdds[] = [];
 
-            const books: BookOdds[] = [];
+              books.push({
+                name: bet.book,
+                bet_odds: decimalToAmerican(bet.odds),
+                opposite_odds:
+                  bet.away_odds
+                    ? decimalToAmerican(bet.away_odds)
+                    : oppositeEntry
+                    ? decimalToAmerican(oppositeEntry.odds)
+                    : "-"
+              });
 
-            // main book
-            books.push({
-              name: bet.book,
-              bet_odds: decimalToAmerican(bet.odds),
-              opposite_odds:
-                bet.away_odds
-                  ? decimalToAmerican(bet.away_odds)
-                  : oppositeEntry
-                  ? decimalToAmerican(oppositeEntry.odds)
-                  : "-"
-            });
+              bet.other_books?.forEach((b: any) => {
+                let oppositeOdds: number | null = null;
 
-            // other books
-            bet.other_books?.forEach((b: any) => {
-              let oppositeOdds: number | null = null;
-
-              // case 1: away_other_books exists
-              if (bet.away_other_books) {
-                const match = bet.away_other_books.find(
-                  (away: any) => away.book === b.book
-                );
-                if (match) oppositeOdds = match.odds;
-              }
-
-              // case 2: use opposite EV row
-              if (!oppositeOdds && oppositeEntry) {
-                if (oppositeEntry.book === b.book) {
-                  oppositeOdds = oppositeEntry.odds;
-                } else {
-                  const match = oppositeEntry.other_books?.find(
-                    (ob: any) => ob.book === b.book
+                if (bet.away_other_books) {
+                  const match = bet.away_other_books.find(
+                    (away: any) => away.book === b.book
                   );
                   if (match) oppositeOdds = match.odds;
                 }
-              }
 
-              books.push({
-                name: b.book,
-                bet_odds: decimalToAmerican(b.odds),
-                opposite_odds: oppositeOdds
-                  ? decimalToAmerican(oppositeOdds)
-                  : "-"
+                if (!oppositeOdds && oppositeEntry) {
+                  if (oppositeEntry.book === b.book) {
+                    oppositeOdds = oppositeEntry.odds;
+                  } else {
+                    const match = oppositeEntry.other_books?.find(
+                      (ob: any) => ob.book === b.book
+                    );
+                    if (match) oppositeOdds = match.odds;
+                  }
+                }
+
+                books.push({
+                  name: b.book,
+                  bet_odds: decimalToAmerican(b.odds),
+                  opposite_odds: oppositeOdds
+                    ? decimalToAmerican(oppositeOdds)
+                    : "-"
+                });
+              });
+
+              allBets.push({
+                id: globalId++,
+                sport: bet.sport || sport,
+                match: bet.match,
+                market: bet.market || "moneyline",
+                bet: bet.bet,
+                opposite_bet: bet.opposite_bet || "",
+                wager_display: bet.wager_display || `${bet.bet} ML`,
+                opposite_wager_display: bet.opposite_wager_display || "",
+                book: bet.book,
+                odds: decimalToAmerican(bet.odds),
+                ev: Number(bet.ev.toFixed(2)),
+                kelly: Number((bet.kelly * 100).toFixed(2)),
+                kelly_stake: Number(((bet.kelly_stake ?? bet.kelly * 0.25) * 100).toFixed(2)),
+                time: new Date(bet.time).toLocaleTimeString(),
+                other_books: books
               });
             });
-
-            allBets.push({
-              id: bet.id,
-              sport: bet.sport || sport,
-              match: bet.match,
-              market: bet.market,
-              bet: bet.bet,
-              opposite_bet: bet.opposite_bet,
-              wager_display: bet.wager_display,
-              opposite_wager_display: bet.opposite_wager_display,
-              book: bet.book,
-              odds: decimalToAmerican(bet.odds),
-              ev: Number(bet.ev.toFixed(2)),
-              kelly: Number((bet.kelly * 100).toFixed(2)),
-              kelly_stake: Number(((bet.kelly_stake ?? bet.kelly * 0.25) * 100).toFixed(2)),
-              time: new Date(bet.time).toLocaleTimeString(),
-              other_books: books
-            });
-          });
+          }
         } catch (err) {
           console.error(`EV fetch error for ${sport}:`, err);
         }
+
+        // Fetch props EV
+        try {
+          const res = await fetch(`${EV_BASE_URL}${sport}/props_ev.json`);
+          if (res.ok) {
+            const data = await res.json();
+
+            data.forEach((bet: any) => {
+              const propLabel = bet.market?.replace("player_", "").replace("_", " ") || "prop";
+              const betDisplay = `${bet.player} ${bet.bet_type} ${bet.line} ${propLabel}`;
+
+              allBets.push({
+                id: globalId++,
+                sport: bet.sport || sport,
+                match: bet.match,
+                market: propLabel,
+                bet: betDisplay,
+                opposite_bet: "",
+                wager_display: betDisplay,
+                opposite_wager_display: "",
+                book: bet.book,
+                odds: decimalToAmerican(bet.odds),
+                ev: Number(bet.ev.toFixed(2)),
+                kelly: Number((bet.kelly * 100).toFixed(2)),
+                kelly_stake: Number(((bet.kelly_stake ?? bet.kelly * 0.25) * 100).toFixed(2)),
+                time: new Date(bet.time).toLocaleTimeString(),
+                other_books: []
+              });
+            });
+          }
+        } catch (err) {
+          console.error(`Props EV fetch error for ${sport}:`, err);
+        }
       }
+
+      allBets.sort((a, b) => b.ev - a.ev);
       setBets(allBets);
     } catch (err) {
       console.error("Overall EV fetch error:", err);
@@ -209,9 +244,13 @@ const PositiveEV: React.FC = () => {
   };
 
   const filteredBets = useMemo(() => {
-    if (selectedSport === "All") return bets;
-    return bets.filter((bet) => bet.sport === selectedSport);
-  }, [bets, selectedSport]);
+    return bets.filter((bet) => {
+      if (selectedSport !== "All" && bet.sport !== selectedSport) return false;
+      if (selectedMarket === "Moneyline" && bet.market !== "moneyline") return false;
+      if (selectedMarket === "Props" && bet.market === "moneyline") return false;
+      return true;
+    });
+  }, [bets, selectedSport, selectedMarket]);
 
   return (
     <div className="min-h-screen bg-black px-4 py-8 sm:px-6 lg:px-8">
@@ -247,7 +286,7 @@ const PositiveEV: React.FC = () => {
         </div>
 
         {/* Sport Filter */}
-        <div className="mb-8 overflow-x-auto pb-2 hide-scrollbar">
+        <div className="mb-4 overflow-x-auto pb-2 hide-scrollbar">
           <div className="flex gap-2">
             {["All", ...SPORTS].map((s) => (
               <button
@@ -260,6 +299,25 @@ const PositiveEV: React.FC = () => {
                 }`}
               >
                 {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Market Filter */}
+        <div className="mb-8 overflow-x-auto pb-2 hide-scrollbar">
+          <div className="flex gap-2">
+            {MARKET_FILTERS.map((m) => (
+              <button
+                key={m}
+                onClick={() => setSelectedMarket(m)}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                  selectedMarket === m
+                    ? 'bg-zinc-700 text-white'
+                    : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                }`}
+              >
+                {m}
               </button>
             ))}
           </div>

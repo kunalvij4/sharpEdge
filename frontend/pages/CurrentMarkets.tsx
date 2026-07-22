@@ -1,40 +1,21 @@
 import React, { useState, useMemo, useEffect } from "react";
-import {
-  ChevronDown,
-  ChevronUp,
-  Trophy,
-  Calendar,
-  Filter,
-  Search
-} from "lucide-react";
-import {
-  MarketResponse,
-  MatchData,
-  SpreadOddsDetails,
-  TotalOddsDetails
-} from "../types";
+import { ChevronDown, ChevronUp, Trophy, Filter } from "lucide-react";
+import { MarketResponse, MatchData } from "../types";
 
-// AUTO-LOAD LEAGUES FROM S3 CACHE
-// Add leagues here as your backend grows
-const LEAGUES = ["NBA"];
+const LEAGUES = ["NBA", "NFL", "NHL", "MLB", "NCAAB"];
 
 // S3 CACHE BASE
 const CACHE_BASE =
   "https://retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v.s3.amazonaws.com/cache";
 
-// FETCH + DECOMPRESS ONE LEAGUE
 async function fetchLeagueData(league: string): Promise<MarketResponse> {
   try {
     const res = await fetch(`${CACHE_BASE}/${league}/moneyline.json.gz`);
+    if (!res.ok) return {};
 
-    console.log(res);
-    
     const buffer = await res.arrayBuffer();
-
     const text = new TextDecoder().decode(buffer);
-
     const json = JSON.parse(text);
-
     const games = json.games;
 
     const transformed: MarketResponse = {};
@@ -43,7 +24,7 @@ async function fetchLeagueData(league: string): Promise<MarketResponse> {
       const oddsData = game.data.odds_data;
 
       const match: MatchData = {
-        sport: game.sport,
+        sport: game.sport || league,
         home_team: game.home_team,
         away_team: game.away_team,
         commence_time: game.commence_time,
@@ -58,6 +39,16 @@ async function fetchLeagueData(league: string): Promise<MarketResponse> {
           }
         }
       };
+
+      // Load spreads if present
+      if (game.data.spreads) {
+        match.markets.spreads = { odds_data: game.data.spreads };
+      }
+
+      // Load totals if present
+      if (game.data.totals) {
+        match.markets.totals = { odds_data: game.data.totals };
+      }
 
       transformed[key] = match;
     });
@@ -182,12 +173,25 @@ const MarketCard: React.FC<{
 
               {type === "moneyline" && (
                 <>
-                  <th className="px-4 py-3 text-right">
-                    {data.away_team}
-                  </th>
-                  <th className="px-4 py-3 text-right">
-                    {data.home_team}
-                  </th>
+                  <th className="px-4 py-3 text-right">{data.away_team}</th>
+                  <th className="px-4 py-3 text-right">{data.home_team}</th>
+                </>
+              )}
+
+              {type === "spreads" && (
+                <>
+                  <th className="px-4 py-3 text-right">{data.away_team} Spread</th>
+                  <th className="px-4 py-3 text-right">{data.away_team} Odds</th>
+                  <th className="px-4 py-3 text-right">{data.home_team} Spread</th>
+                  <th className="px-4 py-3 text-right">{data.home_team} Odds</th>
+                </>
+              )}
+
+              {type === "totals" && (
+                <>
+                  <th className="px-4 py-3 text-right">Line</th>
+                  <th className="px-4 py-3 text-right">Over</th>
+                  <th className="px-4 py-3 text-right">Under</th>
                 </>
               )}
             </tr>
@@ -195,26 +199,53 @@ const MarketCard: React.FC<{
 
           <tbody className="divide-y divide-zinc-800">
             {books.map((book) => {
-              const oddData = market.odds_data[book];
+              const oddData = market.odds_data[book] as any;
 
               return (
                 <tr key={book}>
-                  <td className="px-4 py-3 text-zinc-300">
-                    {book}
-                  </td>
+                  <td className="px-4 py-3 text-zinc-300">{book}</td>
 
-                  {type === "moneyline" &&
-                    Array.isArray(oddData) && (
-                      <>
-                        <td className="px-4 py-3 text-right font-mono text-amber-500">
-                          {decimalToAmerican(oddData[0])}
-                        </td>
+                  {type === "moneyline" && Array.isArray(oddData) && (
+                    <>
+                      <td className="px-4 py-3 text-right font-mono text-amber-500">
+                        {decimalToAmerican(oddData[0])}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-amber-500">
+                        {decimalToAmerican(oddData[1])}
+                      </td>
+                    </>
+                  )}
 
-                        <td className="px-4 py-3 text-right font-mono text-amber-500">
-                          {decimalToAmerican(oddData[1])}
-                        </td>
-                      </>
-                    )}
+                  {type === "spreads" && oddData && (
+                    <>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-300">
+                        {oddData.away_point > 0 ? `+${oddData.away_point}` : oddData.away_point}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-amber-500">
+                        {decimalToAmerican(oddData.away_odds)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-300">
+                        {oddData.home_point > 0 ? `+${oddData.home_point}` : oddData.home_point}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-amber-500">
+                        {decimalToAmerican(oddData.home_odds)}
+                      </td>
+                    </>
+                  )}
+
+                  {type === "totals" && oddData && (
+                    <>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-300">
+                        {oddData.point}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-amber-500">
+                        {decimalToAmerican(oddData.over_odds)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-amber-500">
+                        {decimalToAmerican(oddData.under_odds)}
+                      </td>
+                    </>
+                  )}
                 </tr>
               );
             })}
@@ -267,7 +298,22 @@ const MarketCard: React.FC<{
 
       {expanded && (
         <div className="border-t border-zinc-800">
-          <OddsGrid type="moneyline" />
+          <div className="flex gap-1 bg-zinc-900/60 px-4 pt-3">
+            {(["moneyline", "spreads", "totals"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={(e) => { e.stopPropagation(); setActiveTab(tab); }}
+                className={`rounded-t-md px-4 py-2 text-xs font-medium capitalize transition-colors ${
+                  activeTab === tab
+                    ? "bg-zinc-950 text-amber-500"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+          <OddsGrid type={activeTab} />
         </div>
       )}
     </div>
@@ -288,7 +334,7 @@ const CurrentMarkets: React.FC = () => {
   const leagues = useMemo(() => {
     const leagueSet = new Set<string>(["All"]);
 
-    Object.values(marketData).forEach((match) =>
+    (Object.values(marketData) as MatchData[]).forEach((match) =>
       leagueSet.add(match.sport)
     );
 
@@ -298,7 +344,7 @@ const CurrentMarkets: React.FC = () => {
   const books = useMemo(() => {
     const bookSet = new Set<string>(["All"]);
 
-    Object.values(marketData).forEach((match) => {
+    (Object.values(marketData) as MatchData[]).forEach((match) => {
       if (match.markets.moneyline?.odds_data)
         Object.keys(match.markets.moneyline.odds_data).forEach(
           (k) => bookSet.add(k)
@@ -309,7 +355,7 @@ const CurrentMarkets: React.FC = () => {
   }, [marketData]);
 
   const filteredMatches = useMemo(() => {
-    return Object.entries(marketData).filter(([_, data]) => {
+    return (Object.entries(marketData) as [string, MatchData][]).filter(([_, data]) => {
       return (
         selectedLeague === "All" ||
         data.sport === selectedLeague
@@ -321,11 +367,60 @@ const CurrentMarkets: React.FC = () => {
     <div className="min-h-screen bg-black px-4 py-8">
       <div className="mx-auto max-w-5xl">
 
-        <h1 className="text-3xl font-bold text-white">
-          Current Markets
-        </h1>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white">
+            Current Markets
+          </h1>
+          <p className="mt-2 text-zinc-400">
+            Live odds across all major sportsbooks.
+          </p>
+        </div>
 
-        <div className="space-y-4 mt-6">
+        {/* Sport Filter */}
+        <div className="mb-6 overflow-x-auto pb-2 hide-scrollbar">
+          <div className="flex gap-2">
+            {leagues.map((s) => (
+              <button
+                key={s}
+                onClick={() => setSelectedLeague(s)}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                  selectedLeague === s
+                    ? "bg-amber-500 text-black"
+                    : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Book Filter */}
+        <div className="mb-6 flex items-center gap-3">
+          <Filter size={16} className="text-zinc-500" />
+          <select
+            value={selectedBook}
+            onChange={(e) => setSelectedBook(e.target.value)}
+            className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-300 focus:border-amber-500 focus:outline-none"
+          >
+            {books.map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Empty State */}
+        {filteredMatches.length === 0 && (
+          <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950 p-8 text-center">
+            <Trophy size={48} className="mb-4 text-zinc-700" />
+            <h3 className="text-xl font-bold text-white">No Games Available</h3>
+            <p className="mt-2 max-w-md text-zinc-500">
+              No games currently scheduled for {selectedLeague === "All" ? "any sport" : selectedLeague}. Check back closer to game time.
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-4">
           {filteredMatches.map(([key, data]) => (
             <MarketCard
               key={key}
