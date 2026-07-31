@@ -1,0 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+
+    --card: 240 6% 6%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 240 6% 6%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 38 92% 50%;
+    --primary-foreground: 0 0% 0%;
+
+    --secondary: 240 4% 14%;
+    --secondary-foreground: 240 5% 65%;
+
+    --muted: 240 4% 14%;
+    --muted-foreground: 240 5% 55%;
+
+    --accent: 38 92% 50%;
+    --accent-foreground: 0 0% 0%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 4% 16%;
+    --input: 240 4% 16%;
+    --ring: 38 92% 50%;
+
+    --radius: 0.75rem;
+
+    --gold: 38 92% 50%;
+    --gold-light: 43 96% 58%;
+    --gold-dark: 32 90% 40%;
+    --gold-glow: 0 0 30px hsla(38, 92%, 50%, 0.3);
+    --gold-glow-strong: 0 0 60px hsla(38, 92%, 50%, 0.4), 0 0 120px hsla(38, 92%, 50%, 0.1);
+
+    --surface: 240 6% 6%;
+    --surface-light: 240 4% 10%;
+    --surface-border: 240 4% 16%;
+
+    --candle-green: 142 76% 36%;
+    --candle-red: 0 72% 51%;
+
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+}
+
+@layer utilities {
+  .glow-gold {
+    box-shadow: var(--gold-glow);
+  }
+
+  .glow-gold-strong {
+    box-shadow: var(--gold-glow-strong);
+  }
+
+  .glow-text-gold {
+    text-shadow: 0 0 40px hsla(38, 92%, 50%, 0.5);
+  }
+
+  .gradient-gold {
+    background: linear-gradient(135deg, hsl(var(--gold-dark)), hsl(var(--gold)), hsl(var(--gold-light)));
+  }
+
+  .gradient-gold-text {
+    background: linear-gradient(135deg, hsl(var(--gold-dark)), hsl(var(--gold)), hsl(var(--gold-light)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .bg-surface {
+    background-color: hsl(var(--surface));
+  }
+
+  .bg-surface-light {
+    background-color: hsl(var(--surface-light));
+  }
+
+  .border-surface {
+    border-color: hsl(var(--surface-border));
+  }
+
+  .bg-radial-gold {
+    background: radial-gradient(ellipse at center, hsla(38, 92%, 50%, 0.08) 0%, transparent 70%);
+  }
+}

@@ -53,9 +53,10 @@ def process_props_sport(sport):
                         try:
                             line = float(line_str)
 
-                            # 🔥 ONLY KEEP VALID BOOKS
                             prop_data = {}
+                            raw_books = {}
 
+                            # 🔥 collect ALL valid books
                             for book, odds in books.items():
                                 if (
                                     "over_odds" in odds
@@ -69,7 +70,11 @@ def process_props_sport(sport):
                                         "line": line
                                     }
 
-                            # 🔥 REQUIRE MULTIPLE BOOKS ON SAME LINE
+                                    raw_books[book] = {
+                                        "over": odds["over_odds"],
+                                        "under": odds["under_odds"]
+                                    }
+
                             if len(prop_data) < 2:
                                 continue
 
@@ -88,15 +93,33 @@ def process_props_sport(sport):
 
                             for opp in opportunities:
 
+                                bet_type = opp["bet_type"]  # OVER / UNDER
+                                main_book = opp["book_name"]
+
+                                # 🔥 BUILD BOTH SIDES
+                                over_other_books = []
+                                under_other_books = []
+
+                                for book, odds in raw_books.items():
+                                    over_other_books.append({
+                                        "book": book,
+                                        "odds": odds["over"]
+                                    })
+
+                                    under_other_books.append({
+                                        "book": book,
+                                        "odds": odds["under"]
+                                    })
+
                                 ev_bets.append({
                                     "id": bet_id,
                                     "sport": sport,
                                     "match": f"{game['away_team']} vs {game['home_team']}",
                                     "market": stat,
                                     "player": player,
-                                    "bet_type": opp["bet_type"],
+                                    "bet_type": bet_type,
                                     "line": line,
-                                    "book": opp["book_name"],
+                                    "book": main_book,
                                     "odds": opp["offered_odds"],
                                     "ev": opp["ev_percentage"],
                                     "kelly": kelly_fraction(
@@ -104,7 +127,11 @@ def process_props_sport(sport):
                                         opp["offered_odds"]
                                     ),
                                     "time": game["commence_time"],
-                                    "book_tier": opp["book_tier"]
+                                    "book_tier": opp["book_tier"],
+
+                                    # 🔥 NEW STRUCTURE
+                                    "over_other_books": over_other_books,
+                                    "under_other_books": under_other_books
                                 })
 
                                 bet_id += 1

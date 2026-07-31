@@ -12,16 +12,22 @@ interface EVBet {
   sport: string;
   match: string;
   market: string;
-  bet: string;
-  opposite_bet: string;
-  wager_display: string;
-  opposite_wager_display: string;
+  bet?: string;
+  opposite_bet?: string;
+  wager_display?: string;
+  opposite_wager_display?: string;
+
+  // (for props)
+  player?: string;
+  bet_type?: string; // OVER / UNDER
+  line?: number;
+
   book: string;
   odds: string;
   ev: number;
   kelly: number;
   time: string;
-  other_books: BookOdds[];
+  other_books?: BookOdds[];
 }
 
 const EV_BASE_URL =
@@ -185,10 +191,61 @@ const PositiveEV: React.FC = () => {
               other_books: books
             });
           });
-        } catch (err) {
+        
+          const propsRes = await fetch(`${EV_BASE_URL}${sport}/props_ev.json`);
+          if (propsRes.ok) {
+            const propsData = await propsRes.json();
+
+            propsData.forEach((bet: any) => {
+              const books: BookOdds[] = [];
+
+              const isOver = bet.bet_type === "OVER";
+
+              // Merge both sides into one clean table
+              const bookMap: Record<string, { over?: number; under?: number }> = {};
+
+              bet.over_other_books?.forEach((b: any) => {
+                if (!bookMap[b.book]) bookMap[b.book] = {};
+                bookMap[b.book].over = b.odds;
+              });
+
+              bet.under_other_books?.forEach((b: any) => {
+                if (!bookMap[b.book]) bookMap[b.book] = {};
+                bookMap[b.book].under = b.odds;
+              });
+
+              Object.entries(bookMap).forEach(([book, odds]: any) => {
+                books.push({
+                  name: book,
+                  bet_odds: odds.over ? decimalToAmerican(odds.over) : "-",
+                  opposite_odds: odds.under ? decimalToAmerican(odds.under) : "-"
+                });
+              });
+
+              allBets.push({
+                id: bet.id,
+                sport: bet.sport || sport,
+                match: bet.match,
+                market: bet.market,
+                player: bet.player,
+                bet_type: bet.bet_type,
+                line: bet.line,
+                book: bet.book,
+                odds: decimalToAmerican(bet.odds),
+                ev: Number(bet.ev.toFixed(2)),
+                kelly: Number((bet.kelly * 100).toFixed(2)),
+                time: new Date(bet.time).toLocaleTimeString(),
+                other_books: books
+              });
+            });
+          }
+        }
+        
+        catch (err) {
           console.error(`EV fetch error for ${sport}:`, err);
         }
       }
+      allBets.sort((a, b) => b.ev - a.ev); 
       setBets(allBets);
     } catch (err) {
       console.error("Overall EV fetch error:", err);
@@ -320,13 +377,13 @@ const PositiveEV: React.FC = () => {
                     <h3 className="mt-1 text-lg font-bold text-white">
                       {bet.match}
                     </h3>
-                    <p className="text-sm text-zinc-400">{bet.market}</p>
+                    <p className="text-sm text-zinc-400">{bet.market.replace("player_", "").toUpperCase()}</p>
                   </div>
 
                   <div className="mb-4 rounded-lg bg-zinc-900/50 p-4 ring-1 ring-zinc-800">
                     <div className="flex justify-between">
                       <span className="text-lg font-semibold text-amber-500">
-                        {bet.bet}
+                        {bet.player ? `${bet.player} ${bet.bet_type} ${bet.line}`: bet.bet}
                       </span>
                       <span className="font-mono text-xl font-bold text-white">
                         {bet.odds}
@@ -364,10 +421,10 @@ const PositiveEV: React.FC = () => {
                       <span>Book</span>
                       <div className="flex gap-4">
                         <span className="w-28 text-right">
-                          {bet.wager_display}
+                          {bet.player ? `OVER ${bet.line}` : bet.wager_display}
                         </span>
                         <span className="w-28 text-right">
-                          {bet.opposite_wager_display}
+                          {bet.player ? `UNDER ${bet.line}` : bet.opposite_wager_display}
                         </span>
                       </div>
                     </div>
@@ -397,10 +454,27 @@ const PositiveEV: React.FC = () => {
                             </span>
 
                             <div className="flex gap-4">
-                              <span className="w-28 text-right font-mono text-zinc-300">
+                              <span
+                                className={`w-28 text-right font-mono ${
+                                  !bet.player
+                                    ? "text-zinc-300"
+                                    : bet.bet_type === "OVER"
+                                    ? "text-zinc-300"   // OVER is active → left bright
+                                    : "text-zinc-500"
+                                }`}
+                              >
                                 {bookOdds.bet_odds}
                               </span>
-                              <span className="w-28 text-right font-mono text-zinc-500">
+
+                              <span
+                                className={`w-28 text-right font-mono ${
+                                  !bet.player
+                                    ? "text-zinc-500"
+                                    : bet.bet_type === "OVER"
+                                    ? "text-zinc-500"
+                                    : "text-zinc-300"   // UNDER is active → right bright
+                                }`}
+                              >
                                 {bookOdds.opposite_odds}
                               </span>
                             </div>
@@ -420,7 +494,7 @@ const PositiveEV: React.FC = () => {
                           window.open(url, "_blank");
 
                           navigator.clipboard.writeText(
-                            `${bet.bet} ML (${bet.odds}) on ${bet.book}`
+                            bet.player ? `${bet.player} ${bet.bet_type} ${bet.line} (${bet.odds}) on ${bet.book}` : `${bet.bet} ML (${bet.odds}) on ${bet.book}`
                           );
                         }}
                         className="w-full flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-3 text-sm font-bold text-black hover:bg-amber-400"
