@@ -1,0 +1,226 @@
+{
+  "leagues": [
+    {
+      "id": 42,
+      "name": "nba"
+    }
+  ],
+  "sources": [
+    {
+      "id": 901,
+      "name": "Fixture Book",
+      "isActive": true,
+      "statusId": 1,
+      "propsStatusId": 1,
+      "disabledMarketTypeIds": []
+    }
+  ],
+  "bets": [
+    {
+      "id": 77,
+      "name": "Moneyline"
+    },
+    {
+      "id": 88,
+      "name": "Player Points"
+    },
+    {
+      "id": 89,
+      "name": "Unmapped Novel Stat"
+    }
+  ],
+  "periods": [
+    {
+      "id": 12,
+      "name": "Full Game"
+    },
+    {
+      "id": 13,
+      "name": "First Quarter"
+    }
+  ],
+  "events": [
+    {
+      "eventId": 555,
+      "leagueId": 42,
+      "statusId": 1,
+      "eventStart": "2026-10-19T00:00:00Z",
+      "eventTeams": [
+        {
+          "teamId": 10,
+          "sideIndex": 0,
+          "name": "Away Team"
+        },
+        {
+          "teamId": 20,
+          "sideIndex": 1,
+          "name": "Home Team"
+        }
+      ]
+    }
+  ],
+  "people": {
+    "300": {
+      "id": 300,
+      "firstName": "Sample",
+      "lastName": "Player"
+    }
+  },
+  "teams": {
+    "10": {
+      "id": 10,
+      "name": "Away Team"
+    },
+    "20": {
+      "id": 20,
+      "name": "Home Team"
+    }
+  },
+  "moneyline": {
+    "success": true,
+    "data": {
+      "odds": {
+        "notAnIdentity": {
+          "leagueId": 42,
+          "periodTypes": {
+            "arbitrary": {
+              "periodTypeId": 12,
+              "pregame": {
+                "ignored": {
+                  "eventId": 555,
+                  "leagueId": 42,
+                  "statusId": 1,
+                  "eventStart": "2026-10-19T00:00:00Z",
+                  "eventTeams": [
+                    {
+                      "teamId": 10,
+                      "sideIndex": 0,
+                      "name": "Away Team"
+                    },
+                    {
+                      "teamId": 20,
+                      "sideIndex": 1,
+                      "name": "Home Team"
+                    }
+                  ],
+                  "betTypeId": 77,
+                  "isLive": false,
+                  "sides": {
+                    "arbitraryAway": {
+                      "sideIndex": 0,
+                      "teamId": 10,
+                      "marketSourceLines": {
+                        "ignoredKey": {
+                          "marketId": 1001,
+                          "marketLineId": 2001,
+                          "marketSourceId": 901,
+                          "price": 120,
+                          "statusId": 1,
+                          "modifiedOn": "2026-10-18T23:59:00Z"
+                        }
+                      }
+                    },
+                    "arbitraryHome": {
+                      "sideIndex": 1,
+                      "teamId": 20,
+                      "marketSourceLines": {
+                        "ignoredKey": {
+                          "marketId": 1002,
+                          "marketLineId": 2002,
+                          "marketSourceId": 901,
+                          "price": -130,
+                          "statusId": 1,
+                          "modifiedOn": "2026-10-18T23:59:00Z"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "live": {}
+            }
+          }
+        }
+      },
+      "lastUpdated": 0
+    },
+    "messages": []
+  },
+  "props": {
+    "success": true,
+    "data": {
+      "odds": {
+        "arbitrary": {
+          "leagueId": 42,
+          "periodTypes": {
+            "arbitrary": {
+              "periodTypeId": 12,
+              "pregame": {
+                "ignored": {
+                  "eventId": 555,
+                  "leagueId": 42,
+                  "statusId": 1,
+                  "eventStart": "2026-10-19T00:00:00Z",
+                  "eventTeams": [
+                    {
+                      "teamId": 10,
+                      "sideIndex": 0,
+                      "name": "Away Team"
+                    },
+                    {
+                      "teamId": 20,
+                      "sideIndex": 1,
+                      "name": "Home Team"
+                    }
+                  ],
+                  "betTypeId": 88,
+                  "isLive": false,
+                  "sides": {
+                    "over": {
+                      "sideIndex": 0,
+                      "personId": 300,
+                      "marketSourceLines": {
+                        "whatever": {
+                          "marketId": 1101,
+                          "marketLineId": 2101,
+                          "marketSourceId": 901,
+                          "price": -110,
+                          "points": 25.5,
+                          "statusId": 1,
+                          "modifiedOn": "2026-10-18T23:59:00Z",
+                          "alternateLines": [
+                            {
+                              "points": 30.5,
+                              "price": 180,
+                              "statusId": 1
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "under": {
+                      "sideIndex": 1,
+                      "personId": 300,
+                      "marketSourceLines": {
+                        "whatever": {
+                          "marketId": 1102,
+                          "marketLineId": 2102,
+                          "marketSourceId": 901,
+                          "price": -110,
+                          "points": 25.5,
+                          "statusId": 1
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "lastUpdated": 0
+    },
+    "messages": []
+  }
+}

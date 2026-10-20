@@ -1,0 +1,80 @@
+name: in-house-odds
+x-common: &common
+  build: .
+  init: true
+  restart: unless-stopped
+  environment: &common-env
+    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-odds}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-odds}
+    LEAGUES_JSON: ${LEAGUES_JSON:?Copy LEAGUES_JSON from .env.example}
+    COLLECTED_TTL: ${COLLECTED_TTL:-90}
+    SOURCE_TTL: ${SOURCE_TTL:-3600}
+    PROPS_CACHE_TTL: ${PROPS_CACHE_TTL:-3600}
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  db:
+    image: postgres:17.6-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-odds}
+      POSTGRES_USER: ${POSTGRES_USER:-odds}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - odds-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    <<: *common
+    # Separate tags prevent parallel builds from exporting to the same image.
+    image: in-house-odds-migrate:phase1
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *common
+    image: in-house-odds-api:phase1
+    environment:
+      <<: *common-env
+      API_KEYS: ${API_KEYS:?Set API_KEYS}
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  collector:
+    <<: *common
+    image: in-house-odds-collector:phase1
+    command: ["python", "-m", "odds_api.collector"]
+    stop_grace_period: 30s
+    environment:
+      <<: *common-env
+      UNABATED_API_KEY: ${UNABATED_API_KEY:?Set UNABATED_API_KEY}
+      UNABATED_API_BASE_URL: ${UNABATED_API_BASE_URL:-https://data.unabated.com}
+      UNABATED_PARTNER_CODE: ${UNABATED_PARTNER_CODE:-}
+      POLL_INTERVAL: ${POLL_INTERVAL:-30}
+      REQUEST_TIMEOUT: ${REQUEST_TIMEOUT:-15}
+      MAX_ATTEMPTS: ${MAX_ATTEMPTS:-3}
+      RETRY_BACKOFF: ${RETRY_BACKOFF:-1}
+      RATE_MIN_INTERVAL: ${RATE_MIN_INTERVAL:-0.1}
+      ODDS_MIN_INTERVAL: ${ODDS_MIN_INTERVAL:-5}
+      METADATA_TTL: ${METADATA_TTL:-3600}
+      SCOPE_METADATA_TTL: ${SCOPE_METADATA_TTL:-300}
+      SNAPSHOT_RETENTION_DAYS: ${SNAPSHOT_RETENTION_DAYS:-0}
+      SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-20}
+      UNABATED_BET_TYPE_MAP: ${UNABATED_BET_TYPE_MAP:?Set UNABATED_BET_TYPE_MAP in .env}
+      UNABATED_PERIOD_MAP: ${UNABATED_PERIOD_MAP:?Set UNABATED_PERIOD_MAP in .env}
+
+volumes:
+  odds-data:
