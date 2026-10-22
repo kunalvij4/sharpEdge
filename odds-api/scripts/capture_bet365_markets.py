@@ -11,6 +11,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+from scripts.bet365_browser_runtime import close_native_browser, launch_native_browser
 from scripts.probe_bet365 import safe_text, safe_url
 
 
@@ -45,8 +46,18 @@ async def capture(args):
     page_errors = []
     prop_views = []
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(channel="chromium", headless=False)
-        context = await browser.new_context(viewport={"width": 1440, "height": 1000})
+        native_process = None
+        if args.cdp:
+            browser, native_process = await launch_native_browser(
+                playwright,
+                args.channel,
+                Path(".cache") / ("bet365-home-" + output.name),
+                output / "browser.log",
+            )
+            context = browser.contexts[0]
+        else:
+            browser = await playwright.chromium.launch(channel=args.channel, headless=False)
+            context = await browser.new_context(viewport={"width": 1440, "height": 1000})
         page = await context.new_page()
 
         async def received(response, captured_stage):
@@ -216,8 +227,11 @@ async def capture(args):
             (output / "page-errors.json").write_text(
                 json.dumps(page_errors, indent=2) + "\n", encoding="utf-8"
             )
-            await context.close()
-            await browser.close()
+            if native_process:
+                await close_native_browser(browser, native_process)
+            else:
+                await context.close()
+                await browser.close()
     from scripts.organize_bet365_dump import organize
 
     report = organize(messages, pages, prop_views, args.region)
@@ -259,6 +273,8 @@ def main():
     parser.add_argument("--leagues", nargs="+", choices=("nba", "nfl", "mlb"), default=["nba", "nfl", "mlb"])
     parser.add_argument("--wait-seconds", type=float, default=5)
     parser.add_argument("--home-only", action="store_true")
+    parser.add_argument("--channel", choices=("chromium", "msedge"), default="chromium")
+    parser.add_argument("--cdp", action="store_true")
     parser.add_argument("--event-props", action="store_true")
     parser.add_argument("--cycle-props", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/bet365-markets"))

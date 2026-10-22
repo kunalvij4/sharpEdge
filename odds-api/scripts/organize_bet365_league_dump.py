@@ -50,6 +50,7 @@ def organize_leagues(messages, pages=(), region="nj", prop_views=()):
     report["source"]["capture"] = "public HTTP homepage and league snapshots"
     report["websocket_deltas_applied"] = False
     issues = []
+    unavailable_moneylines = []
     events = {
         league["title"]: {e["source_event_id"]: e for e in league["events"]} for league in report["leagues"]
     }
@@ -111,6 +112,17 @@ def organize_leagues(messages, pages=(), region="nj", prop_views=()):
                         pairs[cell["OI"]].append((ri, cell))
                 for identifier, pair in pairs.items():
                     target = events[league].get(identifier)
+                    if target is not None and len(pair) == 2 and not any(f.get("OD") for _, f in pair):
+                        unavailable_moneylines.append(
+                            {
+                                "message_index": mi,
+                                "league": league,
+                                "event_id": identifier,
+                                "reason": "both_prices_unavailable",
+                                "source_suspended": [f.get("SU") for _, f in pair],
+                            }
+                        )
+                        continue
                     if target is None or len(pair) != 2 or not all(f.get("OD") for _, f in pair):
                         issues.append(
                             {"message_index": mi, "type": "invalid_moneyline_pair", "event_id": identifier}
@@ -228,7 +240,9 @@ def organize_leagues(messages, pages=(), region="nj", prop_views=()):
         bucket["selections"] = list(bucket["selections"].values())
         bucket["both_sides_present"] = {s["comparison"] for s in bucket["selections"]} == {"over", "under"}
     for league in report["leagues"]:
-        league["events"] = list(events[league["title"]].values())
+        league["events"] = [
+            event for event in events[league["title"]].values() if event["moneyline"] or event["player_props"]
+        ]
         counts = Counter(
             dict.fromkeys(
                 (
@@ -273,6 +287,7 @@ def organize_leagues(messages, pages=(), region="nj", prop_views=()):
         for key in report["leagues"][0]["summary"]
     }
     report["normalization_issues"] = issues
+    report["source_unavailable_moneylines"] = unavailable_moneylines
     return report
 
 

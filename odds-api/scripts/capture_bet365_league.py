@@ -5,13 +5,12 @@ import asyncio
 import json
 import os
 import re
-import socket
-import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
+from scripts.bet365_browser_runtime import close_native_browser, launch_native_browser
 from scripts.capture_bet365_markets import records
 from scripts.probe_bet365 import safe_text, safe_url
 
@@ -32,39 +31,10 @@ async def capture(args):
     async with async_playwright() as playwright:
         cdp_process = None
         if args.cdp:
-            executable = (
-                Path(os.environ.get("PROGRAMFILES(X86)", "C:/Program Files (x86)"))
-                / "Microsoft/Edge/Application/msedge.exe"
-                if args.channel == "msedge"
-                else Path(playwright.chromium.executable_path)
-            )
             profile = args.profile_dir or Path(".cache") / ("bet365-cdp-" + output.name)
-            profile.resolve().mkdir(parents=True, exist_ok=True)
-            with socket.socket() as listener:
-                listener.bind(("127.0.0.1", 0))
-                port = listener.getsockname()[1]
-            cdp_process = subprocess.Popen(
-                [
-                    str(executable),
-                    f"--remote-debugging-port={port}",
-                    "--remote-debugging-address=127.0.0.1",
-                    f"--user-data-dir={profile.resolve()}",
-                    "--no-first-run",
-                    "--no-default-browser-check",
-                    "about:blank",
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+            browser, cdp_process = await launch_native_browser(
+                playwright, args.channel, profile, output / "browser.log", no_sandbox=args.no_browser_sandbox
             )
-            for attempt in range(40):
-                try:
-                    browser = await playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
-                    break
-                except Error:
-                    if attempt == 39:
-                        cdp_process.terminate()
-                        raise
-                    await asyncio.sleep(0.25)
             context = browser.contexts[0]
         elif args.profile_dir:
             context = await playwright.chromium.launch_persistent_context(
@@ -202,6 +172,9 @@ async def capture(args):
                     "captured_at": datetime.now(UTC).isoformat(),
                     "text": text,
                     "controls": controls,
+                    "browser_environment": await page.evaluate(
+                        """() => ({visibility:document.visibilityState,focused:document.hasFocus(),webdriver:navigator.webdriver,platform:navigator.platform,language:navigator.language,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,screen:{width:screen.width,height:screen.height}})"""
+                    ),
                 }
             )
             await page.screenshot(path=str(output / f"{label}.png"))
@@ -563,14 +536,9 @@ async def capture(args):
                 encoding="utf-8",
             )
             if cdp_process:
-                try:
-                    session = await browser.new_browser_cdp_session()
-                    await session.send("Browser.close")
-                except Error:
-                    pass
-            await browser.close()
-            if cdp_process and cdp_process.poll() is None:
-                cdp_process.terminate()
+                await close_native_browser(browser, cdp_process)
+            else:
+                await browser.close()
             if failed and not unexpected_failure:
                 raise RuntimeError(
                     "Requested navigation or market response was incomplete; see capture-status.json and errors.json"
@@ -585,6 +553,11 @@ def main():
     parser.add_argument("--reload-league", action="store_true")
     parser.add_argument("--profile-dir", type=Path)
     parser.add_argument("--cdp", action="store_true")
+    parser.add_argument(
+        "--no-browser-sandbox",
+        action="store_true",
+        help="Only for an isolated container when its kernel cannot run the browser sandbox",
+    )
     parser.add_argument(
         "--entry",
         choices=("sidebar", "view-all", "classification", "event", "player-props", "league"),

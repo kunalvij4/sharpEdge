@@ -57,7 +57,7 @@ def test_truncated_price_column_is_rejected_instead_of_shifting_players():
     message = capture()
     del message["records"][9]
     report = organize_leagues([message])
-    assert props(report) == []
+    assert report["leagues"][0]["events"] == []
     assert report["normalization_issues"][0]["type"] == "column_length_mismatch"
 
 
@@ -65,7 +65,7 @@ def test_reordered_over_cells_fail_descriptor_id_crosscheck():
     message = capture()
     message["records"][8]["fields"]["ID"] = "some-other-player"
     report = organize_leagues([message])
-    assert props(report) == []
+    assert report["leagues"][0]["events"] == []
     assert report["normalization_issues"][0]["type"] == "player_order_mismatch"
 
 
@@ -147,3 +147,22 @@ def test_named_player_without_stable_id_keeps_null_identity_and_source_descripto
     assert group["source_player_descriptor_id"] == "Pover-a"
     assert group["both_sides_present"]
     assert verify(report, [message])["source_checks_passed"]
+
+
+def test_unoffered_suspended_moneyline_is_reported_without_exporting_an_empty_fixture():
+    message = capture()
+    message["records"] = [
+        row("CL", L3="NBA"),
+        row("MG", SY="cmx"),
+        row("MA", SY="ef"),
+        row("PA", OI="fixture", NA="Away", N2="Home"),
+        row("MA", SY="eo", NA="Money"),
+        row("PA", OI="fixture", ID="away", OD="", SU="1"),
+        row("PA", OI="fixture", ID="home", OD="", SU="1"),
+    ]
+    report = organize_leagues([message])
+    assert report["summary"]["events"] == 0
+    assert report["leagues"][0]["events"] == []
+    assert report["normalization_issues"] == []
+    assert report["source_unavailable_moneylines"][0]["event_id"] == "fixture"
+    assert report["source_unavailable_moneylines"][0]["reason"] == "both_prices_unavailable"

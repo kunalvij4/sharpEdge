@@ -1,0 +1,23 @@
+FROM ghcr.io/astral-sh/uv:0.9.4 AS uv
+FROM python:3.13.6-slim-bookworm
+COPY --from=uv /uv /uvx /bin/
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 UV_PROJECT_ENVIRONMENT=/app/.venv
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --extra bet365-probe --no-dev --no-install-project \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends xvfb xauth \
+    && /app/.venv/bin/python -m playwright install-deps chromium \
+    && /app/.venv/bin/python -m playwright install msedge \
+    && groupadd --gid 10001 odds \
+    && useradd --uid 10001 --gid odds --create-home odds \
+    && mkdir -p /app/artifacts /app/.cache \
+    && chown odds:odds /app/artifacts /app/.cache \
+    && rm -rf /var/lib/apt/lists/*
+COPY --chown=odds:odds scripts ./scripts
+COPY --chown=odds:odds odds_api ./odds_api
+COPY --chown=odds:odds docker/bet365-entrypoint.sh /app/docker/bet365-entrypoint.sh
+ENV PATH="/app/.venv/bin:$PATH"
+USER 10001:10001
+ENTRYPOINT ["/bin/sh", "/app/docker/bet365-entrypoint.sh"]
+CMD ["python", "-m", "scripts.collect_bet365_container", "--output-dir", "/app/artifacts/collector"]
