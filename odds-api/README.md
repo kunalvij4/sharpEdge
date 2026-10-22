@@ -1,5 +1,7 @@
 # In-House Odds API — Phase 1
 
+Bet365 investigation: see the [New Jersey moneyline and O/U verification](docs/bet365-nj-extraction-2026-10-21.md) for the latest capture and reproducible browser setup, the [earlier headed extraction](docs/bet365-extraction-2026-10-21.md) for the Virginia snapshot and AWS virtual-display instructions, and the [integration plan](docs/bet365-integration-plan.md) for the proposed provider architecture. The browser tools are optional and do not run inside the production API or collector.
+
 A FastAPI service that reads persisted Unabated moneylines and player props. A separate collector discovers account metadata, normalizes boards, and commits each refresh in one database transaction. PostgreSQL is the deployment database; SQLite supports local development and offline tests.
 
 ## Start with Docker Compose

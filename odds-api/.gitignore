@@ -5,9 +5,12 @@
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+.cache/
+artifacts/
 *.py[cod]
 *.db
 *.db-shm
 *.db-wal
 *.collector.lock
 validation*.json
+docs/*
