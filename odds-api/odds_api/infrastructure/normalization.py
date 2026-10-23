@@ -1,5 +1,6 @@
 """Explicit semantic mapping, using discovered IDs rather than composite keys."""
 
+from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -116,6 +117,23 @@ def link_with_partner(link, partner):
     return link
 
 
+def resolve_duplicates(candidates):
+    """Use source recency only when it establishes an unambiguous quote."""
+
+    def terms(q):
+        return q.price, q.state, q.expires_at, q.description
+
+    if all(q.source_updated_at is not None for q in candidates):
+        newest = max(q.source_updated_at for q in candidates)
+        candidates = [q for q in candidates if q.source_updated_at == newest]
+    chosen = min(candidates, key=repr)
+    if len({terms(q) for q in candidates}) == 1:
+        return chosen, False
+    # Explicitly suspend the conflicting selection so an older cached price
+    # cannot remain actionable after a partial refresh.
+    return replace(chosen, price=None, state=Availability.SUSPENDED, deep_link=None), True
+
+
 class Normalizer:
     def __init__(self, bet_overrides=None, period_overrides=None, partner=""):
         self.bet_overrides, self.period_overrides = bet_overrides or {}, period_overrides or {}
@@ -196,6 +214,8 @@ class Normalizer:
                             }:
                                 raise
                             warnings.add("unresolved_event:" + str(group.get("eventId", "missing")))
+                            continue
+                        if event.start <= now:
                             continue
                         bet_id = str(group["betTypeId"])
                         base = market_map.get(bet_id)
@@ -289,16 +309,19 @@ class Normalizer:
                                         timestamp(item.freshnessExpiresAt),
                                         link_with_partner(item.deepLink, self.partner),
                                     )
-                                    existing = quotes.get(quote.selection_id)
-                                    if existing and existing != quote:
-                                        raise ValueError("Conflicting duplicate selections")
-                                    quotes[quote.selection_id] = quote
+                                    quotes.setdefault(quote.selection_id, []).append(quote)
+        resolved = []
+        for selection_id, candidates in quotes.items():
+            quote, ambiguous = resolve_duplicates(candidates)
+            resolved.append(quote)
+            if ambiguous:
+                warnings.add("conflicting_selection:" + selection_id)
         return Board(
             league,
             kind,
             tuple(event_map.values()),
             tuple(books.values()),
-            tuple(quotes.values()),
+            tuple(resolved),
             now,
             complete and not warnings,
             tuple(sorted(warnings)),

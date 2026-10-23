@@ -5,9 +5,9 @@ from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_LEAGUES = {
-    "basketball_nba": {"title": "NBA", "route": "nba"},
-    "americanfootball_nfl": {"title": "NFL", "route": "nfl"},
-    "baseball_mlb": {"title": "MLB", "route": "mlb"},
+    "nba_basketball": {"title": "NBA", "route": "nba"},
+    "nfl_football": {"title": "NFL", "route": "nfl"},
+    "mlb_baseball": {"title": "MLB", "route": "mlb"},
 }
 
 
@@ -44,7 +44,18 @@ class Settings(BaseSettings):
 
     @cached_property
     def leagues(self) -> dict:
-        return json.loads(self.leagues_json)
+        aliases = {
+            "basketball_nba": "nba_basketball",
+            "americanfootball_nfl": "nfl_football",
+            "baseball_mlb": "mlb_baseball",
+        }
+        result = {}
+        for key, value in json.loads(self.leagues_json).items():
+            key = aliases.get(key, key)
+            if key in result:
+                raise ValueError("Duplicate canonical league key in LEAGUES_JSON")
+            result[key] = value
+        return result
 
     @model_validator(mode="after")
     def valid(self):

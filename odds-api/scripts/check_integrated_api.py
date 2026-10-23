@@ -5,7 +5,10 @@ import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 
+from sqlalchemy import func, select
+
 from odds_api.infrastructure.config import Settings
+from odds_api.infrastructure.repository import SqlRepository
 
 s = Settings()
 headers = {"X-API-Key": s.api_keys.get_secret_value().split(",")[0].strip()}
@@ -20,18 +23,34 @@ def get(path):
 result = {
     "observed_at": datetime.now(UTC).isoformat(),
     "ready": get("/health/ready"),
-    "status": get("/status"),
+    "status": get("/v1/status"),
     "leagues": {},
 }
+assert {league["key"] for league in get("/v1/sports")} == set(s.leagues)
+repository = SqlRepository(s.database_url, s.leagues)
+try:
+    with repository.engine.connect() as conn:
+        events = repository.t["events"]
+        expired = conn.scalar(select(func.count()).select_from(events).where(events.c.start <= func.now()))
+        assert expired == 0, "Commenced events remain in the database"
+    assert repository.ready()
+    result["commenced_events_in_database"] = expired
+finally:
+    repository.close()
 for league in s.leagues:
-    money = get(f"/v4/sports/{league}/odds?oddsFormat=american")
+    events = get(f"/v1/sports/{league}/events")
+    assert all(
+        datetime.fromisoformat(e["commence_time"].replace("Z", "+00:00")) > datetime.now(UTC) for e in events
+    )
+    money = get(f"/v1/sports/{league}/odds?oddsFormat=american")
     matched = [e for e in money if any(b["key"] == "bet365" for b in e["bookmakers"])]
     props = []
     for event in matched:
-        response = get(f"/v4/sports/{league}/events/{event['id']}/props?oddsFormat=american")
+        response = get(f"/v1/events/{event['id']}/props?oddsFormat=american")
         if any(b["key"] == "bet365" for b in response["bookmakers"]):
             props.append(response)
     result["leagues"][league] = {
+        "upcoming_events": len(events),
         "moneyline_events": len(money),
         "bet365_moneyline_events": len(matched),
         "existing_books": sorted({b["key"] for e in money for b in e["bookmakers"] if b["key"] != "bet365"}),

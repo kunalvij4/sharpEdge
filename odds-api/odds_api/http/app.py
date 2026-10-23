@@ -69,9 +69,9 @@ def create_app(settings=None, repository=None, clock=None):
 
     app = FastAPI(
         title="In-House Odds API",
-        version="0.1.0",
+        version="1.0.0",
         description="Persisted sportsbook moneylines and player props, including Bet365. Auth uses your product key. "
-        "Source timestamps can be null. See /status for collection freshness.",
+        "Source timestamps can be null. See /v1/status for collection freshness.",
         lifespan=lifespan,
     )
 
@@ -171,7 +171,7 @@ def create_app(settings=None, repository=None, clock=None):
         return {"status": "ready"}
 
     @app.get(
-        "/status",
+        "/v1/status",
         response_model=StatusResponse,
         dependencies=[Depends(authenticate)],
         responses=ERRORS,
@@ -189,7 +189,7 @@ def create_app(settings=None, repository=None, clock=None):
         return {**result, "bet365": bet365}
 
     @app.get(
-        "/v4/sports",
+        "/v1/sports",
         response_model=list[SportResponse],
         dependencies=[Depends(authenticate)],
         responses=ERRORS,
@@ -200,12 +200,12 @@ def create_app(settings=None, repository=None, clock=None):
         return service.sports()
 
     @app.get(
-        "/v4/sports/{sport}/events",
+        "/v1/sports/{sport}/events",
         response_model=list[EventResponse],
         dependencies=[Depends(authenticate)],
         responses=ERRORS,
         tags=["Odds"],
-        summary="List pregame and live events, including delayed and postponed events",
+        summary="List events whose commence time is still in the future",
     )
     def events(
         sport: str,
@@ -223,7 +223,7 @@ def create_app(settings=None, repository=None, clock=None):
         return service.events(sport, commenceTimeFrom, commenceTimeTo)
 
     @app.get(
-        "/v4/sports/{sport}/odds",
+        "/v1/sports/{sport}/odds",
         response_model=list[OddsResponse],
         response_model_exclude_unset=True,
         dependencies=[Depends(authenticate)],
@@ -236,7 +236,7 @@ def create_app(settings=None, repository=None, clock=None):
         return service.moneylines(sport, **options)
 
     @app.get(
-        "/v4/sports/{sport}/events/{event_id}/odds",
+        "/v1/events/{event_id}/odds",
         response_model=OddsResponse,
         response_model_exclude_unset=True,
         dependencies=[Depends(authenticate)],
@@ -246,17 +246,15 @@ def create_app(settings=None, repository=None, clock=None):
         description="Player props can include bounded cached prices with freshness.status=stale and "
         "actionable=false. Use freshOnly=true to exclude cached prices; markets=all_props selects all supported props.",
     )
-    def event_odds(
-        sport: str, event_id: str, response: Response, options=Depends(filters), service=Depends(queries)
-    ):
+    def event_odds(event_id: str, response: Response, options=Depends(filters), service=Depends(queries)):
         freshness(response)
-        payload = service.odds(sport, event_id=event_id, **options)
+        payload = service.event_odds(event_id, **options)
         if "freshness" in payload:
             response.headers["X-Odds-Data-Status"] = payload["freshness"]["status"]
         return payload
 
     @app.get(
-        "/v4/sports/{sport}/events/{event_id}/props",
+        "/v1/events/{event_id}/props",
         response_model=OddsResponse,
         response_model_exclude_unset=True,
         dependencies=[Depends(authenticate)],
@@ -267,14 +265,13 @@ def create_app(settings=None, repository=None, clock=None):
         "with actionable=false and original timestamps. Use freshOnly=true for actionable prices only.",
     )
     def event_props(
-        sport: str,
         event_id: str,
         response: Response,
         options=Depends(props_filters),
         service=Depends(queries),
     ):
         freshness(response)
-        payload = service.props(sport, event_id, **options)
+        payload = service.event_props(event_id, **options)
         response.headers["X-Odds-Data-Status"] = payload["freshness"]["status"]
         return payload
 

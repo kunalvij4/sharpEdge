@@ -9,7 +9,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from fractions import Fraction
 from pathlib import Path
 
-LEAGUES = {"NBA": "basketball_nba", "NFL": "americanfootball_nfl", "MLB": "baseball_mlb"}
+LEAGUES = {"NBA": "nba_basketball", "NFL": "nfl_football", "MLB": "mlb_baseball"}
 QUICK_PICK = {"Points", "Assists", "Rebounds", "Threes Made", "Double Double", "Triple Double"}
 
 

@@ -72,7 +72,7 @@ def save_report(report, repo, clock):
 
 
 def bet_quotes(repo):
-    return [r["quote"] for r in repo.quotes("basketball_nba") if r["book_key"] == "bet365"]
+    return [r["quote"] for r in repo.quotes("nba_basketball") if r["book_key"] == "bet365"]
 
 
 def test_provider_leases_are_independent_but_each_is_exclusive(repo):
@@ -83,7 +83,7 @@ def test_provider_leases_are_independent_but_each_is_exclusive(repo):
 
 
 def test_merge_uses_existing_ids_and_exact_api_schema(repo, board, clock, report):
-    original = [r["quote"] for r in repo.quotes("basketball_nba")]
+    original = [r["quote"] for r in repo.quotes("nba_basketball")]
     output, counts = save_report(report, repo, clock)
     assert counts["moneyline_selections"] == 2 and counts["props_selections"] == 2
     assert {q.event_id for q in bet_quotes(repo)} == {board().events[0].id}
@@ -94,21 +94,19 @@ def test_merge_uses_existing_ids_and_exact_api_schema(repo, board, clock, report
         if q.player_id
     )
     assert all(q.source_updated_at is None for q in bet_quotes(repo))
-    assert len(repo.events("basketball_nba")) == 1
+    assert len(repo.events("nba_basketball")) == 1
     settings = Settings(_env_file=None, api_keys="test-key")
     with TestClient(create_app(settings, repo, clock)) as client:
         headers = {"X-API-Key": "test-key"}
-        money = client.get("/v4/sports/basketball_nba/odds", headers=headers)
+        money = client.get("/v1/sports/nba_basketball/odds", headers=headers)
         assert money.status_code == 200
         books = money.json()[0]["bookmakers"]
         assert {b["key"] for b in books} == {"unabated_901", "bet365"}
         assert next(b for b in books if b["key"] == "bet365")["title"] == "Bet365"
-        props = client.get(
-            f"/v4/sports/basketball_nba/events/{canonical.event_id}/props?bookmakers=bet365", headers=headers
-        )
+        props = client.get(f"/v1/events/{canonical.event_id}/props?bookmakers=bet365", headers=headers)
         assert props.status_code == 200
         assert props.json()["bookmakers"][0]["markets"][0]["key"] == "player_points"
-    assert [r["quote"] for r in repo.quotes("basketball_nba") if r["book_key"] != "bet365"] == original
+    assert [r["quote"] for r in repo.quotes("nba_basketball") if r["book_key"] != "bet365"] == original
 
 
 @pytest.mark.parametrize("mutation", ["line", "player", "market", "milestone", "ambiguous_player"])
@@ -144,14 +142,14 @@ def test_provider_refreshes_cannot_remove_each_other_or_corrupt_event_lifecycle(
     repo.save(replace(output[0], quotes=()))
     assert all(
         r["quote"].state == Availability.AVAILABLE
-        for r in repo.quotes("basketball_nba")
+        for r in repo.quotes("nba_basketball")
         if r["book_key"] != "bet365"
     )
     # A late browser write cannot revert the canonical provider's final event.
     snapshot = board()
     repo.save(replace(snapshot, events=(replace(snapshot.events[0], status="final"),)))
     repo.save(output[0])
-    assert repo.events("basketball_nba")[0]["status"] == "final"
+    assert repo.events("nba_basketball")[0]["status"] == "final"
 
 
 def test_removing_last_other_book_removes_bet365_prop_in_same_transaction(repo, board, clock, report):
@@ -181,7 +179,7 @@ def test_capture_timestamp_and_expiry_are_never_refreshed_by_reimport(repo, cloc
 
 
 def test_ambiguous_fixtures_are_never_guessed(repo, board, clock, report):
-    event = repo.events("basketball_nba")[0]
+    event = repo.events("nba_basketball")[0]
     source = report["leagues"][0]["events"][0]
     assert match_event(source, [event, {**event, "id": "doubleheader"}], clock.now()) is None
     source = deepcopy(source)
@@ -197,6 +195,6 @@ def test_bet365_failure_expiry_and_support_filter_do_not_hide_other_books(repo, 
         # The browser has failed; ordinary collection keeps refreshing independently.
         money = board()
         repo.save(money)
-        response = client.get("/v4/sports/basketball_nba/odds", headers={"X-API-Key": "test-key"})
+        response = client.get("/v1/sports/nba_basketball/odds", headers={"X-API-Key": "test-key"})
         assert {b["key"] for b in response.json()[0]["bookmakers"]} == {"unabated_901"}
         assert BOOK.key == "bet365"

@@ -41,13 +41,13 @@ def main():
     repository = SqlRepository(settings.database_url, settings.leagues)
     try:
         target = "275f9649fc6e5e69b4e35ccd890aa8e8"
-        path = "/v4/sports/basketball_nba/events/" + target
+        path = "/v1/events/" + target
         assert summarize(path + "/odds?markets=player_points&oddsFormat=american"), (
             "Target points still empty"
         )
         assert summarize(path + "/props?oddsFormat=american"), "NBA all-props endpoint empty"
         summarize(path + "/props?freshOnly=true&oddsFormat=american")
-        for sport in ("americanfootball_nfl",):
+        for sport in ("nfl_football",):
             eligible = Counter()
             for row in repository.quotes(sport):
                 q = row["quote"]
@@ -60,8 +60,8 @@ def main():
                             eligible[q.event_id] += 1
             assert eligible, "No eligible NFL props are currently stored"
             event_id = eligible.most_common(1)[0][0]
-            assert summarize("/v4/sports/" + sport + "/events/" + event_id + "/props?oddsFormat=american")
-        status, _ = get("/status")
+            assert summarize("/v1/events/" + event_id + "/props?oddsFormat=american")
+        status, _ = get("/v1/status")
         print(
             json.dumps(
                 {

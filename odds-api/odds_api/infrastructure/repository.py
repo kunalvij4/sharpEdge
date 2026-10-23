@@ -1,10 +1,11 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import MetaData, create_engine, delete, event, func, select, text, update
+from sqlalchemy import MetaData, and_, create_engine, delete, event, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from odds_api.domain.models import Availability, League, Quote
+from odds_api.infrastructure.clock import SystemClock
 
 
 def aware(value):
@@ -13,7 +14,8 @@ def aware(value):
 
 
 class SqlRepository:
-    def __init__(self, url, league_config, retention=0):
+    def __init__(self, url, league_config, retention=0, clock=None):
+        self.clock = clock or SystemClock()
         kwargs = (
             {"connect_args": {"check_same_thread": False, "timeout": 30}}
             if url.startswith("sqlite")
@@ -79,6 +81,8 @@ class SqlRepository:
             # Serialize both scopes of one league so event lifecycle updates cannot race.
             if self.engine.dialect.name == "postgresql":
                 conn.execute(select(t["leagues"]).where(t["leagues"].c.key == league.key).with_for_update())
+            now = self.clock.now()
+            self._prune_started(conn, now, league.key)
             if board.provider == "unabated":
                 self.upsert(conn, "leagues", vars(league))
             self.upsert_many(
@@ -95,9 +99,12 @@ class SqlRepository:
                         "status": e.status,
                     }
                     for e in board.events
-                    if board.provider == "unabated"
+                    if board.provider == "unabated" and e.start > now
                 ],
             )
+            # A corrected kickoff may move a previously future event into the past.
+            expired_ids = {e.id for e in board.events if e.start <= now and board.provider == "unabated"}
+            self._delete_events(conn, expired_ids)
             self.upsert_many(
                 conn,
                 "books",
@@ -134,19 +141,14 @@ class SqlRepository:
                 if board.provider == "bet365"
                 else None
             )
-            canonical_events = None
+            event_query = select(t["events"].c.id).where(
+                t["events"].c.league_key == league.key, t["events"].c.start > now
+            )
             if board.provider == "bet365":
-                canonical_events = set(
-                    conn.execute(
-                        select(t["events"].c.id).where(
-                            t["events"].c.league_key == league.key,
-                            t["events"].c.status == "pregame",
-                            t["events"].c.start > board.collected_at,
-                        )
-                    ).scalars()
-                )
+                event_query = event_query.where(t["events"].c.status == "pregame")
+            canonical_events = set(conn.execute(event_query).scalars())
             for q in board.quotes:
-                if canonical_events is not None and q.event_id not in canonical_events:
+                if q.event_id not in canonical_events:
                     continue
                 if (
                     supported is not None
@@ -189,7 +191,7 @@ class SqlRepository:
             changes = {
                 "last_attempt": board.collected_at,
                 "outcome": "partial" if not board.complete else ("success" if board.quotes else "empty"),
-                "selection_count": len(board.quotes),
+                "selection_count": len(prices),
                 "warnings": list(board.warnings),
             }
             if board.complete:
@@ -212,6 +214,7 @@ class SqlRepository:
                         "source_updated_at": q.source_updated_at.isoformat() if q.source_updated_at else None,
                     }
                     for q in board.quotes
+                    if q.selection_id in prices
                 ]
                 conn.execute(
                     t["snapshots"]
@@ -225,6 +228,34 @@ class SqlRepository:
                         t["snapshots"].c.collected_at < board.collected_at - timedelta(days=self.retention)
                     )
                 )
+
+    def _delete_events(self, conn, event_ids):
+        if not event_ids:
+            return 0
+        t = self.t
+        markets = select(t["markets"].c.id).where(t["markets"].c.event_id.in_(event_ids))
+        selections = select(t["selections"].c.id).where(t["selections"].c.market_id.in_(markets))
+        conn.execute(delete(t["odds"]).where(t["odds"].c.selection_id.in_(selections)))
+        conn.execute(delete(t["selections"]).where(t["selections"].c.market_id.in_(markets)))
+        conn.execute(delete(t["markets"]).where(t["markets"].c.event_id.in_(event_ids)))
+        return conn.execute(delete(t["events"]).where(t["events"].c.id.in_(event_ids))).rowcount
+
+    def _prune_started(self, conn, now, league):
+        e = self.t["events"]
+        ids = list(conn.execute(select(e.c.id).where(e.c.league_key == league, e.c.start <= now)).scalars())
+        # Bound parameters and transaction work for large accumulated boards.
+        return sum(self._delete_events(conn, ids[n : n + 500]) for n in range(0, len(ids), 500))
+
+    def prune_started(self):
+        removed = 0
+        for league in sorted(self.configured):
+            with self.engine.begin() as conn:
+                if self.engine.dialect.name == "postgresql":
+                    conn.execute(
+                        select(self.t["leagues"]).where(self.t["leagues"].c.key == league).with_for_update()
+                    )
+                removed += self._prune_started(conn, self.clock.now(), league)
+        return removed
 
     @staticmethod
     def prop_identity(q):
@@ -313,7 +344,21 @@ class SqlRepository:
             ).mappings()
             return [{**dict(r), "start": aware(r["start"])} for r in rows]
 
-    def quotes(self, sport):
+    def event(self, event_id):
+        e, league = self.t["events"], self.t["leagues"]
+        with self.engine.connect() as conn:
+            row = (
+                conn.execute(
+                    select(e, league.c.title.label("sport_title"))
+                    .join(league)
+                    .where(e.c.id == event_id, e.c.league_key.in_(self.configured))
+                )
+                .mappings()
+                .first()
+            )
+            return {**dict(row), "start": aware(row["start"])} if row else None
+
+    def quotes(self, sport, event_id=None, now=None):
         m, s, o, e, b = (self.t[k] for k in ("markets", "selections", "odds", "events", "books"))
         stmt = (
             select(
@@ -334,6 +379,10 @@ class SqlRepository:
             .select_from(m.join(s).join(o).join(e, m.c.event_id == e.c.id).join(b, m.c.book_id == b.c.id))
             .where(e.c.league_key == sport)
         )
+        if event_id is not None:
+            stmt = stmt.where(e.c.id == event_id)
+        if now is not None:
+            stmt = stmt.where(e.c.start > now)
         with self.engine.connect() as conn:
             return self._quote_rows(conn.execute(stmt).mappings())
 
@@ -388,11 +437,25 @@ class SqlRepository:
                 for name in ("events", "markets", "selections")
             }
             collector = conn.execute(select(self.t["collector"])).mappings().first()
-        stale = sum(
-            row["quote"].availability(now, collected_ttl, source_ttl) == Availability.STALE
-            for sport in self.configured
-            for row in self.quotes(sport)
-        )
+            o, s, m, e = (self.t[k] for k in ("odds", "selections", "markets", "events"))
+            stale = conn.execute(
+                select(func.count())
+                .select_from(o.join(s).join(m).join(e))
+                .where(
+                    e.c.league_key.in_(self.configured),
+                    or_(
+                        o.c.state == "stale",
+                        and_(
+                            o.c.state == "available",
+                            or_(
+                                o.c.collected_at < now - timedelta(seconds=collected_ttl),
+                                o.c.source_updated_at < now - timedelta(seconds=source_ttl),
+                                o.c.expires_at <= now,
+                            ),
+                        ),
+                    ),
+                )
+            ).scalar_one()
         heartbeat = aware(collector["heartbeat"]) if collector else None
         healthy = bool(heartbeat and now - heartbeat < timedelta(seconds=10))
         return {
@@ -411,7 +474,7 @@ class SqlRepository:
             with self.engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
                 version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                return version == "0001"
+                return version == "0002"
         except Exception:
             return False
 

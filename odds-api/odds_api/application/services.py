@@ -81,7 +81,9 @@ class OddsQueryService:
         return [
             {
                 "key": league.key,
-                "group": league.key.split("_")[0].title(),
+                "group": {"nba": "Basketball", "nfl": "Football", "mlb": "Baseball"}.get(
+                    league.route, league.title
+                ),
                 "title": league.title,
                 "description": league.title,
                 "active": True,
@@ -128,6 +130,7 @@ class OddsQueryService:
             self.event_payload(e)
             for e in self.repository.events(sport)
             if e["status"] not in {"final", "cancelled"}
+            and e["start"] > self.clock.now()
             and (start is None or e["start"] >= start)
             and (end is None or e["start"] <= end)
         ]
@@ -155,6 +158,18 @@ class OddsQueryService:
             raise QueryError("The props endpoint accepts only player prop markets")
         return self.odds(sport, event_id=event_id, markets=markets, **options)
 
+    def event_sport(self, event_id):
+        event = self.repository.event(event_id)
+        if event is None or event["start"] <= self.clock.now():
+            raise QueryError("Unknown or commenced event", 404)
+        return event["league_key"]
+
+    def event_props(self, event_id: str, **options):
+        return self.props(self.event_sport(event_id), event_id, **options)
+
+    def event_odds(self, event_id: str, **options):
+        return self.odds(self.event_sport(event_id), event_id=event_id, **options)
+
     def odds(
         self,
         sport: str,
@@ -171,11 +186,13 @@ class OddsQueryService:
         prop_query = bool(market_set and any(not market.startswith("h2h") for market in market_set))
         if odds_format not in {"american", "decimal"}:
             raise QueryError("Invalid oddsFormat")
-        events = {e["id"]: e for e in self.repository.events(sport)}
+        now = self.clock.now()
+        candidates = [self.repository.event(event_id)] if event_id else self.repository.events(sport)
+        events = {e["id"]: e for e in candidates if e and e["league_key"] == sport and e["start"] > now}
         if event_id is not None and event_id not in events:
             raise QueryError("Unknown event", 404)
         now, grouped = self.clock.now(), {}
-        rows = self.repository.quotes(sport)
+        rows = self.repository.quotes(sport, event_id=event_id, now=now)
         # Enforce the intersection at read time as well: filters must never turn
         # a Bet365-only prop into a supported one, including during an outage.
         support = {
@@ -192,7 +209,9 @@ class OddsQueryService:
         }
         for row in rows:
             q = row["quote"]
-            event = events[q.event_id]
+            event = events.get(q.event_id)
+            if event is None:
+                continue
             if row["book_key"] == "bet365":
                 if event["status"] != "pregame" or event["start"] <= now:
                     continue
@@ -238,7 +257,7 @@ class OddsQueryService:
             market = book["markets"].setdefault(
                 q.market, {"key": q.market, "last_update": None, "outcomes": []}
             )
-            # Null source times stay null. Collection time is available in /status.
+            # Null source times stay null. Collection time is available in /v1/status.
             if q.source_updated_at:
                 for obj in (book, market):
                     obj["last_update"] = max(filter(None, (obj["last_update"], q.source_updated_at)))
@@ -265,6 +284,8 @@ class OddsQueryService:
                 market["outcomes"].append(outcome)
         result = []
         for eid in sorted(grouped, key=lambda k: (events[k]["start"], k)):
+            if events[eid]["start"] <= self.clock.now():
+                continue
             payload = self.event_payload(events[eid])
             payload["bookmakers"] = []
             for key in sorted(grouped[eid]):
@@ -279,6 +300,8 @@ class OddsQueryService:
                 payload["freshness"] = self.freshness(payload, now)
             result.append(payload)
         if event_id:
+            if events[event_id]["start"] <= self.clock.now():
+                raise QueryError("Unknown or commenced event", 404)
             if result:
                 return result[0]
             payload = {**self.event_payload(events[event_id]), "bookmakers": []}

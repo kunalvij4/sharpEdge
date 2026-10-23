@@ -482,6 +482,9 @@ async def capture(args):
                         and re.search(r"#D(?:43|47)#", row["fields"].get("PD", ""))
                     ]
                     candidates = page.get_by_text(tab, exact=True).filter(visible=True)
+                    if getattr(args, "skip_unavailable_tabs", False) and not await candidates.count():
+                        errors.append({"stage": stage, "error_type": "market_tab_unavailable"})
+                        continue
                     target = candidates.last if tab in {"A-Z", "Player", "Main Props"} else candidates.first
                     await target.click(timeout=8000)
                     if routes and args.entry not in {"event", "player-props"}:
@@ -565,6 +568,7 @@ def main():
     parser.add_argument("--content-fetch", action="store_true")
     parser.add_argument("--market-filter")
     parser.add_argument("--routes-file", type=Path)
+    parser.add_argument("--skip-unavailable-tabs", action="store_true")
     parser.add_argument(
         "--tabs",
         nargs="*",

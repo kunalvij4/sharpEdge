@@ -22,12 +22,12 @@ def test_migrations_idempotency_and_relationships(repo, board):
     assert count(repo, "markets") == 1
     assert count(repo, "selections") == 2
     assert count(repo, "odds") == 2
-    assert repo.quotes("basketball_nba")[0]["quote"].source_selection_id in {"2001", "2002"}
+    assert repo.quotes("nba_basketball")[0]["quote"].source_selection_id in {"2001", "2002"}
 
 
 def test_unique_source_event_constraint(repo, board):
     repo.save(board())
-    event = repo.events("basketball_nba")[0]
+    event = repo.events("nba_basketball")[0]
     with pytest.raises(IntegrityError), repo.engine.begin() as conn:
         conn.execute(
             repo.t["events"]
@@ -48,8 +48,8 @@ def test_partial_refresh_and_failure_preserve_absent_selections(repo, board):
     snapshot = board()
     repo.save(snapshot)
     repo.save(replace(snapshot, quotes=snapshot.quotes[:1], complete=False))
-    repo.failure("basketball_nba", "moneyline", "provider_unavailable")
-    assert all(r["quote"].state == Availability.AVAILABLE for r in repo.quotes("basketball_nba"))
+    repo.failure("nba_basketball", "moneyline", "provider_unavailable")
+    assert all(r["quote"].state == Availability.AVAILABLE for r in repo.quotes("nba_basketball"))
 
 
 def test_complete_empty_refresh_marks_removed_only_in_scope(repo, board):
@@ -57,7 +57,7 @@ def test_complete_empty_refresh_marks_removed_only_in_scope(repo, board):
     repo.save(moneyline)
     repo.save(props)
     repo.save(replace(moneyline, quotes=()))
-    rows = repo.quotes("basketball_nba")
+    rows = repo.quotes("nba_basketball")
     assert all(r["quote"].state == Availability.REMOVED for r in rows if r["quote"].market == "h2h")
     assert all(r["quote"].state == Availability.AVAILABLE for r in rows if r["quote"].market != "h2h")
 
@@ -69,7 +69,7 @@ def test_suspension_removal_and_relisting(repo, board):
     repo.save(replace(snapshot, quotes=(replace(q, state=Availability.SUSPENDED),)))
     repo.save(replace(snapshot, quotes=()))
     repo.save(replace(snapshot, quotes=(replace(q, source_selection_id="new-line-id"),)))
-    rows = repo.quotes("basketball_nba")
+    rows = repo.quotes("nba_basketball")
     assert len(rows) == 2
     relisted = next(r["quote"] for r in rows if r["quote"].selection_id == q.selection_id)
     assert relisted.state == Availability.AVAILABLE
@@ -89,17 +89,17 @@ def test_failed_transaction_rolls_back_removals_and_updates(repo, board, monkeyp
     monkeypatch.setattr(repo, "upsert_many", fail)
     with pytest.raises(RuntimeError):
         repo.save(replace(snapshot, quotes=snapshot.quotes[:1]))
-    assert all(r["quote"].state == Availability.AVAILABLE for r in repo.quotes("basketball_nba"))
+    assert all(r["quote"].state == Availability.AVAILABLE for r in repo.quotes("nba_basketball"))
 
 
 def test_event_transitions_preserve_identity_and_null_source_times(repo, board):
     snapshot = board()
     for status in ("pregame", "live", "final", "cancelled"):
         repo.save(replace(snapshot, events=(replace(snapshot.events[0], status=status),)))
-        assert repo.events("basketball_nba")[0]["id"] == snapshot.events[0].id
-        assert repo.events("basketball_nba")[0]["status"] == status
+        assert repo.events("nba_basketball")[0]["id"] == snapshot.events[0].id
+        assert repo.events("nba_basketball")[0]["status"] == status
     repo.save(board("props"))
-    assert any(r["quote"].source_updated_at is None for r in repo.quotes("basketball_nba"))
+    assert any(r["quote"].source_updated_at is None for r in repo.quotes("nba_basketball"))
 
 
 def test_snapshots_have_retention(repo, board, clock):
@@ -122,7 +122,7 @@ def test_collection_status_distinguishes_empty_failure_and_stale(repo, board, cl
     scope = next(
         s
         for s in repo.status(clock.now(), 90, 3600)["scopes"]
-        if s["league"] == "basketball_nba" and s["kind"] == "moneyline"
+        if s["league"] == "nba_basketball" and s["kind"] == "moneyline"
     )
     assert scope["outcome"] == "empty"
     assert scope["last_success"] is not None
@@ -161,13 +161,13 @@ def test_readers_never_observe_partial_board(repo, board, monkeypatch):
         write = executor.submit(repo.save, replacement)
         try:
             assert paused.wait(5)
-            during = repo.quotes("basketball_nba")
+            during = repo.quotes("nba_basketball")
             assert len(during) == 2
             assert all(row["quote"].state == Availability.AVAILABLE for row in during)
             assert {row["quote"].price for row in during} == {120, -130}
         finally:
             resume.set()
         write.result(timeout=10)
-    after = [row["quote"] for row in repo.quotes("basketball_nba")]
+    after = [row["quote"] for row in repo.quotes("nba_basketball")]
     assert {quote.state for quote in after} == {Availability.AVAILABLE, Availability.REMOVED}
     assert next(quote for quote in after if quote.state == Availability.AVAILABLE).price == 150

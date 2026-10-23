@@ -1,4 +1,4 @@
-"""Observe persisted event transitions; never requests upstream data."""
+"""Observe future events and their removal at commence time; never calls providers."""
 
 import argparse
 import json
@@ -21,18 +21,22 @@ def main():
     settings = Settings()
     repository = SqlRepository(settings.database_url, settings.leagues)
     started, deadline, seen = datetime.now(UTC), time.monotonic() + args.seconds, {}
+    starts, deleted = {}, set()
     try:
         while True:
+            present = set()
             for sport in settings.leagues:
                 for event in repository.events(sport):
+                    present.add(event["id"])
+                    starts[event["id"]] = event["start"]
                     seen.setdefault(event["id"], set()).add(event["status"])
             now = datetime.now(UTC)
-            complete = [eid for eid, states in seen.items() if {"pregame", "live", "final"} <= states]
+            deleted.update(eid for eid, start in starts.items() if eid not in present and start <= now)
             report = {
                 "started_at": started.isoformat(),
                 "observed_at": now.isoformat(),
                 "events": {eid: sorted(states) for eid, states in seen.items()},
-                "pregame_live_final_events": complete,
+                "commenced_events_deleted": sorted(deleted),
                 "status": repository.status(now, settings.collected_ttl, settings.source_ttl),
             }
             args.output.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")

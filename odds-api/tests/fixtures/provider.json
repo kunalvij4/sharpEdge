@@ -44,7 +44,7 @@
       "eventId": 555,
       "leagueId": 42,
       "statusId": 1,
-      "eventStart": "2026-10-19T00:00:00Z",
+      "eventStart": "2026-10-20T00:00:00Z",
       "eventTeams": [
         {
           "teamId": 10,
@@ -90,7 +90,7 @@
                   "eventId": 555,
                   "leagueId": 42,
                   "statusId": 1,
-                  "eventStart": "2026-10-19T00:00:00Z",
+                  "eventStart": "2026-10-20T00:00:00Z",
                   "eventTeams": [
                     {
                       "teamId": 10,
@@ -160,7 +160,7 @@
                   "eventId": 555,
                   "leagueId": 42,
                   "statusId": 1,
-                  "eventStart": "2026-10-19T00:00:00Z",
+                  "eventStart": "2026-10-20T00:00:00Z",
                   "eventTeams": [
                     {
                       "teamId": 10,

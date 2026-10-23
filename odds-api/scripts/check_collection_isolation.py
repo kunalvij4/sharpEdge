@@ -26,7 +26,7 @@ def main():
     key = settings.api_keys.get_secret_value().split(",")[0].strip()
 
     def status():
-        request = urllib.request.Request("http://localhost:8000/status", headers={"X-API-Key": key})
+        request = urllib.request.Request("http://localhost:8000/v1/status", headers={"X-API-Key": key})
         with urllib.request.urlopen(request, timeout=15) as response:
             return json.load(response)
 

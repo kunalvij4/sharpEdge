@@ -16,7 +16,7 @@ def main():
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.load(response)
 
-    status = get("/status")
+    status = get("/v1/status")
     print(
         json.dumps(
             {
@@ -37,7 +37,7 @@ def main():
         flush=True,
     )
     for sport in settings.leagues:
-        odds = get("/v4/sports/" + sport + "/odds?oddsFormat=american")
+        odds = get("/v1/sports/" + sport + "/odds?oddsFormat=american")
         print(
             json.dumps(
                 {
@@ -51,9 +51,7 @@ def main():
         if odds:
             event_id = odds[0]["id"]
             markets = ",".join(sorted(set(BET_NAMES.values()) - {"h2h"}))
-            props = get(
-                "/v4/sports/" + sport + "/events/" + event_id + "/odds?freshOnly=true&markets=" + markets
-            )
+            props = get("/v1/events/" + event_id + "/odds?freshOnly=true&markets=" + markets)
             print(
                 json.dumps(
                     {

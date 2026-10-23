@@ -1,9 +1,9 @@
 [
   {
     "id": "__EVENT_ID__",
-    "sport_key": "basketball_nba",
+    "sport_key": "nba_basketball",
     "sport_title": "NBA",
-    "commence_time": "2026-10-19T00:00:00Z",
+    "commence_time": "2026-10-20T00:00:00Z",
     "home_team": "Home Team",
     "away_team": "Away Team",
     "bookmakers": [

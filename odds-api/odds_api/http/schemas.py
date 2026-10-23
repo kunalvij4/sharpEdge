@@ -23,7 +23,7 @@ class SportResponse(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "key": "basketball_nba",
+                "key": "nba_basketball",
                 "group": "Basketball",
                 "title": "NBA",
                 "description": "NBA",
@@ -45,7 +45,7 @@ class EventResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "id": "example-event-id",
-                "sport_key": "basketball_nba",
+                "sport_key": "nba_basketball",
                 "sport_title": "NBA",
                 "commence_time": "2026-10-19T00:00:00Z",
                 "home_team": "Home Team",

@@ -23,13 +23,13 @@ Compose waits for PostgreSQL, runs `alembic upgrade head` in a one-shot migratio
 Swagger UI: <http://localhost:8000/docs>. OpenAPI: <http://localhost:8000/openapi.json>. Use Swagger's Authorize button with your **product** key.
 
 ```sh
-curl -H "X-API-Key: YOUR_PRODUCT_KEY" http://localhost:8000/v4/sports
-curl -H "X-API-Key: YOUR_PRODUCT_KEY" "http://localhost:8000/v4/sports/basketball_nba/odds?markets=h2h&oddsFormat=american"
-curl -H "X-API-Key: YOUR_PRODUCT_KEY" "http://localhost:8000/v4/sports/basketball_nba/events/EVENT_ID/odds?markets=player_points,player_rebounds&oddsFormat=american"
-curl -H "X-API-Key: YOUR_PRODUCT_KEY" http://localhost:8000/status
+curl -H "X-API-Key: YOUR_PRODUCT_KEY" http://localhost:8000/v1/sports
+curl -H "X-API-Key: YOUR_PRODUCT_KEY" "http://localhost:8000/v1/sports/nba_basketball/odds?markets=h2h&oddsFormat=american"
+curl -H "X-API-Key: YOUR_PRODUCT_KEY" "http://localhost:8000/v1/events/EVENT_ID/odds?markets=player_points,player_rebounds&oddsFormat=american"
+curl -H "X-API-Key: YOUR_PRODUCT_KEY" http://localhost:8000/v1/status
 ```
 
-An empty list before collection succeeds is expected. Inspect each scope in `/status` to distinguish an uncollected scope, an empty successful board, partial data, or a failure.
+An empty list before collection succeeds is expected. Inspect each scope in `/v1/status` to distinguish an uncollected scope, an empty successful board, partial data, or a failure.
 
 For upgrades, rebuild the image and run migrations before replacing the services:
 
@@ -77,12 +77,12 @@ Set `TEST_DATABASE_URL` to an **empty disposable PostgreSQL database** to run re
 
 | Endpoint | Behavior |
 |---|---|
-| `GET /v4/sports` | Configured leagues, including NBA, NFL, and MLB by default |
-| `GET /v4/sports/{sport}/events` | Pregame/live/delayed/postponed events |
-| `GET /v4/sports/{sport}/odds` | Actionable moneylines across events |
-| `GET /v4/sports/{sport}/events/{event_id}/odds` | Moneylines and selected props; cached props carry explicit freshness labels |
-| `GET /v4/sports/{sport}/events/{event_id}/props` | All supported player props, including alternates and periods, from every stored book |
-| `GET /status` | Collection success/failure, lag, misses, warnings, counts, rate limits, freshness |
+| `GET /v1/sports` | Configured leagues, including NBA, NFL, and MLB by default |
+| `GET /v1/sports/{sport}/events` | Events with a future commence time |
+| `GET /v1/sports/{sport}/odds` | Actionable moneylines across events |
+| `GET /v1/events/{event_id}/odds` | Moneylines and selected props; cached props carry explicit freshness labels |
+| `GET /v1/events/{event_id}/props` | All supported player props, including alternates and periods, from every stored book |
+| `GET /v1/status` | Collection success/failure, lag, misses, warnings, counts, rate limits, freshness |
 | `GET /health/live` | Process liveness |
 | `GET /health/ready` | Database connectivity and migration revision |
 
@@ -90,7 +90,7 @@ All product endpoints require `X-API-Key` or the compatibility query parameter `
 
 Both odds endpoints accept comma-separated `markets` (default `h2h`) and `bookmakers`, plus `oddsFormat=decimal|american` (default decimal). Props must be requested from the event endpoint. Event and odds queries accept inclusive `commenceTimeFrom` and `commenceTimeTo` bounds with an explicit UTC offset. Unknown sports/events return 404; unknown bookmakers, unsupported markets, invalid dates, invalid formats, reversed bounds, and unsupported parameters return 422. Missing/invalid product credentials return 401. A not-ready internal dependency returns 503 on readiness.
 
-For every supported prop on a game, use `/v4/sports/basketball_nba/events/{event_id}/props?oddsFormat=american` or `/v4/sports/americanfootball_nfl/events/{event_id}/props?oddsFormat=american`. The equivalent event odds query is `?markets=all_props&oddsFormat=american`. The props route defaults to `markets=all_props` and accepts the same bookmaker, market, date, and format filters. To request one or several prop types, use e.g. `?markets=player_points,player_rebounds` for NBA or `?markets=player_pass_yds,player_receptions` for NFL. Game IDs come from the matching sport's `/events` endpoint. All-props means all supported normalized prop keys; unsupported settlement types still appear as collector warnings.
+For every supported prop on a game, use `/v1/events/{event_id}/props?oddsFormat=american`. The equivalent event odds query is `?markets=all_props&oddsFormat=american`. The props route defaults to `markets=all_props` and accepts the same bookmaker, market, date, and format filters. To request one or several prop types, use e.g. `?markets=player_points,player_rebounds` for NBA or `?markets=player_pass_yds,player_receptions` for NFL. Game IDs come from the matching sport's `/events` endpoint. All-props means all supported normalized prop keys; unsupported settlement types still appear as collector warnings.
 
 Props can now include recently cached prices during an upstream outage. The default `PROPS_CACHE_TTL=3600` bounds their collection age to one hour; `SOURCE_TTL` and explicit source expiry remain enforced. Each prop outcome includes `freshness.status`, `actionable`, `collected_at`, `source_updated_at`, `expires_at`, and `age_seconds`. Stale cached prices have `actionable:false`. The response's `freshness` object summarizes fresh/stale counts; `X-Odds-Data-Status` repeats its status. These timestamps are never refreshed by reading the API or by a failed collection. Add `freshOnly=true` to either event route for fresh actionable prices only. Set `PROPS_CACHE_TTL=0` to disable cached props globally. Moneylines continue to use the strict collection freshness limit.
 
@@ -100,12 +100,20 @@ Responses use events → bookmakers → markets → outcomes. Player over/under 
 
 This implements the Phase 1 subset of [The Odds API v4](https://the-odds-api.com/liveapi/guides/v4/); it is not a complete drop-in replacement.
 
+This service exposes `/v1` business routes. The league keys are `nba_basketball`, `nfl_football`, and `mlb_baseball`. Event props and odds use `/v1/events/{event_id}/props` and `/v1/events/{event_id}/odds`; no sport parameter is required. Health probes remain `/health/live` and `/health/ready`. Older `/v4` routes are removed.
+
+Events are excluded at their commence time, regardless of their upstream status. An independent maintenance process deletes commenced events and their markets, selections, and odds every second, including during provider outages. Writers also prune and reject commenced events, using the current database-write time rather than the capture time. Expired event IDs return 404. Deletion frees PostgreSQL space for reuse; normal autovacuum reclaims dead rows without a blocking table rewrite. Snapshot history remains disabled by default (`SNAPSHOT_RETENTION_DAYS=0`).
+
+Run `alembic upgrade head` with old collectors stopped before starting the v1 service. Revision `0002` renames league references while preserving event, market, and selection IDs. Legacy league names in `LEAGUES_JSON` are translated at startup; API clients should use the new keys.
+
+Duplicate selections use the newest source timestamp when it establishes an unambiguous quote. Conflicting selections with missing or tied timestamps are suspended individually and reported as warnings; other valid props on the board continue updating. Unoffered Bet365 tabs are skipped, while navigation failures remain visible as failures.
+
 - Internal event IDs are deterministic UUID5 hex strings derived from league key and provider event ID. They do not equal The Odds API's IDs.
 - Bookmaker keys are stable `unabated_<source-id>` identifiers, plus `bet365` for direct Bet365 collection. Every discovered account-authorized Unabated source is considered.
 - `last_update` is null when individual source timestamps are absent. It is never synthesized from collection time. When grouped, it is the newest known source timestamp among included outcomes; it does not imply every outcome changed then.
 - Region filters, scores, futures, historical endpoints, dateFormat, quota/billing headers, and event/market discovery endpoints beyond the required subset are not implemented. Unsupported query parameters are rejected.
 - Suspended, removed, explicitly expired, source-expired, and final/cancelled/unknown-event quotes are excluded. Stale props within the bounded cache policy are returned with explicit non-actionable labels unless `freshOnly=true`; stale moneylines remain excluded. Known events with no eligible prices return `bookmakers: []`.
-- Freshness is reported separately in `/status` and `X-Odds-Observed-At`, `X-Odds-Collected-TTL`, and `X-Odds-Source-TTL` headers. The observed-at header is the API observation time, not an upstream update time.
+- Freshness is reported separately in `/v1/status` and `X-Odds-Observed-At`, `X-Odds-Collected-TTL`, and `X-Odds-Source-TTL` headers. The observed-at header is the API observation time, not an upstream update time.
 - Periods and alternate lines have distinct public market keys as described below. Outcome arrays may contain multiple points for a player.
 - Fixtures in `tests/fixtures` are synthetic examples based on the documented hierarchy. No actual existing consumer payload or account response was supplied; replace/add sanitized real fixtures during acceptance validation.
 
@@ -173,11 +181,11 @@ Availability has available, suspended, removed, and stale states. Staleness is c
 
 A missing source timestamp stays null. A fresh collection can contain an old source update. The [response concepts guide](https://docs.unabated.com/guides/response-concepts) distinguishes individual line timestamps and source status from board-level timestamps. The board's lastUpdated value is never assigned to every line. Completed and cancelled event quotes are excluded even if an old line remains in storage.
 
-The collector permits only `/league`, `/bettype`, `/market-type`, `/period-type/{league}`, `/team/{league}`, `/player/{league}`, and `/market/{league}/{straight|props}/{odds|sources}` for configured leagues. The actual odds calls are moneylines from `/market/{league}/straight/odds` with discovered moneyline bet IDs and player props from `/market/{league}/props/odds`. The complete props board preserves unsupported-mapping warnings rather than silently narrowing coverage. Discovery data is cached; `/status.provider_metrics` reports outgoing request counts by path.
+The collector permits only `/league`, `/bettype`, `/market-type`, `/period-type/{league}`, `/team/{league}`, `/player/{league}`, and `/market/{league}/{straight|props}/{odds|sources}` for configured leagues. The actual odds calls are moneylines from `/market/{league}/straight/odds` with discovered moneyline bet IDs and player props from `/market/{league}/props/odds`. The complete props board preserves unsupported-mapping warnings rather than silently narrowing coverage. Discovery data is cached; `/v1/status.provider_metrics` reports outgoing request counts by path.
 
 There is no upcoming-event enrichment, cross-market sportsbook fallback, or speculative season/futures/deeplink request. Events, starts, and lifecycle state come from the odds board. Teams and players are resolved directly from their documented league catalogs, while sportsbook metadata comes from the requested market type's own sources endpoint. Odds authorization must succeed before identities are fetched. Book status, props status, and disabled market-type IDs remain enforced. Unresolved books, players, or individual event contexts are reported and skipped without blocking other valid quotes, making the board partial and preserving absent stored prices.
 
-For a partial refresh, `/status` updates `last_attempt`, `selection_count`, and warnings. `last_success` advances only for complete refreshes. Structured logs include the failing provider path and HTTP status, a safe validation category, and bounded warning codes; raw upstream error bodies and credentials are omitted.
+For a partial refresh, `/v1/status` updates `last_attempt`, `selection_count`, and warnings. `last_success` advances only for complete refreshes. Structured logs include the failing provider path and HTTP status, a safe validation category, and bounded warning codes; raw upstream error bodies and credentials are omitted.
 
 Optional snapshot retention is disabled with `SNAPSHOT_RETENTION_DAYS=0`. When enabled, normalized quote snapshots are stored and older snapshots pruned during collection transactions. Current odds are always persisted.
 
@@ -203,15 +211,15 @@ Observe a continuous run while the collector operates:
 uv run python -m scripts.validate_run --seconds 7200 --output validation.json
 ```
 
-Point `DATABASE_URL` at the database being collected. The observer reads persisted data and records event state transitions, collection status, counts, and whether a single event was seen pregame, live, and final. It does not call Unabated. Run across actual scheduled games; elapsed time alone cannot establish lifecycle coverage.
+Point `DATABASE_URL` at the database being collected. The observer records upcoming events, collection status, counts, and previously observed event IDs that disappear after commence time. It does not call Unabated. Live and final states are not retained under the pregame-only policy. Run across actual scheduled start times to observe expiry.
 
 Before claiming deployment acceptance:
 - Verify all six scope schedules and actual lag under the account's request policy.
 - Compare discovered source/market coverage against the configured account.
 - Add sanitized real provider fixtures and representative existing consumer payloads.
 - Resolve/review every reported unsupported mapping or document the coverage gap.
-- Capture pregame → live → completed transitions and suspended/relisted lines.
+- Verify events disappear at commence time and their stored odds are deleted; verify suspended/relisted lines before kickoff.
 - Verify restart persistence, multiple API workers, collector ownership, and provider outage behavior.
 - Verify partner-link attribution if links are published.
 
-See `docs/acceptance-status.md` for the current validation record.
+The Docker smoke test also verifies commence-time deletion during a provider outage using synthetic data.

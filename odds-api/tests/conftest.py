@@ -47,7 +47,7 @@ def raw():
 
 @pytest.fixture
 def league():
-    return League("basketball_nba", "NBA", "nba", "42")
+    return League("nba_basketball", "NBA", "nba", "42")
 
 
 @pytest.fixture
@@ -71,7 +71,7 @@ def board(raw, league, clock):
 
 
 @pytest.fixture(params=["sqlite"] + (["postgres"] if os.getenv("TEST_DATABASE_URL") else []))
-def repo(request, tmp_path):
+def repo(request, tmp_path, clock):
     url = (
         os.environ["TEST_DATABASE_URL"]
         if request.param == "postgres"
@@ -82,7 +82,7 @@ def repo(request, tmp_path):
     if request.param == "postgres":
         command.downgrade(config, "base")
     command.upgrade(config, "head")
-    repository = SqlRepository(url, DEFAULT_LEAGUES)
+    repository = SqlRepository(url, DEFAULT_LEAGUES, clock=clock)
     yield repository
     repository.close()
     if request.param == "postgres":

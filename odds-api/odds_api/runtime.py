@@ -52,6 +52,7 @@ async def run():
             "--no-access-log",
         ],
         "collector": ["-m", "odds_api.collector"],
+        "maintenance": ["-m", "odds_api.maintenance"],
     }
     if settings.bet365_enabled:
         jobs["bet365"] = ["-m", "odds_api.bet365_collector"]

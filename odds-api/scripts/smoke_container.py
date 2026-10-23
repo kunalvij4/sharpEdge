@@ -80,7 +80,7 @@ def refresh(node):
 refresh(raw)
 repository = SqlRepository(os.environ["DATABASE_URL"], DEFAULT_LEAGUES)
 for kind in ("moneyline", "props"):
-    board = Normalizer().parse(League("basketball_nba", "NBA", "nba", "42"), kind,
+    board = Normalizer().parse(League("nba_basketball", "NBA", "nba", "42"), kind,
         raw[kind]["data"], raw["sources"], raw["bets"], raw["periods"], raw["events"],
         raw["people"], raw["teams"], now)
     repository.save(board)
@@ -118,20 +118,20 @@ def get(path, auth=True):
     request = urllib.request.Request(base+path, headers={"X-API-Key": "smoke-product-key"} if auth else {})
     with urllib.request.urlopen(request, timeout=5) as response:
         return json.load(response)
-assert len(get("/v4/sports")) == 3
-odds = get("/v4/sports/basketball_nba/odds?oddsFormat=american")
+assert len(get("/v1/sports")) == 3
+odds = get("/v1/sports/nba_basketball/odds?oddsFormat=american")
 assert len(odds) == 1 and len(odds[0]["bookmakers"][0]["markets"][0]["outcomes"]) == 2
 eid = odds[0]["id"]
-props = get("/v4/sports/basketball_nba/events/"+eid+"/odds?markets=player_points")
+props = get("/v1/events/"+eid+"/odds?markets=player_points")
 assert props["bookmakers"][0]["markets"][0]["outcomes"][0]["description"] == "Sample Player"
-all_props = get("/v4/sports/basketball_nba/events/"+eid+"/props")
+all_props = get("/v1/events/"+eid+"/props")
 assert {m["key"] for b in all_props["bookmakers"] for m in b["markets"]} == {"player_points", "player_points_alternate"}
 assert all_props["freshness"]["status"] == "fresh"
 assert all(o["freshness"]["actionable"] for b in all_props["bookmakers"] for m in b["markets"] for o in m["outcomes"])
 assert get("/health/live", auth=False)["status"] == "ok"
 assert "openapi" in get("/openapi.json", auth=False)
 try:
-    get("/v4/sports", auth=False)
+    get("/v1/sports", auth=False)
 except urllib.error.HTTPError as error:
     assert error.code == 401
 else:
@@ -178,7 +178,7 @@ print("two-worker API, authentication, persisted moneylines/props, and OpenAPI p
         )
         check_health = """
 import json,urllib.request
-request=urllib.request.Request("http://localhost:8000/status",headers={"X-API-Key":"smoke-product-key"})
+request=urllib.request.Request("http://localhost:8000/v1/status",headers={"X-API-Key":"smoke-product-key"})
 with urllib.request.urlopen(request,timeout=3) as response:
     status=json.load(response)
 assert status["collector_healthy"]
@@ -198,6 +198,31 @@ assert any(scope["failures"] for scope in status["scopes"])
         )
         assert second.returncode != 0 and "Another collector owns" in second.stderr
         docker("exec", api, "python", "-c", check)
+        expiry_seed = seed.replace(
+            "repository.close()",
+            """
+from dataclasses import replace
+expiring = replace(board.events[0], source_id="expires-during-outage", start=now+timedelta(seconds=3))
+repository.save(replace(board, events=(expiring,), quotes=tuple(replace(q, event_id=expiring.id) for q in board.quotes), complete=False))
+repository.close()
+""",
+        )
+        docker("run", "--rm", "-i", *common, args.image, "python", "-", input=expiry_seed)
+        docker("exec", "-d", api, "python", "-m", "odds_api.maintenance")
+        expiry_check = """
+import os
+from sqlalchemy import select, func
+from odds_api.infrastructure.repository import SqlRepository
+from odds_api.infrastructure.config import DEFAULT_LEAGUES
+repository = SqlRepository(os.environ["DATABASE_URL"], DEFAULT_LEAGUES)
+with repository.engine.connect() as conn:
+    for name, expected in (("events", 1), ("markets", 3), ("selections", 5), ("odds", 5)):
+        assert conn.scalar(select(func.count()).select_from(repository.t[name])) == expected
+repository.close()
+"""
+        wait_for(lambda: docker("exec", api, "python", "-c", expiry_check, check=False).returncode == 0)
+        docker("exec", api, "python", "-c", check)
+        print("commenced events and all child odds deleted during provider outage")
         docker("stop", "--time", "10", collector)
         logs = docker("logs", collector)
         assert "smoke-provider-key" not in logs.stdout + logs.stderr

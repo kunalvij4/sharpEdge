@@ -14,7 +14,7 @@ from odds_api.infrastructure.repository import SqlRepository
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("event_id")
-    parser.add_argument("--sport", default="basketball_nba")
+    parser.add_argument("--sport", default="nba_basketball")
     parser.add_argument("--market", default="player_points")
     args = parser.parse_args()
     settings, now = Settings(), datetime.now(UTC)

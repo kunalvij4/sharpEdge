@@ -67,7 +67,13 @@ class Event:
 
     @property
     def id(self) -> str:
-        return identity("event", self.league_key, self.source_id)
+        # Public league names may change without invalidating saved event IDs.
+        namespace = {
+            "nba_basketball": "basketball_nba",
+            "nfl_football": "americanfootball_nfl",
+            "mlb_baseball": "baseball_mlb",
+        }.get(self.league_key, self.league_key)
+        return identity("event", namespace, self.source_id)
 
 
 @dataclass(frozen=True)

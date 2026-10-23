@@ -55,7 +55,7 @@ start, whichever comes first. The API uses this bound for Bet365 freshness;
 the existing books keep `COLLECTED_TTL`. Bet365 never enters the hour-long props
 cache beyond its explicit expiry. `X-Odds-Bet365-TTL` reports its limit.
 
-`GET /status` retains existing collector/scopes fields and adds `bet365.jobs`
+`GET /v1/status` retains existing collector/scopes fields and adds `bet365.jobs`
 with each job's state, last attempt/success, counts, and duration. Current JSON,
 screenshots, and raw references live at `/app/artifacts/bet365/<job>/runs/`;
 three runs per job are retained, including their disposable browser profiles.

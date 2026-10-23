@@ -20,7 +20,7 @@ from scripts.verify_bet365_dump import verify
 log = logging.getLogger(__name__)
 JOBS = {
     "homepage": ("scripts.capture_bet365_markets", ["--home-only"], None),
-    "nba": ("scripts.capture_bet365_league", ["--league", "nba", "--tabs", "Points O/U"], "basketball_nba"),
+    "nba": ("scripts.capture_bet365_league", ["--league", "nba", "--tabs", "Points O/U"], "nba_basketball"),
     "nfl": (
         "scripts.capture_bet365_league",
         [
@@ -34,7 +34,7 @@ JOBS = {
             "Receiving Yds O/U",
             "Rush Yds O/U",
         ],
-        "americanfootball_nfl",
+        "nfl_football",
     ),
     "mlb": (
         "scripts.capture_bet365_league",
@@ -50,9 +50,13 @@ JOBS = {
             "Batter Props",
             "Hits O/U",
         ],
-        "baseball_mlb",
+        "mlb_baseball",
     ),
 }
+
+
+class MarketsUnavailable(Exception):
+    """Navigation succeeded but the source offered no supported prices."""
 
 
 def ingest(directory, repository, settings, job):
@@ -85,7 +89,7 @@ def ingest(directory, repository, settings, job):
         coverage=coverage,
     )
     if job != "homepage" and not output:
-        raise ValueError("Requested Bet365 O/U market content was not received")
+        raise MarketsUnavailable("Requested Bet365 O/U market content was not received")
     for board in output:
         repository.save(board)
     write_json(directory / "normalized.json", report)
@@ -138,6 +142,7 @@ async def run():
                             "--profile-dir",
                             str(directory / "profile"),
                             *options,
+                            *(["--skip-unavailable-tabs"] if name != "homepage" else []),
                         ],
                         settings.bet365_command_timeout,
                         environment={
@@ -148,6 +153,8 @@ async def run():
                     )
                     counts = await asyncio.to_thread(ingest, directory, repository, settings, name)
                     state.update(state="success", last_success=datetime.now(UTC).isoformat(), counts=counts)
+                except MarketsUnavailable:
+                    state.update(state="unavailable", reason="no_supported_markets_offered")
                 except Exception as error:
                     state.update(state="failed", error_type=type(error).__name__)
                 state["duration_seconds"] = round(loop.time() - start, 2)

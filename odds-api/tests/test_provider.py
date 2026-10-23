@@ -110,7 +110,7 @@ async def test_discovered_ids_are_used_for_moneylines(raw, clock, league_name):
         return httpx.Response(200, json={"success": True, "data": routes[request.url.path]})
 
     client = client_for(clock, handler)
-    board = await client.fetch("basketball_nba", "moneyline")
+    board = await client.fetch("nba_basketball", "moneyline")
     assert board.league.source_id == "42"
     assert board.league.route == "nba"
     assert len(board.quotes) == 2
@@ -187,7 +187,7 @@ async def test_discovered_display_names_map_to_routes(raw, clock, kind, market_t
 
     client = client_for(clock, handler)
     try:
-        board = await client.fetch("basketball_nba", kind)
+        board = await client.fetch("nba_basketball", kind)
         assert board.complete and board.quotes
         assert {quote.state.value for quote in board.quotes} == ({"suspended"} if disabled else {"available"})
     finally:
@@ -237,7 +237,7 @@ async def test_only_required_catalogs_and_odds_are_called_and_metadata_is_cached
     client = client_for(clock, handler)
     try:
         for _ in range(2):
-            board = await client.fetch("basketball_nba", "props")
+            board = await client.fetch("nba_basketball", "props")
             assert board.complete and board.quotes
         assert requested.count("/market/nba/props/odds") == 2
         assert all(requested.count(path) == 1 for path in routes)
@@ -265,7 +265,7 @@ async def test_denials_do_not_trigger_cross_market_or_event_requests(raw, clock,
     client = client_for(clock, handler)
     try:
         with pytest.raises(ProviderError) as error:
-            await client.fetch("basketball_nba", "props")
+            await client.fetch("nba_basketball", "props")
         assert error.value.provider_path == forbidden_path
         assert error.value.provider_http_status == status
         assert "/market/nba/straight/sources" not in requested
@@ -289,7 +289,7 @@ async def test_unsuccessful_odds_never_trigger_identity_lookup_or_unrelated_fall
     client = client_for(clock, handler)
     try:
         with pytest.raises(ProviderError, match="provider_operation_failed"):
-            await client.fetch("basketball_nba", "props")
+            await client.fetch("nba_basketball", "props")
         assert set(requested) == {
             "/league",
             "/bettype",

@@ -1,9 +1,38 @@
 from copy import deepcopy
+from dataclasses import replace
+from datetime import timedelta
 
 import pytest
 
 from odds_api.domain.models import Availability
-from odds_api.infrastructure.normalization import Normalizer, link_with_partner, timestamp
+from odds_api.infrastructure.normalization import Normalizer, link_with_partner, resolve_duplicates, timestamp
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("mode", ["newer", "tied", "missing", "same_terms"])
+def test_duplicate_quotes_are_order_independent_and_conservative(board, clock, mode, reverse):
+    original = replace(board("props").quotes[0], source_updated_at=clock.now())
+    newer = replace(
+        original,
+        price=-150,
+        source_selection_id="relisted",
+        source_updated_at=clock.now() + timedelta(seconds=1),
+    )
+    if mode == "tied":
+        newer = replace(newer, source_updated_at=clock.now())
+    elif mode == "missing":
+        newer = replace(newer, source_updated_at=None)
+    elif mode == "same_terms":
+        newer = replace(newer, price=original.price, source_updated_at=None)
+    candidates = [original, newer]
+    if reverse:
+        candidates.reverse()
+    chosen, ambiguous = resolve_duplicates(candidates)
+    if mode in {"tied", "missing"}:
+        assert ambiguous and chosen.state == Availability.SUSPENDED and chosen.price is None
+    else:
+        assert not ambiguous
+        assert chosen.price == (newer.price if mode == "newer" else original.price)
 
 
 def prop_line(raw):

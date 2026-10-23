@@ -21,17 +21,17 @@ def client(repo, board, clock):
 def test_health_and_authentication(client):
     assert client.get("/health/live").json() == {"status": "ok"}
     assert client.get("/health/ready").status_code == 200
-    assert client.get("/v4/sports").status_code == 401
-    assert client.get("/status").status_code == 401
-    assert client.get("/v4/sports", headers={"X-API-Key": "consumer-fixture-key"}).status_code == 200
-    assert len(client.get("/v4/sports?apiKey=consumer-fixture-key").json()) == 3
+    assert client.get("/v1/sports").status_code == 401
+    assert client.get("/v1/status").status_code == 401
+    assert client.get("/v1/sports", headers={"X-API-Key": "consumer-fixture-key"}).status_code == 200
+    assert len(client.get("/v1/sports?apiKey=consumer-fixture-key").json()) == 3
 
 
 def test_moneyline_compatibility_fixture(client, board):
     expected = json.loads((Path(__file__).parent / "fixtures/consumer_moneyline.json").read_text())
     expected[0]["id"] = board().events[0].id
     response = client.get(
-        "/v4/sports/basketball_nba/odds?oddsFormat=american", headers={"X-API-Key": "consumer-fixture-key"}
+        "/v1/sports/nba_basketball/odds?oddsFormat=american", headers={"X-API-Key": "consumer-fixture-key"}
     )
     assert response.status_code == 200
     assert response.json() == expected
@@ -42,7 +42,7 @@ def test_moneyline_compatibility_fixture(client, board):
 def test_event_props_and_null_last_update(client, board):
     eid = board().events[0].id
     response = client.get(
-        f"/v4/sports/basketball_nba/events/{eid}/odds?markets=player_points_alternate",
+        f"/v1/events/{eid}/odds?markets=player_points_alternate",
         headers={"X-API-Key": "consumer-fixture-key"},
     )
     assert response.status_code == 200
@@ -53,7 +53,7 @@ def test_event_props_and_null_last_update(client, board):
 
 def test_player_points_expire_during_failed_refresh_without_erasing_stored_quotes(client, repo, board, clock):
     eid = board().events[0].id
-    url = f"/v4/sports/basketball_nba/events/{eid}/odds?markets=player_points&oddsFormat=american"
+    url = f"/v1/events/{eid}/odds?markets=player_points&oddsFormat=american"
     headers = {"X-API-Key": "consumer-fixture-key"}
     fresh = client.get(url, headers=headers)
     assert fresh.status_code == 200
@@ -62,7 +62,7 @@ def test_player_points_expire_during_failed_refresh_without_erasing_stored_quote
     clock.value = 90
     assert client.get(url, headers=headers).json()["bookmakers"]
     clock.value = 91
-    repo.failure("basketball_nba", "props", "provider_operation_failed")
+    repo.failure("nba_basketball", "props", "provider_operation_failed")
     cached = client.get(url, headers=headers)
     assert cached.status_code == 200 and cached.json()["bookmakers"]
     assert cached.json()["freshness"]["status"] == "stale"
@@ -73,7 +73,7 @@ def test_player_points_expire_during_failed_refresh_without_erasing_stored_quote
     expired = client.get(url + "&freshOnly=true", headers=headers)
     assert expired.status_code == 200 and expired.json()["bookmakers"] == []
     assert expired.headers["X-Odds-Collected-TTL"] == "90.0"
-    assert any(row["quote"].market == "player_points" for row in repo.quotes("basketball_nba"))
+    assert any(row["quote"].market == "player_points" for row in repo.quotes("nba_basketball"))
     repo.save(board("props"))
     assert client.get(url, headers=headers).json()["bookmakers"]
 
@@ -81,7 +81,7 @@ def test_player_points_expire_during_failed_refresh_without_erasing_stored_quote
 def test_all_props_route_includes_alternates_and_rejects_moneylines(client, board):
     eid = board().events[0].id
     headers = {"X-API-Key": "consumer-fixture-key"}
-    path = f"/v4/sports/basketball_nba/events/{eid}/props"
+    path = f"/v1/events/{eid}/props"
     response = client.get(path, headers=headers)
     assert response.status_code == 200
     assert {m["key"] for b in response.json()["bookmakers"] for m in b["markets"]} == {
@@ -98,7 +98,7 @@ def test_all_props_route_includes_alternates_and_rejects_moneylines(client, boar
 
 
 @pytest.mark.parametrize(
-    "sport,base", [("basketball_nba", "player_points"), ("americanfootball_nfl", "player_pass_yds")]
+    "sport,base", [("nba_basketball", "player_points"), ("nfl_football", "player_pass_yds")]
 )
 def test_all_props_for_nba_and_nfl_include_distinct_periods_and_cached_flags(
     client, repo, board, clock, sport, base
@@ -106,7 +106,7 @@ def test_all_props_for_nba_and_nfl_include_distinct_periods_and_cached_flags(
     snapshot = board("props")
     event = replace(snapshot.events[0], league_key=sport)
     league = replace(snapshot.league, key=sport)
-    if sport == "americanfootball_nfl":
+    if sport == "nfl_football":
         league = replace(league, title="NFL", route="nfl", source_id="43")
     quotes = tuple(
         replace(q, event_id=event.id, market=q.market.replace("player_points", base)) for q in snapshot.quotes
@@ -115,7 +115,7 @@ def test_all_props_for_nba_and_nfl_include_distinct_periods_and_cached_flags(
     repo.save(replace(snapshot, league=league, events=(event,), quotes=(*quotes, quarter)))
     clock.value = 91
     headers = {"X-API-Key": "consumer-fixture-key"}
-    path = f"/v4/sports/{sport}/events/{event.id}/props"
+    path = f"/v1/events/{event.id}/props"
     response = client.get(path + "?oddsFormat=american", headers=headers)
     assert response.status_code == 200
     payload = response.json()
@@ -138,13 +138,13 @@ def test_all_props_for_nba_and_nfl_include_distinct_periods_and_cached_flags(
 @pytest.mark.parametrize(
     "url,status",
     [
-        ("/v4/sports/unknown/events", 404),
-        ("/v4/sports/basketball_nba/events/unknown/odds", 404),
-        ("/v4/sports/basketball_nba/odds?markets=bogus", 422),
-        ("/v4/sports/basketball_nba/odds?bookmakers=bogus", 422),
-        ("/v4/sports/basketball_nba/odds?oddsFormat=fractional", 422),
-        ("/v4/sports/basketball_nba/odds?regions=us", 422),
-        ("/v4/sports/basketball_nba/events?commenceTimeFrom=2026-10-20T00:00:00", 422),
+        ("/v1/sports/unknown/events", 404),
+        ("/v1/events/unknown/odds", 404),
+        ("/v1/sports/nba_basketball/odds?markets=bogus", 422),
+        ("/v1/sports/nba_basketball/odds?bookmakers=bogus", 422),
+        ("/v1/sports/nba_basketball/odds?oddsFormat=fractional", 422),
+        ("/v1/sports/nba_basketball/odds?regions=us", 422),
+        ("/v1/sports/nba_basketball/events?commenceTimeFrom=2026-10-20T00:00:00", 422),
     ],
 )
 def test_documented_errors(client, url, status):
@@ -156,9 +156,23 @@ def test_docs_and_openapi_do_not_contain_provider_credentials(client):
     assert response.status_code == 200
     spec = response.json()
     assert "OddsResponse" in spec["components"]["schemas"]
-    assert spec["paths"]["/v4/sports/{sport}/odds"]["get"]["security"]
+    assert spec["paths"]["/v1/sports/{sport}/odds"]["get"]["security"]
     assert "provider-secret" not in response.text
     assert client.get("/docs").status_code == 200
+    assert "/v1/events/{event_id}/props" in spec["paths"]
+    assert all(not path.startswith("/v4") for path in spec["paths"])
+    assert "sport" not in {
+        p["name"] for p in spec["paths"]["/v1/events/{event_id}/props"]["get"]["parameters"]
+    }
+
+
+def test_v1_league_keys_and_removed_routes(client):
+    headers = {"X-API-Key": "consumer-fixture-key"}
+    leagues = client.get("/v1/sports", headers=headers).json()
+    assert {league["key"] for league in leagues} == {"nba_basketball", "nfl_football", "mlb_baseball"}
+    assert {league["group"] for league in leagues} == {"Basketball", "Football", "Baseball"}
+    for old in ("/v4/sports", "/v1/sports/basketball_nba/events", "/status"):
+        assert client.get(old, headers=headers).status_code == 404
 
 
 def test_internal_database_error_is_safe_service_unavailable(client, repo, monkeypatch):
@@ -168,6 +182,6 @@ def test_internal_database_error_is_safe_service_unavailable(client, repo, monke
         raise OperationalError("sensitive-query", {}, Exception("database-secret"))
 
     monkeypatch.setattr(repo, "leagues", fail)
-    response = client.get("/v4/sports", headers={"X-API-Key": "consumer-fixture-key"})
+    response = client.get("/v1/sports", headers={"X-API-Key": "consumer-fixture-key"})
     assert response.status_code == 503
     assert "database-secret" not in response.text
