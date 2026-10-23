@@ -11,8 +11,8 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+from odds_api.infrastructure.bet365_runtime import safe_text, safe_url
 from scripts.bet365_browser_runtime import close_native_browser, launch_native_browser
-from scripts.probe_bet365 import safe_text, safe_url
 
 
 def records(payload):
@@ -51,7 +51,7 @@ async def capture(args):
             browser, native_process = await launch_native_browser(
                 playwright,
                 args.channel,
-                Path(".cache") / ("bet365-home-" + output.name),
+                getattr(args, "profile_dir", None) or Path(".cache") / ("bet365-home-" + output.name),
                 output / "browser.log",
             )
             context = browser.contexts[0]
@@ -275,6 +275,7 @@ def main():
     parser.add_argument("--home-only", action="store_true")
     parser.add_argument("--channel", choices=("chromium", "msedge"), default="chromium")
     parser.add_argument("--cdp", action="store_true")
+    parser.add_argument("--profile-dir", type=Path)
     parser.add_argument("--event-props", action="store_true")
     parser.add_argument("--cycle-props", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/bet365-markets"))

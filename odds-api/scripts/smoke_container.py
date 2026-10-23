@@ -9,9 +9,10 @@ from uuid import uuid4
 
 
 def docker(*args, check=True, input=None):
-    return subprocess.run(
-        ["docker", *args], check=check, input=input, capture_output=True, text=True, timeout=90
-    )
+    result = subprocess.run(["docker", *args], input=input, capture_output=True, text=True, timeout=90)
+    if check and result.returncode:
+        raise RuntimeError("Container smoke operation failed: " + result.stderr)
+    return result
 
 
 def wait_for(check, seconds=45):

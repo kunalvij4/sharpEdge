@@ -42,7 +42,11 @@ while [ ! -S "/tmp/.X11-unix/X${bet365_display_number}" ]; do
     sleep 0.1
 done
 
-"$@" &
+# Preserve stdin for one-shot commands such as `python -` used by migrations
+# and smoke tooling; a non-interactive shell otherwise gives background jobs /dev/null.
+exec 3<&0
+"$@" <&3 3<&- &
+exec 3<&-
 bet365_worker_pid=$!
 bet365_exit=0
 wait "$bet365_worker_pid" || bet365_exit=$?

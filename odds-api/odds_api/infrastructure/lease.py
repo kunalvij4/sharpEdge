@@ -7,13 +7,16 @@ from sqlalchemy.engine import make_url
 
 
 class CollectorLease:
-    def __init__(self, engine):
+    def __init__(self, engine, key=911712349):
         self.engine, self.connection, self.file = engine, None, None
+        self.key = key
 
     def __enter__(self):
         if self.engine.dialect.name == "postgresql":
             self.connection = self.engine.connect()
-            if not self.connection.execute(text("SELECT pg_try_advisory_lock(911712349)")).scalar_one():
+            if not self.connection.execute(
+                text("SELECT pg_try_advisory_lock(:key)"), {"key": self.key}
+            ).scalar_one():
                 self.connection.close()
                 self.connection = None
                 raise RuntimeError("Another collector owns this database")
@@ -23,7 +26,8 @@ class CollectorLease:
             db = make_url(str(self.engine.url)).database
             if not db or db == ":memory:":
                 raise RuntimeError("Collector requires a persistent database")
-            self.file = Path(db).resolve().with_suffix(".collector.lock").open("a+b")
+            suffix = ".collector.lock" if self.key == 911712349 else f".collector-{self.key}.lock"
+            self.file = Path(db).resolve().with_suffix(suffix).open("a+b")
             self.file.seek(0)
             self.file.write(b"0")
             self.file.flush()
@@ -52,7 +56,7 @@ class CollectorLease:
     def __exit__(self, *_):
         if self.connection:
             try:
-                self.connection.execute(text("SELECT pg_advisory_unlock(911712349)"))
+                self.connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": self.key})
             finally:
                 self.connection.close()
         if self.file:

@@ -1,8 +1,8 @@
 # In-House Odds API — Phase 1
 
-Bet365 investigation: see the [New Jersey moneyline and O/U verification](docs/bet365-nj-extraction-2026-10-21.md) for the latest capture and reproducible browser setup, the [earlier headed extraction](docs/bet365-extraction-2026-10-21.md) for the Virginia snapshot and AWS virtual-display instructions, and the [integration plan](docs/bet365-integration-plan.md) for the proposed provider architecture. The browser tools are optional and do not run inside the production API or collector.
+The application container runs FastAPI, the existing Unabated collector, and a Bet365 collector using headed Microsoft Edge, Playwright, and Xvfb. PostgreSQL remains a separate database container. Collection runs in independent supervised processes; browser failures do not block the existing collector or HTTP requests.
 
-The [Docker Edge/Xvfb worker](docker/README.md) runs separately with `docker compose -f compose.bet365.yaml up --build --detach`. It collects on a 120-second schedule, writes verified JSON under `artifacts/bet365-docker/collector/`, and does not modify the API database.
+Bet365 uses bookmaker key `bet365` in the same odds and props responses as existing `unabated_<source-id>` books. Only explicit full-game O/U props matching another book's canonical event, player, market, period, side, and exact line are stored. Ambiguous fixtures, unmapped props, and SGP/milestone prices are discarded. See [integrated collection and coverage](docker/INTEGRATION.md) and the [container smoke check](docker/README.md).
 
 A FastAPI service that reads persisted Unabated moneylines and player props. A separate collector discovers account metadata, normalizes boards, and commits each refresh in one database transaction. PostgreSQL is the deployment database; SQLite supports local development and offline tests.
 
@@ -15,10 +15,10 @@ A FastAPI service that reads persisted Unabated moneylines and player props. A s
 
 ```sh
 docker compose up --build -d
-docker compose logs -f collector
+docker compose logs -f api
 ```
 
-Compose waits for PostgreSQL, runs `alembic upgrade head` in a one-shot migration service, and then starts the API and collector. PostgreSQL data lives in the `odds-data` named volume. Ordinary `docker compose down` preserves it. The API and collector image runs as UID/GID 10001. The database's server process runs as the postgres user.
+Compose waits for PostgreSQL, runs `alembic upgrade head` in a one-shot migration service, and starts the combined application container. PostgreSQL data lives in `odds-data`; diagnostic captures live in `bet365-artifacts`. Ordinary `docker compose down` preserves both. The application runs as UID/GID 10001 on Linux/amd64 with the browser sandbox enabled.
 
 Swagger UI: <http://localhost:8000/docs>. OpenAPI: <http://localhost:8000/openapi.json>. Use Swagger's Authorize button with your **product** key.
 
@@ -86,7 +86,7 @@ Set `TEST_DATABASE_URL` to an **empty disposable PostgreSQL database** to run re
 | `GET /health/live` | Process liveness |
 | `GET /health/ready` | Database connectivity and migration revision |
 
-All product endpoints require `X-API-Key` or the compatibility query parameter `apiKey`. Health endpoints, Swagger, and the OpenAPI schema are public. Query-string keys can appear in proxy logs; use the header and keep access logging disabled or redact `apiKey` in your proxy. Compose does not pass the provider secret into the API service.
+All product endpoints require `X-API-Key` or the compatibility query parameter `apiKey`. Health endpoints, Swagger, and the OpenAPI schema are public. Query-string keys can appear in proxy logs; use the header and keep access logging disabled or redact `apiKey` in your proxy. The combined application container receives the provider credentials required by its collector.
 
 Both odds endpoints accept comma-separated `markets` (default `h2h`) and `bookmakers`, plus `oddsFormat=decimal|american` (default decimal). Props must be requested from the event endpoint. Event and odds queries accept inclusive `commenceTimeFrom` and `commenceTimeTo` bounds with an explicit UTC offset. Unknown sports/events return 404; unknown bookmakers, unsupported markets, invalid dates, invalid formats, reversed bounds, and unsupported parameters return 422. Missing/invalid product credentials return 401. A not-ready internal dependency returns 503 on readiness.
 
@@ -101,7 +101,7 @@ Responses use events → bookmakers → markets → outcomes. Player over/under 
 This implements the Phase 1 subset of [The Odds API v4](https://the-odds-api.com/liveapi/guides/v4/); it is not a complete drop-in replacement.
 
 - Internal event IDs are deterministic UUID5 hex strings derived from league key and provider event ID. They do not equal The Odds API's IDs.
-- Bookmaker keys are stable `unabated_<source-id>` identifiers. Source names can change without changing a key. Every discovered account-authorized source is considered; there is no book-name allowlist.
+- Bookmaker keys are stable `unabated_<source-id>` identifiers, plus `bet365` for direct Bet365 collection. Every discovered account-authorized Unabated source is considered.
 - `last_update` is null when individual source timestamps are absent. It is never synthesized from collection time. When grouped, it is the newest known source timestamp among included outcomes; it does not imply every outcome changed then.
 - Region filters, scores, futures, historical endpoints, dateFormat, quota/billing headers, and event/market discovery endpoints beyond the required subset are not implemented. Unsupported query parameters are rejected.
 - Suspended, removed, explicitly expired, source-expired, and final/cancelled/unknown-event quotes are excluded. Stale props within the bounded cache policy are returned with explicit non-actionable labels unless `freshOnly=true`; stale moneylines remain excluded. Known events with no eligible prices return `bookmakers: []`.

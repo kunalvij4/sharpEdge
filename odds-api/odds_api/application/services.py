@@ -69,11 +69,13 @@ class OddsQueryService:
         source_ttl: float,
         supported_markets: set[str],
         props_cache_ttl: float = 3600,
+        bet365_collected_ttl: float = 150,
     ):
         self.repository, self.clock = repository, clock
         self.collected_ttl, self.source_ttl = collected_ttl, source_ttl
         self.supported_markets = supported_markets
         self.props_cache_ttl = props_cache_ttl
+        self.bet365_collected_ttl = bet365_collected_ttl
 
     def sports(self) -> list[dict]:
         return [
@@ -173,9 +175,33 @@ class OddsQueryService:
         if event_id is not None and event_id not in events:
             raise QueryError("Unknown event", 404)
         now, grouped = self.clock.now(), {}
-        for row in self.repository.quotes(sport):
+        rows = self.repository.quotes(sport)
+        # Enforce the intersection at read time as well: filters must never turn
+        # a Bet365-only prop into a supported one, including during an outage.
+        support = {
+            (q.event_id, q.market, q.period, q.player_id, q.point, q.alternate, q.name)
+            for row in rows
+            if row["book_key"] != "bet365"
+            and (q := row["quote"]).player_id is not None
+            and q.state == Availability.AVAILABLE
+            and (now - q.collected_at).total_seconds() <= max(self.collected_ttl, self.props_cache_ttl)
+            and (
+                q.source_updated_at is None or (now - q.source_updated_at).total_seconds() <= self.source_ttl
+            )
+            and (q.expires_at is None or q.expires_at > now)
+        }
+        for row in rows:
             q = row["quote"]
             event = events[q.event_id]
+            if row["book_key"] == "bet365":
+                if event["status"] != "pregame" or event["start"] <= now:
+                    continue
+                if (
+                    q.player_id is not None
+                    and (q.event_id, q.market, q.period, q.player_id, q.point, q.alternate, q.name)
+                    not in support
+                ):
+                    continue
             if event_id is not None and q.event_id != event_id:
                 continue
             if event["status"] in {"final", "cancelled", "unknown"}:
@@ -184,7 +210,11 @@ class OddsQueryService:
                 continue
             if (market_set and q.market not in market_set) or (book_set and row["book_key"] not in book_set):
                 continue
-            availability = q.availability(now, self.collected_ttl, self.source_ttl)
+            availability = q.availability(
+                now,
+                self.bet365_collected_ttl if row["book_key"] == "bet365" else self.collected_ttl,
+                self.source_ttl,
+            )
             age = max(0, (now - q.collected_at).total_seconds())
             cached_prop = (
                 not fresh_only

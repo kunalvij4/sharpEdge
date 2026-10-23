@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ErrorResponse(BaseModel):
@@ -164,3 +164,4 @@ class StatusResponse(BaseModel):
     counts: dict[str, int]
     stale_quotes: int
     observed_at: datetime
+    bet365: dict = Field(default_factory=dict)

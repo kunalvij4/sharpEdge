@@ -23,6 +23,14 @@ class JsonFormatter(logging.Formatter):
             "provider_path",
             "provider_http_status",
             "failure_reason",
+            "job",
+            "state",
+            "last_attempt",
+            "last_success",
+            "counts",
+            "duration_seconds",
+            "process_name",
+            "exit_code",
         ):
             if hasattr(record, name):
                 result[name] = getattr(record, name)

@@ -1,6 +1,8 @@
 import hmac
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, Security
@@ -59,6 +61,7 @@ def create_app(settings=None, repository=None, clock=None):
             settings.source_ttl,
             markets,
             settings.props_cache_ttl,
+            settings.bet365_max_age,
         )
         yield
         if repository is None:
@@ -67,7 +70,7 @@ def create_app(settings=None, repository=None, clock=None):
     app = FastAPI(
         title="In-House Odds API",
         version="0.1.0",
-        description="Persisted Unabated moneylines and player props. Auth uses your product key. "
+        description="Persisted sportsbook moneylines and player props, including Bet365. Auth uses your product key. "
         "Source timestamps can be null. See /status for collection freshness.",
         lifespan=lifespan,
     )
@@ -101,7 +104,7 @@ def create_app(settings=None, repository=None, clock=None):
                 ),
             ] = default_markets,
             bookmakers: Annotated[
-                str | None, Query(description="Stable sportsbook keys, e.g. unabated_91")
+                str | None, Query(description="Stable sportsbook keys, e.g. unabated_91 or bet365")
             ] = None,
             oddsFormat: Annotated[
                 Literal["american", "decimal"], Query(description="Output price format")
@@ -146,6 +149,7 @@ def create_app(settings=None, repository=None, clock=None):
         response.headers["X-Odds-Collected-TTL"] = str(settings.collected_ttl)
         response.headers["X-Odds-Source-TTL"] = str(settings.source_ttl)
         response.headers["X-Odds-Props-Cache-TTL"] = str(settings.props_cache_ttl)
+        response.headers["X-Odds-Bet365-TTL"] = str(settings.bet365_max_age)
         response.headers["Cache-Control"] = "no-store"
 
     @app.get(
@@ -175,7 +179,14 @@ def create_app(settings=None, repository=None, clock=None):
         summary="Inspect collection health and freshness",
     )
     def status(request: Request):
-        return request.app.state.repository.status(clock.now(), settings.collected_ttl, settings.source_ttl)
+        result = request.app.state.repository.status(clock.now(), settings.collected_ttl, settings.source_ttl)
+        bet365 = {"enabled": settings.bet365_enabled, "jobs": {}}
+        if settings.bet365_enabled:
+            try:
+                bet365["jobs"] = json.loads((Path(settings.bet365_output_dir) / "status.json").read_text())
+            except (OSError, ValueError):
+                bet365["state"] = "unavailable"
+        return {**result, "bet365": bet365}
 
     @app.get(
         "/v4/sports",

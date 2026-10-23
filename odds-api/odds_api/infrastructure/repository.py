@@ -15,7 +15,9 @@ def aware(value):
 class SqlRepository:
     def __init__(self, url, league_config, retention=0):
         kwargs = (
-            {"connect_args": {"check_same_thread": False, "timeout": 30}} if url.startswith("sqlite") else {}
+            {"connect_args": {"check_same_thread": False, "timeout": 30}}
+            if url.startswith("sqlite")
+            else {"connect_args": {"options": "-c max_parallel_workers_per_gather=0"}}
         )
         self.engine = create_engine(url, pool_pre_ping=True, **kwargs)
         if self.engine.dialect.name == "sqlite":
@@ -77,7 +79,8 @@ class SqlRepository:
             # Serialize both scopes of one league so event lifecycle updates cannot race.
             if self.engine.dialect.name == "postgresql":
                 conn.execute(select(t["leagues"]).where(t["leagues"].c.key == league.key).with_for_update())
-            self.upsert(conn, "leagues", vars(league))
+            if board.provider == "unabated":
+                self.upsert(conn, "leagues", vars(league))
             self.upsert_many(
                 conn,
                 "events",
@@ -92,6 +95,7 @@ class SqlRepository:
                         "status": e.status,
                     }
                     for e in board.events
+                    if board.provider == "unabated"
                 ],
             )
             self.upsert_many(
@@ -104,15 +108,52 @@ class SqlRepository:
             )
             scope = (
                 select(t["selections"].c.id)
-                .select_from(t["selections"].join(t["markets"]).join(t["events"]))
+                .select_from(
+                    t["selections"]
+                    .join(t["markets"])
+                    .join(t["events"])
+                    .join(t["books"], t["markets"].c.book_id == t["books"].c.id)
+                )
                 .where(t["events"].c.league_key == league.key, t["markets"].c.kind == board.kind)
             )
+            scope = scope.where(
+                t["books"].c.key == "bet365" if board.provider == "bet365" else t["books"].c.key != "bet365"
+            )
+            if board.provider == "bet365":
+                scope = scope.where(t["markets"].c.type.in_(board.covered_markets))
             if board.complete:
                 conn.execute(
                     update(t["odds"]).where(t["odds"].c.selection_id.in_(scope)).values(state="removed")
                 )
             markets, selections, prices = {}, {}, {}
+            # The league lock makes the intersection check atomic with other refreshes.
+            supported = (
+                self._supported_bet365(
+                    conn, league.key, {self.prop_identity(q) for q in board.quotes if q.player_id}
+                )
+                if board.provider == "bet365"
+                else None
+            )
+            canonical_events = None
+            if board.provider == "bet365":
+                canonical_events = set(
+                    conn.execute(
+                        select(t["events"].c.id).where(
+                            t["events"].c.league_key == league.key,
+                            t["events"].c.status == "pregame",
+                            t["events"].c.start > board.collected_at,
+                        )
+                    ).scalars()
+                )
             for q in board.quotes:
+                if canonical_events is not None and q.event_id not in canonical_events:
+                    continue
+                if (
+                    supported is not None
+                    and self.prop_identity(q) not in supported
+                    and q.player_id is not None
+                ):
+                    continue
                 markets[q.market_id] = {
                     "id": q.market_id,
                     "event_id": q.event_id,
@@ -153,11 +194,13 @@ class SqlRepository:
             }
             if board.complete:
                 changes["last_success"] = board.collected_at
-            conn.execute(
-                update(t["scopes"])
-                .where(t["scopes"].c.league == league.key, t["scopes"].c.kind == board.kind)
-                .values(**changes)
-            )
+            if board.provider == "unabated":
+                conn.execute(
+                    update(t["scopes"])
+                    .where(t["scopes"].c.league == league.key, t["scopes"].c.kind == board.kind)
+                    .values(**changes)
+                )
+            self._remove_unsupported_bet365(conn, league.key)
             if self.retention:
                 # Domain snapshots; no credentials or upstream envelopes.
                 payload = [
@@ -182,6 +225,55 @@ class SqlRepository:
                         t["snapshots"].c.collected_at < board.collected_at - timedelta(days=self.retention)
                     )
                 )
+
+    @staticmethod
+    def prop_identity(q):
+        return (q.event_id, q.market, q.period, q.player_id, q.point, q.alternate, q.name)
+
+    def _supported_bet365(self, conn, league, candidates):
+        if not candidates:
+            return set()
+        m, s, o, e, b = (self.t[k] for k in ("markets", "selections", "odds", "events", "books"))
+        rows = conn.execute(
+            select(m.c.event_id, m.c.type, m.c.period, m.c.player_id, m.c.point, m.c.alternate, s.c.name)
+            .select_from(m.join(s).join(o).join(e, m.c.event_id == e.c.id).join(b, m.c.book_id == b.c.id))
+            .where(
+                e.c.league_key == league,
+                b.c.key != "bet365",
+                o.c.state == "available",
+                m.c.player_id.is_not(None),
+                m.c.event_id.in_({q[0] for q in candidates}),
+                m.c.type.in_({q[1] for q in candidates}),
+                m.c.player_id.in_({q[3] for q in candidates}),
+                m.c.point.in_({q[4] for q in candidates}),
+            )
+        )
+        return {tuple(row) for row in rows}
+
+    def _remove_unsupported_bet365(self, conn, league):
+        m, s, o, e, b = (self.t[k] for k in ("markets", "selections", "odds", "events", "books"))
+        rows = conn.execute(
+            select(
+                s.c.id, m.c.event_id, m.c.type, m.c.period, m.c.player_id, m.c.point, m.c.alternate, s.c.name
+            )
+            .select_from(m.join(s).join(o).join(e, m.c.event_id == e.c.id).join(b, m.c.book_id == b.c.id))
+            .where(
+                e.c.league_key == league,
+                b.c.key == "bet365",
+                m.c.player_id.is_not(None),
+                o.c.state != "removed",
+            )
+        ).all()
+        if not rows:
+            return
+        supported = self._supported_bet365(conn, league, {tuple(row[1:]) for row in rows})
+        unsupported = [row[0] for row in rows if tuple(row[1:]) not in supported]
+        for offset in range(0, len(unsupported), 500):
+            conn.execute(
+                update(o)
+                .where(o.c.selection_id.in_(unsupported[offset : offset + 500]))
+                .values(state="removed")
+            )
 
     def failure(self, league, kind, outcome):
         t = self.t["scopes"]

@@ -74,14 +74,19 @@ class Event:
 class Sportsbook:
     source_id: str
     title: str
+    provider: str = "unabated"
 
     @property
     def id(self) -> str:
-        return identity("book", self.source_id)
+        return (
+            identity("book", self.source_id)
+            if self.provider == "unabated"
+            else identity("book", self.provider, self.source_id)
+        )
 
     @property
     def key(self) -> str:
-        return "unabated_" + self.source_id
+        return "bet365" if self.provider == "bet365" else "unabated_" + self.source_id
 
 
 @dataclass(frozen=True)
@@ -161,11 +166,19 @@ class Board:
     collected_at: datetime
     complete: bool
     warnings: tuple[str, ...] = ()
+    provider: str = "unabated"
+    covered_markets: tuple[str, ...] = ()
 
     def __post_init__(self):
         object.__setattr__(self, "collected_at", utc(self.collected_at))
         if self.kind not in {"moneyline", "props"}:
             raise ValueError("Unsupported board kind")
+        if self.provider not in {"unabated", "bet365"}:
+            raise ValueError("Unsupported board provider")
+        if self.provider == "bet365" and (
+            not self.covered_markets or any(b.provider != "bet365" for b in self.books)
+        ):
+            raise ValueError("Bet365 boards require explicit market coverage and provider-owned books")
         if any(e.league_key != self.league.key for e in self.events):
             raise ValueError("Board contains another league")
         event_ids, book_ids = {e.id for e in self.events}, {b.id for b in self.books}

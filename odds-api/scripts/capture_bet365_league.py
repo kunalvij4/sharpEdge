@@ -10,9 +10,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
+from odds_api.infrastructure.bet365_runtime import safe_text, safe_url
 from scripts.bet365_browser_runtime import close_native_browser, launch_native_browser
 from scripts.capture_bet365_markets import records
-from scripts.probe_bet365 import safe_text, safe_url
 
 
 async def capture(args):
@@ -295,11 +295,7 @@ async def capture(args):
                 )
                 await section.get_by_text("View All", exact=True).first.click(timeout=10000)
             else:
-                await (
-                    page.locator(".lhs-fa")
-                    .filter(has_text=re.compile("^" + re.escape(title) + "$"))
-                    .first.click(timeout=10000)
-                )
+                await page.get_by_text(title, exact=True).filter(visible=True).first.click(timeout=10000)
             await save(stage)
             if args.reload_league:
                 stage = args.league + "_lines_reload"

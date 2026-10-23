@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     props_cache_ttl: float = Field(default=3600, ge=0)
     snapshot_retention_days: int = Field(default=0, ge=0)
     shutdown_timeout: float = Field(default=20, gt=0)
+    bet365_enabled: bool = True
+    bet365_region: str = Field(default="nj", pattern="^(nj|va)$")
+    bet365_interval: float = Field(default=90, ge=60, le=120)
+    bet365_max_age: float = Field(default=150, ge=60, le=300)
+    bet365_wait: float = Field(default=8, ge=1, le=30)
+    bet365_command_timeout: float = Field(default=100, ge=30, le=180)
+    bet365_output_dir: str = "/app/artifacts/bet365"
     unabated_bet_type_map: dict[str, str] = {}
     unabated_period_map: dict[str, str] = {}
 
