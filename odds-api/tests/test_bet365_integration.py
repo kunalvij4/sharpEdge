@@ -75,6 +75,20 @@ def bet_quotes(repo):
     return [r["quote"] for r in repo.quotes("nba_basketball") if r["book_key"] == "bet365"]
 
 
+def test_disabled_bet365_is_hidden_even_when_old_rows_exist(repo, clock, report):
+    save_report(report, repo, clock)
+    assert bet_quotes(repo)
+    settings = Settings(_env_file=None, api_keys="test-key", bet365_enabled=False)
+    with TestClient(create_app(settings, repo, clock)) as client:
+        headers = {"X-API-Key": "test-key"}
+        games = client.get("/v1/sports/nba_basketball/odds", headers=headers).json()
+        assert {b["key"] for e in games for b in e["bookmakers"]} == {"unabated_901"}
+        event_id = games[0]["id"]
+        props = client.get(f"/v1/events/{event_id}/props?bookmakers=bet365", headers=headers).json()
+        assert props["bookmakers"] == []
+        assert client.get("/v1/status", headers=headers).json()["bet365"]["enabled"] is False
+
+
 def test_provider_leases_are_independent_but_each_is_exclusive(repo):
     with CollectorLease(repo.engine), CollectorLease(repo.engine, key=911712350):
         with pytest.raises(RuntimeError, match="Another collector"):
@@ -95,7 +109,7 @@ def test_merge_uses_existing_ids_and_exact_api_schema(repo, board, clock, report
     )
     assert all(q.source_updated_at is None for q in bet_quotes(repo))
     assert len(repo.events("nba_basketball")) == 1
-    settings = Settings(_env_file=None, api_keys="test-key")
+    settings = Settings(_env_file=None, api_keys="test-key", bet365_enabled=True)
     with TestClient(create_app(settings, repo, clock)) as client:
         headers = {"X-API-Key": "test-key"}
         money = client.get("/v1/sports/nba_basketball/odds", headers=headers)
@@ -152,20 +166,20 @@ def test_provider_refreshes_cannot_remove_each_other_or_corrupt_event_lifecycle(
     assert repo.events("nba_basketball")[0]["status"] == "final"
 
 
-def test_removing_last_other_book_removes_bet365_prop_in_same_transaction(repo, board, clock, report):
+def test_empty_api_refresh_preserves_legacy_bet365_support(repo, board, clock, report):
     save_report(report, repo, clock)
     assert len(bet_quotes(repo)) == 4
     repo.save(replace(board("props"), quotes=()))
-    assert all(q.state == Availability.REMOVED for q in bet_quotes(repo) if q.player_id)
+    assert all(q.state == Availability.AVAILABLE for q in bet_quotes(repo) if q.player_id)
     assert all(q.state == Availability.AVAILABLE for q in bet_quotes(repo) if not q.player_id)
 
 
-def test_race_drops_prop_if_support_disappears_before_save(repo, board, clock, report):
+def test_late_legacy_capture_retains_support_after_empty_api_response(repo, board, clock, report):
     output, _ = boards(report, repo, clock.now())
     repo.save(replace(board("props"), quotes=()))
     for snapshot in output:
         repo.save(snapshot)
-    assert not any(q.player_id for q in bet_quotes(repo))
+    assert any(q.player_id for q in bet_quotes(repo))
 
 
 def test_capture_timestamp_and_expiry_are_never_refreshed_by_reimport(repo, clock, report):
@@ -189,7 +203,7 @@ def test_ambiguous_fixtures_are_never_guessed(repo, board, clock, report):
 
 def test_bet365_failure_expiry_and_support_filter_do_not_hide_other_books(repo, board, clock, report):
     save_report(report, repo, clock)
-    settings = Settings(_env_file=None, api_keys="test-key")
+    settings = Settings(_env_file=None, api_keys="test-key", bet365_enabled=True)
     with TestClient(create_app(settings, repo, clock)) as client:
         clock.value = 151
         # The browser has failed; ordinary collection keeps refreshing independently.

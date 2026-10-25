@@ -165,3 +165,4 @@ class StatusResponse(BaseModel):
     stale_quotes: int
     observed_at: datetime
     bet365: dict = Field(default_factory=dict)
+    propline: dict = Field(default_factory=dict)

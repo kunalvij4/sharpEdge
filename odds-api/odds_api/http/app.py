@@ -23,6 +23,7 @@ from odds_api.http.schemas import (
 from odds_api.infrastructure.clock import SystemClock
 from odds_api.infrastructure.config import Settings
 from odds_api.infrastructure.normalization import BET_NAMES, PERIOD_NAMES
+from odds_api.infrastructure.propline_normalization import public_markets
 from odds_api.infrastructure.repository import SqlRepository
 
 header_key = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -54,6 +55,7 @@ def create_app(settings=None, repository=None, clock=None):
             for alt in ("", "_alternate")
             for suffix in ("", *("_" + p for p in periods if p != "full"))
         }
+        markets.update(public_markets())
         app.state.query = OddsQueryService(
             app.state.repository,
             clock,
@@ -62,6 +64,8 @@ def create_app(settings=None, repository=None, clock=None):
             markets,
             settings.props_cache_ttl,
             settings.bet365_max_age,
+            settings.propline_collected_ttl,
+            settings.bet365_enabled,
         )
         yield
         if repository is None:
@@ -150,6 +154,7 @@ def create_app(settings=None, repository=None, clock=None):
         response.headers["X-Odds-Source-TTL"] = str(settings.source_ttl)
         response.headers["X-Odds-Props-Cache-TTL"] = str(settings.props_cache_ttl)
         response.headers["X-Odds-Bet365-TTL"] = str(settings.bet365_max_age)
+        response.headers["X-Odds-PropLine-TTL"] = str(settings.propline_collected_ttl)
         response.headers["Cache-Control"] = "no-store"
 
     @app.get(
@@ -179,14 +184,22 @@ def create_app(settings=None, repository=None, clock=None):
         summary="Inspect collection health and freshness",
     )
     def status(request: Request):
-        result = request.app.state.repository.status(clock.now(), settings.collected_ttl, settings.source_ttl)
+        result = request.app.state.repository.status(
+            clock.now(), settings.collected_ttl, settings.source_ttl, settings.propline_collected_ttl
+        )
         bet365 = {"enabled": settings.bet365_enabled, "jobs": {}}
         if settings.bet365_enabled:
             try:
                 bet365["jobs"] = json.loads((Path(settings.bet365_output_dir) / "status.json").read_text())
             except (OSError, ValueError):
                 bet365["state"] = "unavailable"
-        return {**result, "bet365": bet365}
+        propline = {"enabled": settings.propline_enabled}
+        if settings.propline_enabled:
+            try:
+                propline.update(json.loads((Path(settings.propline_output_dir) / "status.json").read_text()))
+            except (OSError, ValueError):
+                propline["state"] = "unavailable"
+        return {**result, "bet365": bet365, "propline": propline}
 
     @app.get(
         "/v1/sports",
@@ -229,7 +242,7 @@ def create_app(settings=None, repository=None, clock=None):
         dependencies=[Depends(authenticate)],
         responses=ERRORS,
         tags=["Odds"],
-        summary="Retrieve actionable moneylines across events",
+        summary="Retrieve actionable moneylines and spreads across events",
     )
     def odds(sport: str, response: Response, options=Depends(filters), service=Depends(queries)):
         freshness(response)

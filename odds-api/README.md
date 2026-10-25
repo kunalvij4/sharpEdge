@@ -1,15 +1,19 @@
 # In-House Odds API — Phase 1
 
-The application container runs FastAPI, the existing Unabated collector, and a Bet365 collector using headed Microsoft Edge, Playwright, and Xvfb. PostgreSQL remains a separate database container. Collection runs in independent supervised processes; browser failures do not block the existing collector or HTTP requests.
+The API combines Unabated and PropLine for **NHL, NBA, NFL, MLB, and NCAAF**.
+One supervised collector runs PropLine at minute 0, Unabated at minute 4, then
+PropLine at minute 8. Each provider repeats every eight minutes. Moneylines,
+spreads, and supported player props share the same event catalog and API.
+See [PROPLINE.md](PROPLINE.md) for identity matching, freshness, quota, and operations.
 
-Bet365 uses bookmaker key `bet365` in the same odds and props responses as existing `unabated_<source-id>` books. Only explicit full-game O/U props matching another book's canonical event, player, market, period, side, and exact line are stored. Ambiguous fixtures, unmapped props, and SGP/milestone prices are discarded. See [integrated collection and coverage](docker/INTEGRATION.md) and the [container smoke check](docker/README.md).
-
-A FastAPI service that reads persisted Unabated moneylines and player props. A separate collector discovers account metadata, normalizes boards, and commits each refresh in one database transaction. PostgreSQL is the deployment database; SQLite supports local development and offline tests.
+Bet365 runs independently through `compose.bet365.yaml` and `Dockerfile.bet365`.
+It saves captures for review and has no database connection or API integration.
+The main image contains no browser or Playwright dependencies.
 
 ## Start with Docker Compose
 
 1. Copy `.env.example` to `.env`.
-2. Set `API_KEYS`, `UNABATED_API_KEY`, and `POSTGRES_PASSWORD` locally. Use a URL-safe database password, or percent-encode reserved URL characters in the connection URL. Never paste provider credentials into chat or commit them.
+2. Set `API_KEYS`, `UNABATED_API_KEY`, `PROPLINE_API_KEY`, and `POSTGRES_PASSWORD` locally. Use a URL-safe database password, or percent-encode reserved URL characters in the connection URL. Never paste provider credentials into chat or commit them.
 3. Confirm your Unabated account's permitted leagues, sources, markets, request policy, and attribution requirements.
 4. Run:
 
@@ -18,7 +22,7 @@ docker compose up --build -d
 docker compose logs -f api
 ```
 
-Compose waits for PostgreSQL, runs `alembic upgrade head` in a one-shot migration service, and starts the combined application container. PostgreSQL data lives in `odds-data`; diagnostic captures live in `bet365-artifacts`. Ordinary `docker compose down` preserves both. The application runs as UID/GID 10001 on Linux/amd64 with the browser sandbox enabled.
+Compose waits for PostgreSQL, runs `alembic upgrade head` in a one-shot migration service, and starts the combined application container. PostgreSQL data lives in `odds-data`; collector schedule and status live in `collection-artifacts`. Ordinary `docker compose down` preserves both. The application runs as UID/GID 10001 on Linux/amd64 without a browser.
 
 Swagger UI: <http://localhost:8000/docs>. OpenAPI: <http://localhost:8000/openapi.json>. Use Swagger's Authorize button with your **product** key.
 
@@ -77,9 +81,9 @@ Set `TEST_DATABASE_URL` to an **empty disposable PostgreSQL database** to run re
 
 | Endpoint | Behavior |
 |---|---|
-| `GET /v1/sports` | Configured leagues, including NBA, NFL, and MLB by default |
+| `GET /v1/sports` | Configured leagues, NHL, NBA, NFL, MLB, and NCAAF by default |
 | `GET /v1/sports/{sport}/events` | Events with a future commence time |
-| `GET /v1/sports/{sport}/odds` | Actionable moneylines across events |
+| `GET /v1/sports/{sport}/odds` | Actionable moneylines and spreads across events |
 | `GET /v1/events/{event_id}/odds` | Moneylines and selected props; cached props carry explicit freshness labels |
 | `GET /v1/events/{event_id}/props` | All supported player props, including alternates and periods, from every stored book |
 | `GET /v1/status` | Collection success/failure, lag, misses, warnings, counts, rate limits, freshness |
@@ -153,26 +157,34 @@ The IDs above are placeholders; replace them with account discovery results. Per
 
 ## Collection, persistence, and freshness
 
-Default deadlines repeat every 30 seconds from collector startup:
+The combined collector repeats each provider every eight minutes:
 
-| Offset | League | Scope |
+| Offset | Provider | Scope |
 |---|---|---|
-| 0s | NBA | Moneylines |
-| 5s | NBA | Props |
-| 10s | NFL | Moneylines |
-| 15s | NFL | Props |
-| 20s | MLB | Moneylines |
-| 25s | MLB | Props |
+| 0 minutes | PropLine | All five leagues, game lines and props |
+| 4 minutes | Unabated | All five leagues, game lines and props |
+| 8 minutes | PropLine | Repeat |
 
-Monotonic deadlines advance from the previous scheduled deadline. A running scope is skipped and counted as a missed deadline. After a pause, only the latest due refresh is attempted; older cycles are counted rather than replayed. The shared limiter still paces recovery and retries. Discovery startup, latency, retries, and request-policy constraints can delay actual requests; monitor scheduling lag. The cadence describes collection attempts, not guaranteed data freshness.
+One durable schedule controls both feeds. A restart resumes the saved schedule;
+slow cycles and downtime delay the next provider without skipping its turn or creating catch-up bursts. A provider
+cycle completes before another starts. See [PROPLINE.md](PROPLINE.md) for the
+request budget, eight-minute freshness windows, and standalone Bet365 service.
 
 One limiter controls all provider HTTP calls, using a configurable general admission interval and a separate odds interval. Every retry passes through it. 429/5xx and transport errors have bounded exponential backoff; valid numeric and HTTP-date Retry-After values defer shared admission. 401, coverage denials, unsupported requests, and unsuccessful provider envelopes fail safely without exposing upstream error bodies. They do not erase stored boards. No tier fallback is attempted.
 
-Odds HTTP calls are serialized across all scopes, with the configured odds interval measured from completion. Waiting odds requests do not hold the shared admission lock, so discovery can proceed under its own general limit. Admission rechecks shared cooldowns after waking. The six 30-second schedule deadlines remain fixed; slow responses, the completion interval, or provider errors can delay admission and cause recorded missed cycles. On Free API, six calls plus their response times may exceed one cycle; the collector does not increase request frequency to catch up.
+Odds HTTP calls are serialized across all scopes, with the configured odds interval measured from completion. Waiting odds requests do not hold the shared admission lock, so discovery can proceed under its own general limit. Admission rechecks shared cooldowns after waking. Slow responses and provider errors can cause a feed to miss its slot; the collector does not increase request frequency to catch up.
 
 The [Unabated discovery guide](https://docs.unabated.com/guides/discovery) identifies lookup endpoints for leagues, sources, bet definitions, periods, people, teams, and events. Relatively static metadata is refreshed hourly; scope metadata every five minutes by default. Boards discover new events/lines on each fetch. A source/player/team not yet in cached discovery causes safe preservation until discovery catches up. Scope metadata TTL can be lowered.
 
-A confirmed complete board atomically updates current odds and marks previously present but missing selections removed within that league and board kind. Nonempty upstream messages or unsupported mappings make a board partial, suppressing removals. Malformed/incomplete structures and unresolved required identities fail the refresh. Partial boards can update valid mapped prices without deleting missing prices. Successful empty boards are distinct from failures. Both source line IDs and internal IDs are stored separately; alternate point values and period/player/book context participate in market identity.
+API refreshes preserve existing markets and prices unless a valid, fresher
+replacement arrives for the same selection. Empty, partial, failed, or narrower
+responses do not remove absent selections, including selections from the other
+provider. Replacements require a newer collection time, an available valid price,
+non-expired freshness, and no regression or loss of a previously known source
+observation time. Retained rows keep their original timestamps and expiration;
+reading or refreshing another feed never makes them fresh again. Market, period,
+player, exact line, side, book, and provider identities remain distinct. Existing
+kickoff pruning and freshness rules still apply.
 
 Availability has available, suspended, removed, and stale states. Staleness is calculated at read time from:
 - time since collection exceeding `COLLECTED_TTL`;

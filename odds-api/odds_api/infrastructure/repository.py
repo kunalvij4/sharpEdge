@@ -14,8 +14,20 @@ def aware(value):
 
 
 class SqlRepository:
-    def __init__(self, url, league_config, retention=0, clock=None):
+    def __init__(
+        self,
+        url,
+        league_config,
+        retention=0,
+        clock=None,
+        *,
+        collected_ttl=600,
+        source_ttl=3600,
+        propline_collected_ttl=600,
+    ):
         self.clock = clock or SystemClock()
+        self.collected_ttl, self.source_ttl = collected_ttl, source_ttl
+        self.propline_collected_ttl = propline_collected_ttl
         kwargs = (
             {"connect_args": {"check_same_thread": False, "timeout": 30}}
             if url.startswith("sqlite")
@@ -68,6 +80,19 @@ class SqlRepository:
         keys = [c.name for c in table.primary_key]
         for offset in range(0, len(rows), 500):
             batch = rows[offset : offset + 500]
+            if self.engine.dialect.name == "postgresql":
+                # Reuse one parameterized statement with psycopg's executemany pipeline.
+                # Compiling thousands of literal VALUES expressions per bulk snapshot
+                # consumed most of the collection slot at real feed sizes.
+                stmt = self.insert(table)
+                conn.execute(
+                    stmt.on_conflict_do_update(
+                        index_elements=keys,
+                        set_={key: stmt.excluded[key] for key in batch[0] if key not in keys},
+                    ),
+                    batch,
+                )
+                continue
             stmt = self.insert(table).values(batch)
             conn.execute(
                 stmt.on_conflict_do_update(
@@ -109,7 +134,14 @@ class SqlRepository:
                 conn,
                 "books",
                 [
-                    {"id": book.id, "source_id": book.source_id, "key": book.key, "title": book.title}
+                    {
+                        "id": book.id,
+                        "source_id": "propline:" + book.source_id
+                        if board.provider == "propline"
+                        else book.source_id,
+                        "key": book.key,
+                        "title": book.title,
+                    }
                     for book in board.books
                 ],
             )
@@ -124,14 +156,29 @@ class SqlRepository:
                 .where(t["events"].c.league_key == league.key, t["markets"].c.kind == board.kind)
             )
             scope = scope.where(
-                t["books"].c.key == "bet365" if board.provider == "bet365" else t["books"].c.key != "bet365"
+                t["books"].c.key == "bet365"
+                if board.provider == "bet365"
+                else t["books"].c.key.startswith(board.provider + "_", autoescape=True)
             )
             if board.provider == "bet365":
                 scope = scope.where(t["markets"].c.type.in_(board.covered_markets))
-            if board.complete:
+            # Legacy Bet365 refresh semantics are isolated from the two API feeds.
+            # Missing API rows are retained at their original age, even on an
+            # otherwise complete/empty response; absence is not a replacement.
+            if board.complete and board.provider == "bet365":
                 conn.execute(
                     update(t["odds"]).where(t["odds"].c.selection_id.in_(scope)).values(state="removed")
                 )
+            existing = (
+                {
+                    row["selection_id"]: row
+                    for row in conn.execute(
+                        select(t["odds"]).where(t["odds"].c.selection_id.in_(scope))
+                    ).mappings()
+                }
+                if board.provider in {"unabated", "propline"}
+                else {}
+            )
             markets, selections, prices = {}, {}, {}
             # The league lock makes the intersection check atomic with other refreshes.
             supported = (
@@ -149,6 +196,9 @@ class SqlRepository:
             canonical_events = set(conn.execute(event_query).scalars())
             for q in board.quotes:
                 if q.event_id not in canonical_events:
+                    continue
+                previous = existing.get(q.selection_id)
+                if previous is not None and not self._valid_replacement(q, previous, now, board.provider):
                     continue
                 if (
                     supported is not None
@@ -228,6 +278,25 @@ class SqlRepository:
                         t["snapshots"].c.collected_at < board.collected_at - timedelta(days=self.retention)
                     )
                 )
+
+    def _valid_replacement(self, quote, previous, now, provider):
+        if quote.state != Availability.AVAILABLE or quote.price is None:
+            return False
+        ttl = self.propline_collected_ttl if provider == "propline" else self.collected_ttl
+        if quote.availability(now, ttl, self.source_ttl) != Availability.AVAILABLE:
+            return False
+        if not aware(previous["collected_at"]) < quote.collected_at <= now + timedelta(seconds=5):
+            return False
+        if quote.expires_at is not None and quote.expires_at <= now:
+            return False
+        source = quote.source_updated_at
+        prior_source = aware(previous["source_updated_at"])
+        if source is not None and source > now + timedelta(seconds=5):
+            return False
+        # A newer download must not promote a regressed or missing observation time.
+        if prior_source is not None and (source is None or source < prior_source):
+            return False
+        return True
 
     def _delete_events(self, conn, event_ids):
         if not event_ids:
@@ -420,7 +489,7 @@ class SqlRepository:
         with self.engine.begin() as conn:
             self.upsert(conn, "collector", {"id": 1, "heartbeat": now, "metrics": dict(metrics)})
 
-    def status(self, now, collected_ttl, source_ttl):
+    def status(self, now, collected_ttl, source_ttl, propline_collected_ttl=600):
         with self.engine.connect() as conn:
             scopes = [
                 {
@@ -437,10 +506,11 @@ class SqlRepository:
                 for name in ("events", "markets", "selections")
             }
             collector = conn.execute(select(self.t["collector"])).mappings().first()
-            o, s, m, e = (self.t[k] for k in ("odds", "selections", "markets", "events"))
+            o, s, m, e, b = (self.t[k] for k in ("odds", "selections", "markets", "events", "books"))
+            is_propline = b.c.key.startswith("propline_", autoescape=True)
             stale = conn.execute(
                 select(func.count())
-                .select_from(o.join(s).join(m).join(e))
+                .select_from(o.join(s).join(m).join(e).join(b, m.c.book_id == b.c.id))
                 .where(
                     e.c.league_key.in_(self.configured),
                     or_(
@@ -448,7 +518,11 @@ class SqlRepository:
                         and_(
                             o.c.state == "available",
                             or_(
-                                o.c.collected_at < now - timedelta(seconds=collected_ttl),
+                                and_(~is_propline, o.c.collected_at < now - timedelta(seconds=collected_ttl)),
+                                and_(
+                                    is_propline,
+                                    o.c.collected_at < now - timedelta(seconds=propline_collected_ttl),
+                                ),
                                 o.c.source_updated_at < now - timedelta(seconds=source_ttl),
                                 o.c.expires_at <= now,
                             ),

@@ -13,7 +13,9 @@ from odds_api.infrastructure.config import Settings
 def client(repo, board, clock):
     repo.save(board())
     repo.save(board("props"))
-    settings = Settings(_env_file=None, api_keys="consumer-fixture-key", unabated_api_key="provider-secret")
+    settings = Settings(
+        _env_file=None, api_keys="consumer-fixture-key", unabated_api_key="provider-secret", collected_ttl=90
+    )
     with TestClient(create_app(settings, repo, clock)) as client:
         yield client
 
@@ -24,7 +26,7 @@ def test_health_and_authentication(client):
     assert client.get("/v1/sports").status_code == 401
     assert client.get("/v1/status").status_code == 401
     assert client.get("/v1/sports", headers={"X-API-Key": "consumer-fixture-key"}).status_code == 200
-    assert len(client.get("/v1/sports?apiKey=consumer-fixture-key").json()) == 3
+    assert len(client.get("/v1/sports?apiKey=consumer-fixture-key").json()) == 5
 
 
 def test_moneyline_compatibility_fixture(client, board):
@@ -169,8 +171,14 @@ def test_docs_and_openapi_do_not_contain_provider_credentials(client):
 def test_v1_league_keys_and_removed_routes(client):
     headers = {"X-API-Key": "consumer-fixture-key"}
     leagues = client.get("/v1/sports", headers=headers).json()
-    assert {league["key"] for league in leagues} == {"nba_basketball", "nfl_football", "mlb_baseball"}
-    assert {league["group"] for league in leagues} == {"Basketball", "Football", "Baseball"}
+    assert {league["key"] for league in leagues} == {
+        "nba_basketball",
+        "nfl_football",
+        "mlb_baseball",
+        "nhl_hockey",
+        "ncaaf_football",
+    }
+    assert {league["group"] for league in leagues} == {"Basketball", "Football", "Baseball", "Hockey"}
     for old in ("/v4/sports", "/v1/sports/basketball_nba/events", "/status"):
         assert client.get(old, headers=headers).status_code == 404
 

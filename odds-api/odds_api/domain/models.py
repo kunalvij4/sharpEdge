@@ -92,7 +92,9 @@ class Sportsbook:
 
     @property
     def key(self) -> str:
-        return "bet365" if self.provider == "bet365" else "unabated_" + self.source_id
+        if self.provider == "bet365":
+            return "bet365"
+        return self.provider + "_" + self.source_id
 
 
 @dataclass(frozen=True)
@@ -179,12 +181,16 @@ class Board:
         object.__setattr__(self, "collected_at", utc(self.collected_at))
         if self.kind not in {"moneyline", "props"}:
             raise ValueError("Unsupported board kind")
-        if self.provider not in {"unabated", "bet365"}:
+        if self.provider not in {"unabated", "bet365", "propline"}:
             raise ValueError("Unsupported board provider")
         if self.provider == "bet365" and (
             not self.covered_markets or any(b.provider != "bet365" for b in self.books)
         ):
             raise ValueError("Bet365 boards require explicit market coverage and provider-owned books")
+        if self.provider == "propline" and (
+            not self.covered_markets or any(b.provider != "propline" for b in self.books)
+        ):
+            raise ValueError("PropLine boards require explicit market coverage and provider-owned books")
         if any(e.league_key != self.league.key for e in self.events):
             raise ValueError("Board contains another league")
         event_ids, book_ids = {e.id for e in self.events}, {b.id for b in self.books}

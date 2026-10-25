@@ -1,4 +1,4 @@
-"""Independent browser collector, writing the same canonical SQL quotes as Unabated."""
+"""Standalone browser capture service. Runtime writes artifacts only, never SQL."""
 
 import asyncio
 import json
@@ -11,9 +11,7 @@ from pathlib import Path
 from odds_api.infrastructure.bet365 import MARKETS, boards
 from odds_api.infrastructure.bet365_runtime import command, prune_runs, write_json
 from odds_api.infrastructure.config import Settings
-from odds_api.infrastructure.lease import CollectorLease
 from odds_api.infrastructure.logging import configure_logging
-from odds_api.infrastructure.repository import SqlRepository
 from scripts.organize_bet365_league_dump import organize_leagues
 from scripts.verify_bet365_dump import verify
 
@@ -97,18 +95,25 @@ def ingest(directory, repository, settings, job):
     return counts
 
 
+def archive_capture(directory, settings):
+    messages = [
+        m for m in json.loads((directory / "messages.json").read_text()) if m.get("transport") != "websocket"
+    ]
+    pages = json.loads((directory / "pages.json").read_text())
+    report = organize_leagues(messages, pages, settings.bet365_region)
+    verification = verify(report, messages)
+    write_json(directory / "normalized.json", report)
+    write_json(directory / "verification.json", verification)
+    if not verification["source_checks_passed"] or verification["errors"] or report["normalization_issues"]:
+        raise ValueError("Bet365 source validation failed")
+    return report["summary"]
+
+
 async def run():
     configure_logging()
     settings = Settings()
     root = Path(settings.bet365_output_dir)
     root.mkdir(parents=True, exist_ok=True)
-    repository = SqlRepository(settings.database_url, settings.leagues)
-    lease = CollectorLease(repository.engine, key=911712350)
-    try:
-        lease.__enter__()
-    except BaseException:
-        repository.close()
-        raise
     semaphore = asyncio.Semaphore(2)
     states = {}
     loop = asyncio.get_running_loop()
@@ -148,10 +153,17 @@ async def run():
                         environment={
                             k: v
                             for k, v in os.environ.items()
-                            if k not in {"DATABASE_URL", "API_KEYS", "UNABATED_API_KEY", "POSTGRES_PASSWORD"}
+                            if k
+                            not in {
+                                "DATABASE_URL",
+                                "API_KEYS",
+                                "UNABATED_API_KEY",
+                                "PROPLINE_API_KEY",
+                                "POSTGRES_PASSWORD",
+                            }
                         },
                     )
-                    counts = await asyncio.to_thread(ingest, directory, repository, settings, name)
+                    counts = await asyncio.to_thread(archive_capture, directory, settings)
                     state.update(state="success", last_success=datetime.now(UTC).isoformat(), counts=counts)
                 except MarketsUnavailable:
                     state.update(state="unavailable", reason="no_supported_markets_offered")
@@ -169,20 +181,12 @@ async def run():
         if league is None or league in settings.leagues
     ]
 
-    async def maintain_lease():
-        while True:
-            lease.ping()
-            await asyncio.sleep(2)
-
-    tasks.append(asyncio.create_task(maintain_lease()))
     try:
         await asyncio.gather(*tasks)
     finally:
         for child in tasks:
             child.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        lease.__exit__(None, None, None)
-        repository.close()
 
 
 if __name__ == "__main__":

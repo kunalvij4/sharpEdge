@@ -5,9 +5,11 @@ from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_LEAGUES = {
+    "nhl_hockey": {"title": "NHL", "route": "nhl"},
     "nba_basketball": {"title": "NBA", "route": "nba"},
     "nfl_football": {"title": "NFL", "route": "nfl"},
     "mlb_baseball": {"title": "MLB", "route": "mlb"},
+    "ncaaf_football": {"title": "NCAAF", "route": "cfb"},
 }
 
 
@@ -16,10 +18,18 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./odds.db"
     api_keys: SecretStr = SecretStr("")
     unabated_api_key: SecretStr = SecretStr("")
+    propline_api_key: SecretStr = SecretStr("")
+    propline_enabled: bool = True
+    propline_poll_interval: float = Field(default=480, ge=480)
+    propline_request_timeout: float = Field(default=90, gt=0)
+    propline_collected_ttl: float = Field(default=600, ge=300)
+    propline_max_age: float = Field(default=900, ge=300)
+    propline_output_dir: str = "artifacts/propline"
     unabated_api_base_url: str = "https://data.unabated.com"
     unabated_partner_code: str = ""
     leagues_json: str = json.dumps(DEFAULT_LEAGUES)
-    poll_interval: float = Field(default=30, gt=0)
+    poll_interval: float = Field(default=480, gt=0)
+    collection_state_path: str = "artifacts/collection/schedule.json"
     request_timeout: float = Field(default=15, gt=0)
     max_attempts: int = Field(default=3, ge=1, le=10)
     retry_backoff: float = Field(default=1, gt=0)
@@ -27,12 +37,12 @@ class Settings(BaseSettings):
     odds_min_interval: float = Field(default=5, ge=0)
     metadata_ttl: float = Field(default=3600, gt=0)
     scope_metadata_ttl: float = Field(default=300, gt=0)
-    collected_ttl: float = Field(default=90, gt=0)
+    collected_ttl: float = Field(default=600, gt=0)
     source_ttl: float = Field(default=3600, gt=0)
     props_cache_ttl: float = Field(default=3600, ge=0)
     snapshot_retention_days: int = Field(default=0, ge=0)
     shutdown_timeout: float = Field(default=20, gt=0)
-    bet365_enabled: bool = True
+    bet365_enabled: bool = False
     bet365_region: str = Field(default="nj", pattern="^(nj|va)$")
     bet365_interval: float = Field(default=90, ge=60, le=120)
     bet365_max_age: float = Field(default=150, ge=60, le=300)
@@ -48,6 +58,10 @@ class Settings(BaseSettings):
             "basketball_nba": "nba_basketball",
             "americanfootball_nfl": "nfl_football",
             "baseball_mlb": "mlb_baseball",
+            "icehockey_nhl": "nhl_hockey",
+            "hockey_nhl": "nhl_hockey",
+            "football_ncaaf": "ncaaf_football",
+            "americanfootball_ncaaf": "ncaaf_football",
         }
         result = {}
         for key, value in json.loads(self.leagues_json).items():
@@ -68,4 +82,6 @@ class Settings(BaseSettings):
             raise ValueError("LEAGUES_JSON requires sport keys with provider route names")
         if not self.unabated_api_base_url.startswith("https://"):
             raise ValueError("UNABATED_API_BASE_URL must use HTTPS")
+        if self.propline_enabled and self.propline_collected_ttl < self.propline_poll_interval:
+            raise ValueError("PROPLINE_COLLECTED_TTL must cover PROPLINE_POLL_INTERVAL")
         return self

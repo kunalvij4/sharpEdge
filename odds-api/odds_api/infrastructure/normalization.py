@@ -11,6 +11,16 @@ from odds_api.infrastructure.provider_schema import Line, Source
 BET_NAMES = {
     "moneyline": "h2h",
     "money line": "h2h",
+    "spread": "spreads",
+    "point spread": "spreads",
+    "puck line": "spreads",
+    "run line": "spreads",
+    "goals": "player_goals",
+    "shots on goal": "player_shots_on_goal",
+    "saves": "goalie_saves",
+    "goalie saves": "goalie_saves",
+    "blocked shots": "player_blocked_shots",
+    "power play points": "player_power_play_points",
     "points": "player_points",
     "player points": "player_points",
     "rebounds": "player_rebounds",
@@ -53,6 +63,9 @@ BET_NAMES = {
     "hitter walks": "batter_walks",
 }
 PERIOD_NAMES = {
+    "first period": "p1",
+    "second period": "p2",
+    "third period": "p3",
     "game": "full",
     "full game": "full",
     "full": "full",
@@ -178,7 +191,14 @@ class Normalizer:
         def event_from(raw):
             team_sides = {}
             for team in values(raw.get("eventTeams")):
-                name = team.get("name") or team_map.get(str(team.get("teamId")))
+                catalog_name = team_map.get(str(team.get("teamId")))
+                # CFB's bulk event list uses abbreviations (e.g. MFL). Use the
+                # same provider's team catalog for the confirmed school name.
+                name = (
+                    (catalog_name or team.get("name"))
+                    if league.route == "cfb"
+                    else (team.get("name") or catalog_name)
+                )
                 if name:
                     team_sides[team["sideIndex"]] = name
             eid = str(raw["eventId"])
@@ -186,7 +206,11 @@ class Normalizer:
             start = timestamp(raw.get("eventStart")) or (previous.start if previous else None)
             home = team_sides.get(1) or (previous.home if previous else "")
             away = team_sides.get(0) or (previous.away if previous else "")
-            state = EVENT_STATES.get(raw.get("statusId"), "unknown")
+            state = (
+                previous.status
+                if previous and raw.get("statusId") is None
+                else EVENT_STATES.get(raw.get("statusId"), "unknown")
+            )
             if raw.get("isLive") and state == "pregame":
                 state = "live"
             if start is None:
@@ -196,7 +220,13 @@ class Normalizer:
             return event
 
         for raw in values(events):
-            event_from(raw)
+            if str(raw.get("leagueId")) != league.source_id:
+                warnings.add("foreign_catalog_event:" + str(raw.get("eventId", "missing")))
+                continue
+            try:
+                event_from(raw)
+            except (ValueError, KeyError, TypeError):
+                warnings.add("unresolved_catalog_event:" + str(raw.get("eventId", "missing")))
         for league_board in values(data["odds"]):
             if str(league_board["leagueId"]) != league.source_id:
                 raise ValueError("Unexpected league in scoped response")
@@ -225,15 +255,16 @@ class Normalizer:
                         if group.get("betSubType"):
                             warnings.add("unsupported_bet_subtype:bet=" + bet_id)
                             continue
-                        if (kind == "moneyline") != (base == "h2h"):
-                            # Straight boards also contain spreads/totals, intentionally outside Phase 1.
+                        if league.route == "nhl" and base == "batter_hits":
+                            base = "player_hits"
+                        if (kind == "moneyline") != (base in {"h2h", "spreads"}):
                             continue
                         for side in values(group.get("sides")):
                             player = str(side["personId"]) if side.get("personId") is not None else None
                             if kind == "props" and not player:
                                 warnings.add("unsupported_nonplayer_prop:bet=" + bet_id)
                                 continue
-                            if base == "h2h":
+                            if base in {"h2h", "spreads"}:
                                 name = {0: event.away, 1: event.home, 2: "Draw"}.get(side["sideIndex"])
                                 description = None
                             else:
@@ -285,7 +316,7 @@ class Normalizer:
                                     market = base + ("_alternate" if is_alt else "")
                                     if period_key != "full":
                                         market += "_" + period_key
-                                    if kind == "props" and item.points is None:
+                                    if (kind == "props" or base == "spreads") and item.points is None:
                                         warnings.add(
                                             "missing_prop_points:bet=" + bet_id + ":source=" + source_id
                                         )

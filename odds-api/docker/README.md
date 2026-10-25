@@ -1,3 +1,5 @@
+> Historical Bet365 integration notes. Current deployment uses the separate capture-only service in `compose.bet365.yaml`; see [current collection setup](../PROPLINE.md).
+
 # Application container
 
 The API and both collectors run together using the root `Dockerfile` and

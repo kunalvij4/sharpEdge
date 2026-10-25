@@ -31,6 +31,8 @@ class JsonFormatter(logging.Formatter):
             "duration_seconds",
             "process_name",
             "exit_code",
+            "feed",
+            "slot",
         ):
             if hasattr(record, name):
                 result[name] = getattr(record, name)

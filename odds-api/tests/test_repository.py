@@ -52,23 +52,26 @@ def test_partial_refresh_and_failure_preserve_absent_selections(repo, board):
     assert all(r["quote"].state == Availability.AVAILABLE for r in repo.quotes("nba_basketball"))
 
 
-def test_complete_empty_refresh_marks_removed_only_in_scope(repo, board):
+def test_complete_empty_refresh_preserves_all_prices_and_timestamps(repo, board):
     moneyline, props = board(), board("props")
     repo.save(moneyline)
     repo.save(props)
+    before = repo.quotes("nba_basketball")
     repo.save(replace(moneyline, quotes=()))
     rows = repo.quotes("nba_basketball")
-    assert all(r["quote"].state == Availability.REMOVED for r in rows if r["quote"].market == "h2h")
-    assert all(r["quote"].state == Availability.AVAILABLE for r in rows if r["quote"].market != "h2h")
+    assert rows == before
 
 
-def test_suspension_removal_and_relisting(repo, board):
+def test_invalid_refresh_preserves_price_until_valid_fresher_relisting(repo, board, clock):
     snapshot = board()
     q = snapshot.quotes[0]
     repo.save(snapshot)
     repo.save(replace(snapshot, quotes=(replace(q, state=Availability.SUSPENDED),)))
     repo.save(replace(snapshot, quotes=()))
-    repo.save(replace(snapshot, quotes=(replace(q, source_selection_id="new-line-id"),)))
+    clock.value = 1
+    repo.save(
+        replace(snapshot, quotes=(replace(q, source_selection_id="new-line-id", collected_at=clock.now()),))
+    )
     rows = repo.quotes("nba_basketball")
     assert len(rows) == 2
     relisted = next(r["quote"] for r in rows if r["quote"].selection_id == q.selection_id)
@@ -139,7 +142,7 @@ def test_collector_ownership_is_exclusive(repo):
         pass
 
 
-def test_readers_never_observe_partial_board(repo, board, monkeypatch):
+def test_readers_never_observe_partial_board(repo, board, monkeypatch, clock):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
 
@@ -156,7 +159,10 @@ def test_readers_never_observe_partial_board(repo, board, monkeypatch):
         return upsert(connection, name, rows)
 
     monkeypatch.setattr(repo, "upsert_many", pause_before_prices)
-    replacement = replace(original, quotes=(replace(original.quotes[0], price=150),))
+    clock.value = 1
+    replacement = replace(
+        original, quotes=(replace(original.quotes[0], price=150, collected_at=clock.now()),)
+    )
     with ThreadPoolExecutor(max_workers=1) as executor:
         write = executor.submit(repo.save, replacement)
         try:
@@ -169,5 +175,5 @@ def test_readers_never_observe_partial_board(repo, board, monkeypatch):
             resume.set()
         write.result(timeout=10)
     after = [row["quote"] for row in repo.quotes("nba_basketball")]
-    assert {quote.state for quote in after} == {Availability.AVAILABLE, Availability.REMOVED}
-    assert next(quote for quote in after if quote.state == Availability.AVAILABLE).price == 150
+    assert {quote.state for quote in after} == {Availability.AVAILABLE}
+    assert {quote.price for quote in after} == {150, -130}

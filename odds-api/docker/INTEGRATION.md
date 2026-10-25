@@ -1,3 +1,5 @@
+> Historical Bet365 integration notes. Current deployment uses the separate capture-only service in `compose.bet365.yaml`; see [current collection setup](../PROPLINE.md).
+
 # Bet365 in the application container
 
 `docker compose up --build --detach` runs one application container with FastAPI,

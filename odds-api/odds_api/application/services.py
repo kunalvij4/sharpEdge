@@ -2,10 +2,15 @@ import logging
 from datetime import datetime
 from decimal import Decimal
 
+from odds_api.application.async_work import blocking_work
 from odds_api.application.ports import Clock, Provider, Repository
 from odds_api.domain.models import Availability, decimal_odds
 
 log = logging.getLogger(__name__)
+
+
+def is_game_market(market):
+    return any(market == base or market.startswith(base + "_") for base in ("h2h", "spreads"))
 
 
 class QueryError(ValueError):
@@ -26,7 +31,7 @@ class CollectionService:
         diagnostics = {}
         try:
             board = await self.provider.fetch(sport, kind)
-            self.repository.save(board)
+            await blocking_work(self.repository.save, board)
             count = len(board.quotes)
             diagnostics["warnings"] = list(board.warnings[:20])
             outcome = ("empty" if not count else "success") if board.complete else "partial"
@@ -70,20 +75,28 @@ class OddsQueryService:
         supported_markets: set[str],
         props_cache_ttl: float = 3600,
         bet365_collected_ttl: float = 150,
+        propline_collected_ttl: float = 600,
+        bet365_enabled: bool = True,
     ):
         self.repository, self.clock = repository, clock
         self.collected_ttl, self.source_ttl = collected_ttl, source_ttl
         self.supported_markets = supported_markets
         self.props_cache_ttl = props_cache_ttl
         self.bet365_collected_ttl = bet365_collected_ttl
+        self.propline_collected_ttl = propline_collected_ttl
+        self.bet365_enabled = bet365_enabled
 
     def sports(self) -> list[dict]:
         return [
             {
                 "key": league.key,
-                "group": {"nba": "Basketball", "nfl": "Football", "mlb": "Baseball"}.get(
-                    league.route, league.title
-                ),
+                "group": {
+                    "nba": "Basketball",
+                    "nfl": "Football",
+                    "mlb": "Baseball",
+                    "nhl": "Hockey",
+                    "cfb": "Football",
+                }.get(league.route, league.title),
                 "title": league.title,
                 "description": league.title,
                 "active": True,
@@ -113,7 +126,7 @@ class OddsQueryService:
 
         market_set, book_set = parse(markets), parse(bookmakers)
         if market_set == {"all_props"}:
-            market_set = {market for market in self.supported_markets if not market.startswith("h2h")}
+            market_set = {market for market in self.supported_markets if not is_game_market(market)}
         if market_set and market_set - self.supported_markets:
             raise QueryError("Unsupported market filter")
         if book_set and book_set - self.repository.bookmakers():
@@ -148,13 +161,13 @@ class OddsQueryService:
 
     def moneylines(self, sport: str, **options):
         requested = options.get("markets", "h2h").split(",")
-        if any(not (m == "h2h" or m.startswith("h2h_")) for m in requested):
+        if any(not is_game_market(m) for m in requested):
             raise QueryError("Player props require the event odds endpoint")
         return self.odds(sport, **options)
 
     def props(self, sport: str, event_id: str, *, markets="all_props", **options):
         market_set, _ = self.validate(sport, markets)
-        if any(market.startswith("h2h") for market in market_set):
+        if any(is_game_market(market) for market in market_set):
             raise QueryError("The props endpoint accepts only player prop markets")
         return self.odds(sport, event_id=event_id, markets=markets, **options)
 
@@ -183,7 +196,7 @@ class OddsQueryService:
         fresh_only=False,
     ) -> list[dict] | dict:
         market_set, book_set = self.validate(sport, markets, bookmakers, start, end)
-        prop_query = bool(market_set and any(not market.startswith("h2h") for market in market_set))
+        prop_query = bool(market_set and any(not is_game_market(market) for market in market_set))
         if odds_format not in {"american", "decimal"}:
             raise QueryError("Invalid oddsFormat")
         now = self.clock.now()
@@ -208,6 +221,8 @@ class OddsQueryService:
             and (q.expires_at is None or q.expires_at > now)
         }
         for row in rows:
+            if row["book_key"] == "bet365" and not self.bet365_enabled:
+                continue
             q = row["quote"]
             event = events.get(q.event_id)
             if event is None:
@@ -231,7 +246,11 @@ class OddsQueryService:
                 continue
             availability = q.availability(
                 now,
-                self.bet365_collected_ttl if row["book_key"] == "bet365" else self.collected_ttl,
+                self.bet365_collected_ttl
+                if row["book_key"] == "bet365"
+                else self.propline_collected_ttl
+                if row["book_key"].startswith("propline_")
+                else self.collected_ttl,
                 self.source_ttl,
             )
             age = max(0, (now - q.collected_at).total_seconds())

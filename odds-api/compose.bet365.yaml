@@ -1,0 +1,24 @@
+name: odds-bet365-standalone
+services:
+  bet365:
+    image: in-house-odds-bet365:standalone
+    build:
+      context: .
+      dockerfile: Dockerfile.bet365
+    platform: linux/amd64
+    init: true
+    restart: unless-stopped
+    shm_size: 1gb
+    security_opt:
+      - seccomp=./docker/seccomp-browser.json
+    stop_grace_period: 45s
+    command: ["python", "-m", "odds_api.bet365_collector"]
+    environment:
+      BET365_REGION: ${BET365_REGION:-nj}
+      BET365_INTERVAL: ${BET365_INTERVAL:-90}
+      BET365_OUTPUT_DIR: /app/artifacts/bet365
+      TZ: America/New_York
+    volumes:
+      - bet365-artifacts:/app/artifacts
+volumes:
+  bet365-artifacts:

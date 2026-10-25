@@ -53,6 +53,8 @@ class UnabatedClient:
         self.allowed_paths = {"/league", "/bettype", "/market-type"}
         for config in settings.leagues.values():
             route = config["route"]
+            if route == "cfb":
+                self.allowed_paths.add("/event/cfb/upcoming")
             self.allowed_paths.update({"/period-type/" + route, "/team/" + route, "/player/" + route})
             self.allowed_paths.update(
                 "/market/" + route + "/" + market + "/" + operation
@@ -149,10 +151,10 @@ class UnabatedClient:
         market_types = await self.metadata("/market-type", self.settings.metadata_ttl)
         market_type = "straight" if kind == "moneyline" else "props"
         prefix = "/market/" + route + "/" + market_type
-        # Filter moneylines using the current discovery ID, never a hardcoded numeric ID.
+        # Fetch moneylines and spreads in one straight-board request using discovered IDs.
         mapping = self.normalizer.market_map(bets)
         params = (
-            [("betTypeId", key) for key, value in mapping.items() if value == "h2h"]
+            [("betTypeId", key) for key, value in mapping.items() if value in {"h2h", "spreads"}]
             if kind == "moneyline"
             else None
         )
@@ -166,6 +168,15 @@ class UnabatedClient:
         people = {}
         if kind == "props":
             people = await self.metadata("/player/" + route, self.settings.scope_metadata_ttl)
+        events = []
+        if route == "cfb" and kind == "props":
+            # College props omit fixture context for many games. One cached bulk
+            # catalog supplies those identities, including games without props yet.
+            try:
+                events = await self.metadata("/event/cfb/upcoming", self.settings.metadata_ttl)
+            except ProviderError:
+                # A catalog outage must not discard usable prices from this board.
+                self.metrics["event_catalog_failures"] += 1
         normalizer = Normalizer(
             self.settings.unabated_bet_type_map,
             self.settings.unabated_period_map,
@@ -191,7 +202,7 @@ class UnabatedClient:
                 sources,
                 bets,
                 periods,
-                [],
+                events,
                 people,
                 teams,
                 self.clock.now(),

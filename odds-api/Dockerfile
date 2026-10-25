@@ -4,23 +4,16 @@ COPY --from=uv /uv /uvx /bin/
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 UV_PROJECT_ENVIRONMENT=/app/.venv
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv sync --locked --extra bet365-probe --no-dev --no-install-project \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends xvfb xauth \
-    && /app/.venv/bin/python -m playwright install-deps chromium \
-    && /app/.venv/bin/python -m playwright install msedge \
+RUN uv sync --locked --no-dev --no-install-project \
     && groupadd --gid 10001 odds \
     && useradd --uid 10001 --gid odds --create-home odds \
-    && mkdir -p /app/artifacts /app/.cache \
-    && chown odds:odds /app/artifacts /app/.cache \
-    && rm -rf /var/lib/apt/lists/*
+    && mkdir -p /app/artifacts \
+    && chown odds:odds /app/artifacts
 COPY --chown=odds:odds odds_api ./odds_api
 COPY --chown=odds:odds migrations ./migrations
 COPY --chown=odds:odds alembic.ini ./
 COPY --chown=odds:odds scripts ./scripts
-COPY --chown=odds:odds docker/bet365-entrypoint.sh /app/docker/bet365-entrypoint.sh
 ENV PATH="/app/.venv/bin:$PATH" TZ="America/New_York"
 USER 10001:10001
 EXPOSE 8000
-ENTRYPOINT ["/bin/sh", "/app/docker/bet365-entrypoint.sh"]
 CMD ["python", "-m", "odds_api.runtime"]

@@ -54,8 +54,6 @@ async def run():
         "collector": ["-m", "odds_api.collector"],
         "maintenance": ["-m", "odds_api.maintenance"],
     }
-    if settings.bet365_enabled:
-        jobs["bet365"] = ["-m", "odds_api.bet365_collector"]
     tasks = [
         asyncio.create_task(supervise(name, arguments, stop, settings.shutdown_timeout))
         for name, arguments in jobs.items()

@@ -107,10 +107,15 @@ def test_league_keys_preserve_opaque_event_identity(clock, old, new):
     assert set(settings.leagues) == {new}
 
 
-def test_conflicting_duplicate_invalidates_previous_cached_selection(repo, board, raw, clock):
+def test_conflicting_response_preserves_previous_valid_selection(repo, board, raw, clock):
     from copy import deepcopy
 
     repo.save(board("props"))
+    previous = next(
+        r["quote"]
+        for r in repo.quotes("nba_basketball")
+        if r["quote"].name == "Over" and not r["quote"].alternate
+    )
     group = raw["props"]["data"]["odds"]["arbitrary"]["periodTypes"]["arbitrary"]["pregame"]["ignored"]
     lines = group["sides"]["over"]["marketSourceLines"]
     duplicate = deepcopy(lines["whatever"])
@@ -122,8 +127,8 @@ def test_conflicting_duplicate_invalidates_previous_cached_selection(repo, board
     repo.save(updated)
     quotes = [r["quote"] for r in repo.quotes("nba_basketball")]
     over = next(q for q in quotes if q.name == "Over" and not q.alternate)
-    assert over.state == Availability.SUSPENDED and over.price is None
+    assert over == previous
     assert next(q for q in quotes if q.name == "Under").state == Availability.AVAILABLE
     response = service(repo, clock).event_props(updated.events[0].id)
     main = next(m for b in response["bookmakers"] for m in b["markets"] if m["key"] == "player_points")
-    assert [o["name"] for o in main["outcomes"]] == ["Under"]
+    assert {o["name"] for o in main["outcomes"]} == {"Over", "Under"}
