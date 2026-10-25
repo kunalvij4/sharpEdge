@@ -118,7 +118,7 @@ def get(path, auth=True):
     request = urllib.request.Request(base+path, headers={"X-API-Key": "smoke-product-key"} if auth else {})
     with urllib.request.urlopen(request, timeout=5) as response:
         return json.load(response)
-assert len(get("/v1/sports")) == 3
+assert len(get("/v1/sports")) == 5
 odds = get("/v1/sports/nba_basketball/odds?oddsFormat=american")
 assert len(odds) == 1 and len(odds[0]["bookmakers"][0]["markets"][0]["outcomes"]) == 2
 eid = odds[0]["id"]
@@ -156,6 +156,10 @@ print("two-worker API, authentication, persisted moneylines/props, and OpenAPI p
         # A local closed port exercises an outage; no request is made to Unabated.
         collector_env = [
             "--env",
+            "API_KEYS=smoke-product-key",
+            "--env",
+            "PROPLINE_ENABLED=false",
+            "--env",
             "UNABATED_API_KEY=smoke-provider-key",
             "--env",
             "UNABATED_API_BASE_URL=https://127.0.0.1:9",
@@ -163,7 +167,17 @@ print("two-worker API, authentication, persisted moneylines/props, and OpenAPI p
             "MAX_ATTEMPTS=1",
             "--env",
             "REQUEST_TIMEOUT=1",
+            "--env",
+            "COLLECTION_STATE_PATH=/app/artifacts/smoke-schedule.json",
         ]
+        # Resume at the Unabated slot so the outage is exercised immediately,
+        # without waiting four minutes or changing production scheduling.
+        start_runtime = """
+import json, os, time
+from pathlib import Path
+Path(os.environ["COLLECTION_STATE_PATH"]).write_text(json.dumps({"origin": time.time()-240, "slot": 1}))
+os.execvp("python", ["python", "-m", "odds_api.runtime"])
+"""
         docker(
             "run",
             "-d",
@@ -173,9 +187,10 @@ print("two-worker API, authentication, persisted moneylines/props, and OpenAPI p
             *collector_env,
             args.image,
             "python",
-            "-m",
-            "odds_api.collector",
+            "-c",
+            start_runtime,
         )
+        wait_for(lambda: docker("exec", collector, "python", "-c", ready, check=False).returncode == 0)
         check_health = """
 import json,urllib.request
 request=urllib.request.Request("http://localhost:8000/v1/status",headers={"X-API-Key":"smoke-product-key"})
@@ -208,7 +223,6 @@ repository.close()
 """,
         )
         docker("run", "--rm", "-i", *common, args.image, "python", "-", input=expiry_seed)
-        docker("exec", "-d", api, "python", "-m", "odds_api.maintenance")
         expiry_check = """
 import os
 from sqlalchemy import select, func
@@ -226,7 +240,7 @@ repository.close()
         docker("stop", "--time", "10", collector)
         logs = docker("logs", collector)
         assert "smoke-provider-key" not in logs.stdout + logs.stderr
-        assert "collector_stopped" in logs.stdout + logs.stderr
+        assert docker("inspect", "--format", "{{.State.ExitCode}}", collector).stdout.strip() == "0"
         print(
             "provider outage cache, collector ownership, credential redaction, and graceful shutdown passed"
         )

@@ -12,6 +12,9 @@ The main image contains no browser or Playwright dependencies.
 
 ## Start with Docker Compose
 
+For automatic GitHub image builds and manual deployment to the production server,
+see [GitHub deployment setup](deploy/README.md).
+
 1. Copy `.env.example` to `.env`.
 2. Set `API_KEYS`, `UNABATED_API_KEY`, `PROPLINE_API_KEY`, and `POSTGRES_PASSWORD` locally. Use a URL-safe database password, or percent-encode reserved URL characters in the connection URL. Never paste provider credentials into chat or commit them.
 3. Confirm your Unabated account's permitted leagues, sources, markets, request policy, and attribution requirements.
@@ -73,7 +76,7 @@ Exercise a built image without provider credentials:
 uv run python -m scripts.smoke_container --image odds-api:phase1
 ```
 
-This creates and cleans up its own disposable containers and network, seeds synthetic odds, verifies two API workers, restarts the database/API, and simulates a provider outage using a closed local port. It never contacts Unabated.
+This creates and cleans up its own disposable containers and network, seeds synthetic odds, verifies two API workers and the supervised application runtime, restarts the database/API, and simulates a provider outage using a closed local port. It never contacts Unabated or PropLine.
 
 Set `TEST_DATABASE_URL` to an **empty disposable PostgreSQL database** to run repository and API tests against both backends. The test fixture downgrades and recreates that test database's application schema. CI provisions its own PostgreSQL database, runs the suite, and builds the Docker image.
 

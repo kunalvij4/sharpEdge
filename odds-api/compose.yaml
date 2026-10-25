@@ -21,7 +21,7 @@ services:
       retries: 12
 
   migrate:
-    image: in-house-odds-api:integrated
+    image: ${ODDS_API_IMAGE:-in-house-odds-api:integrated}
     platform: linux/amd64
     build: .
     restart: "no"
@@ -34,7 +34,7 @@ services:
         condition: service_healthy
 
   api:
-    image: in-house-odds-api:integrated
+    image: ${ODDS_API_IMAGE:-in-house-odds-api:integrated}
     platform: linux/amd64
     init: true
     restart: unless-stopped

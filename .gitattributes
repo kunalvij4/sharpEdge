@@ -1,0 +1,2 @@
+*.sh text eol=lf
+.github/workflows/odds-api-*.yml text eol=lf

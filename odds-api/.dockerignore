@@ -13,3 +13,7 @@ artifacts
 *.db-wal
 *.collector.lock
 validation*.json
+releases
+current
+previous
+.deploy.lock

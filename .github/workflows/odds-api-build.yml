@@ -1,0 +1,115 @@
+name: Build odds API image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - odds-api/**
+      - .github/workflows/odds-api-*.yml
+      - .gitattributes
+  pull_request:
+    branches: [main]
+    paths:
+      - odds-api/**
+      - .github/workflows/odds-api-*.yml
+      - .gitattributes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: odds-api-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    defaults:
+      run:
+        working-directory: odds-api
+    services:
+      postgres:
+        image: postgres:17.6-bookworm
+        env:
+          POSTGRES_DB: odds_test
+          POSTGRES_USER: odds
+          POSTGRES_PASSWORD: ci-test-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U odds -d odds_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://odds:ci-test-only@localhost:5432/odds_test
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: "0.9.4"
+          enable-cache: true
+          cache-dependency-glob: odds-api/uv.lock
+      - name: Install test dependencies
+        run: uv sync --locked --dev
+      - name: Check Python and deployment scripts
+        run: |
+          uv run --locked ruff check .
+          uv run --locked ruff format --check .
+          bash -n deploy/deploy.sh
+      - name: Test SQLite, PostgreSQL, and deployment failures
+        run: uv run --locked python -m pytest -q
+      - name: Name the image
+        id: image
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}-odds-api:sha-${GITHUB_SHA}"
+          printf 'tag=%s\n' "$image" >> "$GITHUB_OUTPUT"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Build the image to test
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: odds-api
+          file: odds-api/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ steps.image.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=odds-api
+          cache-to: type=gha,mode=max,scope=odds-api
+      - name: Smoke test the built image
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: uv run --locked python -m scripts.smoke_container --image "$IMAGE_TAG"
+      - name: Log in to GitHub Container Registry
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the exact image that passed the smoke test
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          docker push "$IMAGE_TAG"
+          image_ref=$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE_TAG")
+          {
+            printf '### Odds API image published\n\n'
+            printf 'Deploy version: %s\n\n' "sha-$GITHUB_SHA"
+            printf 'Image: %s\n\n' "$image_ref"
+            printf 'Open **Deploy odds API** and run it with this version to deploy.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
