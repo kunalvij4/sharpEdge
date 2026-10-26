@@ -10,6 +10,7 @@ from dynamo_client import DynamoDBClient
 
 
 ODDS_API_KEY = os.environ["ODDS_API_KEY"]          # required
+ODDS_API_BASE_URL = os.environ["ODDS_API_BASE_URL"]  # required; custom in-house API origin
 TABLE_NAME = os.environ["TABLE_NAME"]              # required
 s3 = boto3.client("s3")
 
@@ -23,25 +24,7 @@ def _s3_put_json_gz(bucket: str, key: str, payload: dict) -> None:
         ContentEncoding="gzip",
     )
 
-def fetch_and_attach_player_props(odds_api, sport_key, event_id, markets, retries=3):
-    for i in range(retries):
-        try:
-            return odds_api.get_event_odds(
-                sport_key,
-                event_id,
-                markets=markets
-            )
-        except Exception as e:
-            if "429" in str(e):
-                sleep_time = 1.5 * (i + 1)
-                print(f"[RATE LIMIT] retrying {event_id} in {sleep_time}s...")
-                time.sleep(sleep_time)
-            else:
-                raise e
-    return None
-
-
-def fetch_and_attach_player_props(odds_api, sport_key: str, games: dict) -> dict:
+def fetch_and_attach_player_props(odds_api, games: dict) -> dict:
     PLAYER_PROP_MARKETS = "player_points,player_rebounds,player_assists,player_threes"
 
     MAX_WORKERS = 4  # ✅ hardcoded
@@ -55,12 +38,7 @@ def fetch_and_attach_player_props(odds_api, sport_key: str, games: dict) -> dict
                 print(f"[SKIP] No event_id for {game_id}")
                 return game_id, None
 
-            event_odds = OddsAPI.get_event_odds(
-                odds_api,
-                sport_key,
-                event_id,
-                PLAYER_PROP_MARKETS
-            )
+            event_odds = odds_api.get_event_odds(event_id, PLAYER_PROP_MARKETS)
 
             if not event_odds:
                 return game_id, None
@@ -168,16 +146,16 @@ def write_s3_cache_for_league(league: str, retrieved_at: str, all_games: dict) -
 def lambda_handler(event, context):
     retrieved_at = datetime.now(timezone.utc).isoformat()
 
-    odds = OddsAPI(api_key=ODDS_API_KEY)
+    odds = OddsAPI(api_key=ODDS_API_KEY, base_url=ODDS_API_BASE_URL)
     db = DynamoDBClient(table_name=TABLE_NAME)
 
-    # Pull both leagues (all moneyline spreads totals)
+    # The in-house all-sports odds route currently supports moneylines.
     # nfl = odds.get_nfl_all_markets()
     nba = odds.get_nba_all_markets()
     mlb = odds.get_mlb_all_markets()
     # nhl = odds.get_nhl_all_markets()
 
-    nba = fetch_and_attach_player_props(odds, "basketball_nba", nba)
+    nba = fetch_and_attach_player_props(odds, nba)
     # mlb = fetch_and_attach_player_props(odds, "baseball_mlb", mlb)
 
     total_items = 0

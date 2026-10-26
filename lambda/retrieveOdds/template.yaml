@@ -6,6 +6,9 @@ Parameters:
   OddsApiKey:
     Type: String
     NoEcho: true
+  OddsApiBaseUrl:
+    Type: String
+    Description: HTTPS origin of the in-house odds API (without the /v1 path)
 
 Resources:
   RetrieveOddsFunction:
@@ -14,13 +17,14 @@ Resources:
       CodeUri: retrieveOdds/
       Handler: app.lambda_handler
       Runtime: python3.11
-      Timeout: 30
-      MemorySize: 256
+      Timeout: 120
+      MemorySize: 512
 
       Environment:
         Variables:
           TABLE_NAME: !Ref AllOddsTable
           ODDS_API_KEY: !Ref OddsApiKey
+          ODDS_API_BASE_URL: !Ref OddsApiBaseUrl
           CACHE_BUCKET: !Ref OddsCacheBucket
           CACHE_PREFIX: cache
 
@@ -36,7 +40,7 @@ Resources:
         EveryFiveMinutes:
           Type: Schedule
           Properties:
-            Schedule: rate(120 minutes)
+            Schedule: rate(5 minutes)
             Enabled: true
     
   CalculateEVFunction:
@@ -49,10 +53,10 @@ Resources:
       MemorySize: 512
 
       Events:
-        HourlySchedule:
+        EveryFiveMinutes:
           Type: Schedule
           Properties:
-            Schedule: rate(1 hour)
+            Schedule: rate(5 minutes)
 
       Policies:
         - AmazonS3FullAccess
@@ -75,10 +79,10 @@ Resources:
         Variables:
           BUCKET_NAME: retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v
       Events:
-        HourlySchedule:
+        EveryFiveMinutes:
           Type: Schedule
           Properties:
-            Schedule: rate(1 hour)
+            Schedule: rate(5 minutes)
 
   OddsCacheBucket:
     Type: AWS::S3::Bucket

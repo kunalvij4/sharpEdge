@@ -3,9 +3,15 @@ from typing import Dict, List, Optional
 
 
 class OddsAPI:
-    def __init__(self, api_key: str):
+    sport_keys = {
+        "americanfootball_nfl": "nfl_football",
+        "baseball_mlb": "mlb_baseball",
+        "basketball_nba": "nba_basketball",
+    }
+
+    def __init__(self, api_key: str, base_url: str):
         self.api_key = api_key
-        self.base_url = "https://api.the-odds-api.com/v4"
+        self.base_url = f"{base_url.rstrip('/')}/v1"
         self.session = requests.Session()
 
     def get_odds(
@@ -15,17 +21,15 @@ class OddsAPI:
         bookmakers: Optional[str] = None,
         odds_format: str = "decimal",
     ) -> List[Dict]:
-        url = f"{self.base_url}/sports/{sport}/odds"
-        params = {
-            "apiKey": self.api_key,
-            "regions": "us",
-            "markets": markets,
-            "oddsFormat": odds_format,
-        }
+        sport_key = self.sport_keys.get(sport, sport)
+        url = f"{self.base_url}/sports/{sport_key}/odds"
+        params = {"markets": markets, "oddsFormat": odds_format}
         if bookmakers:
             params["bookmakers"] = bookmakers
 
-        response = self.session.get(url, params=params, timeout=20)
+        response = self.session.get(
+            url, params=params, headers={"X-API-Key": self.api_key}, timeout=20
+        )
         response.raise_for_status()
         return response.json()
 
@@ -46,6 +50,9 @@ class OddsAPI:
             "Bovada": "Bovada",
             "BetOnline.ag": "BetOnline",
             "MyBookie.ag": "MyBookie",
+            "Caesars": "Caesars",
+            "Novig": "NoVig",
+            "Prophet Exchange": "ProphetX",
         }
 
         for game in raw_odds:
@@ -111,24 +118,23 @@ class OddsAPI:
         return parsed_games
 
     def get_nfl_all_markets(self) -> Dict[str, Dict]:
-        raw = self.get_odds("americanfootball_nfl", markets="h2h,spreads,totals")
+        raw = self.get_odds("americanfootball_nfl", markets="h2h")
         return self.parse_all_markets_odds(raw)
 
     def get_nba_all_markets(self) -> Dict[str, Dict]:
-        raw = self.get_odds("basketball_nba", markets="h2h,spreads,totals")
+        raw = self.get_odds("basketball_nba", markets="h2h")
         return self.parse_all_markets_odds(raw)
 
     def get_mlb_all_markets(self) -> Dict[str, Dict]:
-        raw = self.get_odds("baseball_mlb", markets="h2h,spreads,totals")
+        raw = self.get_odds("baseball_mlb", markets="h2h")
         return self.parse_all_markets_odds(raw)
     
     def get_nhl_all_markets(self) -> Dict[str, Dict]:
-        raw = self.get_odds("icehockey_nhl", markets="h2h,spreads,totals")
+        raw = self.get_odds("icehockey_nhl", markets="h2h")
         return self.parse_all_markets_odds(raw)
 
     def get_event_odds(
         self,
-        sport: str,
         event_id: str,
         markets: str,
         bookmakers: str = None,
@@ -137,17 +143,13 @@ class OddsAPI:
         """
         Get odds for a specific event (required for player props).
         """
-        url = f"{self.base_url}/sports/{sport}/events/{event_id}/odds"
-        params = {
-            "apiKey": self.api_key,
-            "regions": "us",
-            "markets": markets,
-            "oddsFormat": odds_format
-        }
+        url = f"{self.base_url}/events/{event_id}/odds"
+        params = {"markets": markets, "oddsFormat": odds_format}
         if bookmakers:
             params["bookmakers"] = bookmakers
 
-        response = self.session.get(url, params=params)
+        response = self.session.get(
+            url, params=params, headers={"X-API-Key": self.api_key}, timeout=20
+        )
         response.raise_for_status()
         return response.json()
-
