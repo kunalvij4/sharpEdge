@@ -27,7 +27,7 @@ jobs:
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST || '45.76.8.244' }}
       DEPLOY_USER: ${{ vars.DEPLOY_USER || 'root' }}
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
-      DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR || secrets.DEPLOY_DIR }}
       DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT || 'in-house-odds' }}
     steps:
       - name: Validate version and server settings
@@ -44,7 +44,7 @@ jobs:
             echo 'Invalid DEPLOY_PORT.' >&2
             exit 1
           fi
-          [[ "$DEPLOY_DIR" =~ ^/[a-zA-Z0-9_./-]+$ && "$DEPLOY_DIR" != / && "$DEPLOY_DIR" != */ ]] || { echo 'Set DEPLOY_DIR to the absolute existing deployment directory, without a trailing slash.' >&2; exit 1; }
+          [[ "$DEPLOY_DIR" =~ ^/[a-zA-Z0-9_./-]+$ && "$DEPLOY_DIR" != / && "$DEPLOY_DIR" != */ ]] || { echo 'Set DEPLOY_DIR as a production environment variable or secret containing the absolute existing deployment directory, without a trailing slash.' >&2; exit 1; }
           [[ "/$DEPLOY_DIR/" != */../* && "/$DEPLOY_DIR/" != */./* ]] || { echo 'DEPLOY_DIR cannot contain . or .. path segments.' >&2; exit 1; }
           [[ "$DEPLOY_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || { echo 'Invalid DEPLOY_PROJECT.' >&2; exit 1; }
           printf 'commit=%s\n' "$commit" >> "$GITHUB_OUTPUT"

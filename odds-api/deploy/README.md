@@ -98,6 +98,9 @@ Add these environment variables:
 | `DEPLOY_USER` | Optional; defaults to `root` |
 | `DEPLOY_PORT` | Optional; defaults to `22` |
 
+`DEPLOY_DIR` can also be stored as an environment or repository secret. The
+workflow accepts either; a nonempty variable takes precedence over the secret.
+
 The workflow uses the automatically supplied `GITHUB_TOKEN` to publish and pull
 the private GHCR package. No registry personal access token or stored server
 registry password is needed. The server receives the short-lived token over
