@@ -1,96 +1,81 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Retrieve odds every 120 minutes and store snapshots in DynamoDB.
+Description: Fetch all five leagues every five minutes, retain closing prices, and publish EV/arbitrage.
 
 Parameters:
   OddsApiKey:
     Type: String
     NoEcho: true
+  RedisUrl:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: TLS Redis URL supplied by the REDIS_URL GitHub secret.
 
 Resources:
   RetrieveOddsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: retrieveOdds/
-      Handler: app.lambda_handler
+      CodeUri: .
+      Handler: odds_pipeline.handler.lambda_handler
       Runtime: python3.11
-      Timeout: 30
-      MemorySize: 256
-
+      Timeout: 300
+      MemorySize: 1024
+      ReservedConcurrentExecutions: 1
+      EventInvokeConfig:
+        MaximumEventAgeInSeconds: 300
+        MaximumRetryAttempts: 0
       Environment:
         Variables:
-          TABLE_NAME: !Ref AllOddsTable
           ODDS_API_KEY: !Ref OddsApiKey
-          CACHE_BUCKET: !Ref OddsCacheBucket
-          CACHE_PREFIX: cache
-
-
+          CLOSING_ODDS_TABLE: !Ref ClosingOddsTable
+          RESULTS_BUCKET: !Ref OddsCacheBucket
+          REDIS_URL: !Ref RedisUrl
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !Ref AllOddsTable
+            TableName: !Ref ClosingOddsTable
         - S3WritePolicy:
             BucketName: !Ref OddsCacheBucket
-
-
       Events:
         EveryFiveMinutes:
           Type: Schedule
           Properties:
-            Schedule: rate(120 minutes)
+            Schedule: rate(5 minutes)
             Enabled: true
-    
-  CalculateEVFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: calculateEV/
-      Handler: app.lambda_handler
-      Runtime: python3.11
-      Timeout: 30
-      MemorySize: 512
 
-      Events:
-        HourlySchedule:
-          Type: Schedule
-          Properties:
-            Schedule: rate(1 hour)
-
-      Policies:
-        - AmazonS3FullAccess
-  
-  ArbitrageFunction:
-    Type: AWS::Serverless::Function
+  ClosingOddsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      FunctionName: arbitrage-finder
-      CodeUri: arbitrage/
-      Handler: app.lambda_handler
-      Runtime: python3.11
-      Timeout: 60
-      MemorySize: 512
-      Policies:
-        - S3ReadPolicy:
-            BucketName: retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v
-        - S3WritePolicy:
-            BucketName: retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v
-      Environment:
-        Variables:
-          BUCKET_NAME: retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v
-      Events:
-        HourlySchedule:
-          Type: Schedule
-          Properties:
-            Schedule: rate(1 hour)
+      TableName: !Sub "${AWS::StackName}-ClosingOdds"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: event_id
+          AttributeType: S
+        - AttributeName: bet_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_id
+          KeyType: HASH
+        - AttributeName: bet_key
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
 
   OddsCacheBucket:
     Type: AWS::S3::Bucket
     Properties:
-      # Let CloudFormation name it (avoids “already exists” errors)
-      # If you want a name, use stack-scoped:
-      # BucketName: !Sub "${AWS::StackName}-odds-cache"
       VersioningConfiguration:
         Status: Enabled
 
+  # Preserve the original table during this migration. The new pipeline does
+  # not read or write it; removing it here would delete existing historical data.
   AllOddsTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${AWS::StackName}-AllOdds"
       BillingMode: PAY_PER_REQUEST
@@ -104,3 +89,9 @@ Resources:
           KeyType: HASH
         - AttributeName: retrieved_at
           KeyType: RANGE
+
+Outputs:
+  ClosingOddsTableName:
+    Value: !Ref ClosingOddsTable
+  ResultsBucketName:
+    Value: !Ref OddsCacheBucket

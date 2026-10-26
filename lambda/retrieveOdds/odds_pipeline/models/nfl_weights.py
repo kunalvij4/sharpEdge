@@ -1,3 +1,5 @@
+"""Existing bookmaker weights, retained for the consolidated pipeline."""
+
 class NFLWeightingEngine:
     """NFL-specific weighting with smart fallback strategy"""
     

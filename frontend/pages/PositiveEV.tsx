@@ -8,7 +8,8 @@ interface BookOdds {
 }
 
 interface EVBet {
-  id: number;
+  id: string | number;
+  event_id: string;
   sport: string;
   match: string;
   market: string;
@@ -101,7 +102,7 @@ const BOOK_LINKS: Record<string, (bet: EVBet) => string> = {
 
 const PositiveEV: React.FC = () => {
   const [bets, setBets] = useState<EVBet[]>([]);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedSport, setSelectedSport] = useState<string>("All");
@@ -123,7 +124,7 @@ const PositiveEV: React.FC = () => {
             // find opposite EV entry for same match
             const oppositeEntry = data.find(
               (b: any) =>
-                b.match === bet.match &&
+                (bet.event_id ? b.event_id === bet.event_id : b.match === bet.match) &&
                 b.bet === bet.opposite_bet
             );
 
@@ -176,6 +177,7 @@ const PositiveEV: React.FC = () => {
 
             allBets.push({
               id: bet.id,
+              event_id: bet.event_id,
               sport: bet.sport || sport,
               match: bet.match,
               market: bet.market,
@@ -224,6 +226,7 @@ const PositiveEV: React.FC = () => {
 
               allBets.push({
                 id: bet.id,
+                event_id: bet.event_id,
                 sport: bet.sport || sport,
                 match: bet.match,
                 market: bet.market,
@@ -259,7 +262,7 @@ const PositiveEV: React.FC = () => {
     fetchData();
   }, []);
 
-  const toggleExpand = (id: number) => {
+  const toggleExpand = (id: string | number) => {
     setExpandedId(expandedId === id ? null : id);
   };
 

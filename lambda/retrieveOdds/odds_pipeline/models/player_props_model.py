@@ -1,3 +1,5 @@
+"""Existing two-sided player-prop fair-odds and expected-value model."""
+
 import statistics
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta

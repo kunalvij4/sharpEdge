@@ -1,3 +1,5 @@
+"""Existing weighted fair-odds and expected-value model."""
+
 class SharpEdge:
     def __init__(self, weights, exchange_weights, liquidity_threshold=1000):
         self.weights = weights
