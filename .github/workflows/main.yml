@@ -81,4 +81,6 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --resolve-s3 \
-            --parameter-overrides OddsApiKey="${{ secrets.ODDS_API_KEY }}"
+            --parameter-overrides \
+              OddsApiKey="${{ secrets.ODDS_API_KEY }}" \
+              OddsApiBaseUrl="${{ vars.ODDS_API_BASE_URL }}"
