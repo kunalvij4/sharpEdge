@@ -135,21 +135,28 @@ If deployment fails with `ReservedConcurrentExecutions` reducing unreserved
 concurrency below its minimum, leave `ENABLE_RESERVED_CONCURRENCY` unset or set
 it to `false`. A stack in `UPDATE_ROLLBACK_COMPLETE` can be updated again.
 
-Check whether rollback retained the newly created closing-odds table. For the
-`retrieve-odds-stack` deployment, its name is `retrieve-odds-stack-ClosingOdds`.
-If the rollback events show `ClosingOddsTable DELETE_SKIPPED` and the table still
-exists outside the stack, set the GitHub repository variable
-`EXISTING_CLOSING_ODDS_TABLE_NAME` to `retrieve-odds-stack-ClosingOdds` before
-pushing these changes to `main`. This reuses its data and grants the Lambda
-access without trying to create a second table with the same name. The existing
-table must have the `event_id`/`bet_key` key schema and TTL enabled on `expires_at`.
-It remains managed outside CloudFormation; keep the variable set on subsequent
-deployments. For manual SAM deployments, pass
-`ExistingClosingOddsTableName=retrieve-odds-stack-ClosingOdds`.
+The workflow checks whether CloudFormation already manages `ClosingOddsTable`.
+If so, the table stays managed by the stack. Otherwise, it looks for the table
+used by the last successful deployment or `${AWS::StackName}-ClosingOdds`. When
+rollback retained that table, the workflow validates its string `event_id`/`bet_key`
+keys and TTL on `expires_at`, then passes its name to SAM automatically. This
+avoids `AWS::EarlyValidation::ResourceExistenceCheck` caused by recreating the
+retained table. If no table exists, CloudFormation creates it normally. AWS read
+errors stop deployment instead of being treated as a missing table.
 
-Leave this variable unset for deployments that create a new table or already
-manage `ClosingOddsTable` in the stack. Only set it to reuse a table outside the
-stack; setting it for a managed table relinquishes CloudFormation ownership.
+The GitHub repository variable `EXISTING_CLOSING_ODDS_TABLE_NAME` can override
+discovery for a different existing table. Reused tables remain managed outside
+CloudFormation; subsequent deployments remember the table through the stack's
+`ExistingClosingOddsTableName` parameter. For manual SAM deployments, check the
+table ownership first and pass
+`ExistingClosingOddsTableName=retrieve-odds-stack-ClosingOdds` for a retained table.
+
+Deployment credentials need `cloudformation:DescribeStacks`,
+`cloudformation:ListStackResources`, `dynamodb:DescribeTable`, and
+`dynamodb:DescribeTimeToLive` for this read-only check. If SAM fails, an additional
+step reads the latest change set's validation errors using
+`cloudformation:ListChangeSets` and `cloudformation:DescribeEvents`, including the
+resource ID and failure reason without dumping stack parameters.
 
 For `sam local invoke`, copy `env.example.json`, fill in its values, and pass
 `--env-vars <private-file.json>`. Keep the filled-in file private. For a manual

@@ -77,7 +77,16 @@ jobs:
           python -m pip install -r tests/requirements.txt -r requirements.txt
           python -m pytest -q tests/unit
 
+      - name: Resolve closing odds table
+        id: closing_table
+        if: steps.changes.outputs.retrieveOdds == 'true'
+        working-directory: lambda/retrieveOdds
+        env:
+          EXISTING_CLOSING_ODDS_TABLE_NAME: ${{ vars.EXISTING_CLOSING_ODDS_TABLE_NAME }}
+        run: python scripts/resolve_closing_table.py --stack-name retrieve-odds-stack
+
       - name: SAM deploy
+        id: sam_deploy
         if: steps.changes.outputs.retrieveOdds == 'true'
         working-directory: lambda/retrieveOdds
         env:
@@ -86,7 +95,7 @@ jobs:
           ODDS_API_BASE_URL: ${{ vars.ODDS_API_BASE_URL }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
           ENABLE_RESERVED_CONCURRENCY: ${{ vars.ENABLE_RESERVED_CONCURRENCY || 'false' }}
-          EXISTING_CLOSING_ODDS_TABLE_NAME: ${{ vars.EXISTING_CLOSING_ODDS_TABLE_NAME }}
+          EXISTING_CLOSING_ODDS_TABLE_NAME: ${{ steps.closing_table.outputs.table_name }}
         run: |
           [[ "$REDIS_URL" == rediss://* ]] || { echo 'Set the REDIS_URL repository secret to the full rediss:// connection URL.' >&2; exit 1; }
           [[ "$ODDS_API_BASE_URL" == https://* ]] || { echo 'Set the ODDS_API_BASE_URL repository variable to the in-house API HTTPS origin.' >&2; exit 1; }
@@ -104,3 +113,9 @@ jobs:
               "RedisUrl=$REDIS_URL" \
               "EnableReservedConcurrency=$ENABLE_RESERVED_CONCURRENCY" \
               "ExistingClosingOddsTableName=\"$EXISTING_CLOSING_ODDS_TABLE_NAME\""
+
+      - name: Show CloudFormation failure details
+        if: failure() && steps.sam_deploy.outcome == 'failure'
+        continue-on-error: true
+        working-directory: lambda/retrieveOdds
+        run: python scripts/resolve_closing_table.py --stack-name retrieve-odds-stack --report-failure
