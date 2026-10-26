@@ -1,9 +1,7 @@
 import os
 import json
 from datetime import datetime, time, timezone
-import gzip
-import boto3
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from player_props import fetch_and_attach_player_props
 
 from odds_api import OddsAPI
 from dynamo_client import DynamoDBClient
@@ -12,151 +10,11 @@ from dynamo_client import DynamoDBClient
 ODDS_API_KEY = os.environ["ODDS_API_KEY"]          # required
 ODDS_API_BASE_URL = os.environ["ODDS_API_BASE_URL"]  # required; custom in-house API origin
 TABLE_NAME = os.environ["TABLE_NAME"]              # required
-s3 = boto3.client("s3")
-
-def _s3_put_json_gz(bucket: str, key: str, payload: dict) -> None:
-    body = gzip.compress(json.dumps(payload).encode("utf-8"))
-    s3.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=body,
-        ContentType="application/json",
-        ContentEncoding="gzip",
-    )
-
-def fetch_and_attach_player_props(odds_api, games: dict) -> dict:
-    PLAYER_PROP_MARKETS = "player_points,player_rebounds,player_assists,player_threes"
-
-    MAX_WORKERS = 4  # ✅ hardcoded
-
-    def fetch_single_event(game_id, game):
-        try:
-            # ✅ USE REAL EVENT ID
-            event_id = game.get("event_id")
-
-            if not event_id:
-                print(f"[SKIP] No event_id for {game_id}")
-                return game_id, None
-
-            event_odds = odds_api.get_event_odds(event_id, PLAYER_PROP_MARKETS)
-
-            if not event_odds:
-                return game_id, None
-
-            structured = {}
-
-            for bookmaker in event_odds.get("bookmakers", []):
-                book_name = bookmaker.get("title")
-
-                for market in bookmaker.get("markets", []):
-                    stat = market.get("key")
-
-                    for outcome in market.get("outcomes", []):
-                        player = outcome.get("description") or outcome.get("name")
-                        if not player:
-                            continue
-
-                        line = outcome.get("point")
-                        price = outcome.get("price")
-                        outcome_type = outcome.get("name", "").lower()
-
-                        if line is None:
-                            continue
-
-                        structured.setdefault(stat, {})
-                        structured[stat].setdefault(player, {})
-                        line_key = str(line)  # 🔥 FIX
-
-                        structured[stat][player].setdefault(line_key, {})
-                        structured[stat][player][line_key].setdefault(book_name, {})
-
-                        if "over" in outcome_type:
-                            structured[stat][player][line_key][book_name]["over_odds"] = price
-                        elif "under" in outcome_type:
-                            structured[stat][player][line_key][book_name]["under_odds"] = price
-
-            return game_id, structured
-
-        except Exception as e:
-            print(f"[ERROR] Props fetch failed for {game_id}: {e}")
-            return game_id, None
-
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = [executor.submit(fetch_single_event, gid, g) for gid, g in games.items()]
-
-        for future in as_completed(futures):
-            game_id, structured_props = future.result()
-
-            if structured_props:
-                games[game_id].setdefault("markets", {})
-                games[game_id]["markets"]["props"] = structured_props
-
-    return games
-
-def _extract_market(games: dict, market: str) -> dict:
-    """
-    games is your parsed dict keyed by game_id.
-    market is like 'moneyline' / 'spreads' / 'totals' / 'props'.
-    Returns a dict with only that market for each game (if present).
-    """
-    out = {}
-    for game_id, g in games.items():
-        markets = (g.get("markets") or {})
-        if market in markets:
-            out[game_id] = {
-                "sport": g.get("sport"),
-                "home_team": g.get("home_team"),
-                "away_team": g.get("away_team"),
-                "commence_time": g.get("commence_time"),
-                "market": market,
-                "data": markets[market],
-            }
-    return out
-
-
-def write_s3_cache_for_league(league: str, retrieved_at: str, all_games: dict) -> None:
-    """
-    Writes:
-      cache/<LEAGUE>/moneyline.json.gz
-      cache/<LEAGUE>/props.json.gz
-    """
-    bucket = os.environ["CACHE_BUCKET"]
-    prefix = os.environ.get("CACHE_PREFIX", "cache").rstrip("/")
-
-    # Moneyline cache (moneyline market only)
-    moneyline_only = _extract_market(all_games, "moneyline")
-
-    # Props cache (placeholder until you add props markets)
-    props_only = _extract_market(all_games, "props")  # will be {} for now
-
-    _s3_put_json_gz(
-        bucket=bucket,
-        key=f"{prefix}/{league}/moneyline.json.gz",
-        payload={"retrieved_at": retrieved_at, "league": league, "wager_type": "moneyline", "games": moneyline_only},
-    )
-
-    _s3_put_json_gz(
-        bucket=bucket,
-        key=f"{prefix}/{league}/props.json.gz",
-        payload={"retrieved_at": retrieved_at, "league": league, "wager_type": "props", "games": props_only},
-    )
-
 def lambda_handler(event, context):
     retrieved_at = datetime.now(timezone.utc).isoformat()
 
     odds = OddsAPI(api_key=ODDS_API_KEY, base_url=ODDS_API_BASE_URL)
     db = DynamoDBClient(table_name=TABLE_NAME)
-
-    # The in-house all-sports odds route currently supports moneylines.
-    # nfl = odds.get_nfl_all_markets()
-    nba = odds.get_nba_all_markets()
-    mlb = odds.get_mlb_all_markets()
-    # nhl = odds.get_nhl_all_markets()
-
-    nba = fetch_and_attach_player_props(odds, nba)
-    # mlb = fetch_and_attach_player_props(odds, "baseball_mlb", mlb)
 
     total_items = 0
 
@@ -172,16 +30,12 @@ def lambda_handler(event, context):
             db.store_item(item)
             total_items += 1
 
-    # Write S3 latest caches (league -> wager type)
-    # write_s3_cache_for_league("NFL", retrieved_at, nfl)
-    write_s3_cache_for_league("NBA", retrieved_at, nba)
-    write_s3_cache_for_league("MLB", retrieved_at, mlb)
-    # write_s3_cache_for_league("NHL", retrieved_at, nhl)
-
-    # write_games(nfl, "NFL")
-    write_games(nba, "NBA")
-    write_games(mlb, "MLB")
-    # write_games(nhl, "NHL")
+    game_counts = {}
+    for league, sport_key in OddsAPI.league_keys.items():
+        games = odds.get_games_with_props_events(sport_key)
+        games = fetch_and_attach_player_props(odds, games)
+        write_games(games, league)
+        game_counts[f"{league.lower()}_games"] = len(games)
 
     return {
         "statusCode": 200,
@@ -190,10 +44,7 @@ def lambda_handler(event, context):
                 "ok": True,
                 "retrieved_at": retrieved_at,
                 "items_written": total_items,
-                # "nfl_games": len(nfl),
-                "nba_games": len(nba),
-                "mlb_games": len(mlb),
-                # "nhl_games": len(nhl),
+                **game_counts,
             }
         ),
     }

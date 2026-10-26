@@ -1,20 +1,19 @@
 import json
-import gzip
 import boto3
+from .odds_store import SPORT_KEYS, load_market, load_sport
 from datetime import datetime
 
-from sharpedge_model import SharpEdge
-from nfl_weights import NFLWeightingEngine
+from .sharpedge_model import SharpEdge
+from .nfl_weights import NFLWeightingEngine
 
 # ✅ NEW IMPORT (your props file)
-from sharpedge_props import process_props_sport
+from .sharpedge_props import process_props_sport
 
 s3 = boto3.client("s3")
 
 BUCKET = "retrieve-odds-stack-oddscachebucket-1wl5a0lcdm9v"
 
-# SPORTS = ["NBA", "NFL", "NHL", "MLB"]
-SPORTS = ["NBA", "MLB"]
+SPORTS = list(SPORT_KEYS)
 
 
 def kelly_fraction(prob, odds):
@@ -25,20 +24,14 @@ def kelly_fraction(prob, odds):
     return max((b * prob - q) / b, 0)
 
 
-def load_odds(sport):
-    key = f"cache/{sport}/moneyline.json.gz"
+def load_odds(sport, games=None):
+    return load_market(sport, "moneyline", games)
 
-    obj = s3.get_object(Bucket=BUCKET, Key=key)
-
-    with gzip.GzipFile(fileobj=obj["Body"]) as gz:
-        return json.load(gz)
-
-
-def process_sport(sport):
+def process_sport(sport, games=None):
 
     print(f"Processing {sport}")
 
-    data = load_odds(sport)
+    data = load_odds(sport, games)
 
     weighting = NFLWeightingEngine()  # TODO: swap per sport later
 
@@ -160,11 +153,12 @@ def lambda_handler(event, context):
     for sport in SPORTS:
         try:
             # ✅ EXISTING MONEYLINE (UNCHANGED)
-            count = process_sport(sport)
+            games = load_sport(sport)
+            count = process_sport(sport, games)
             total_bets += count
 
             # ✅ NEW PROPS PIPELINE
-            props_count = process_props_sport(sport)
+            props_count = process_props_sport(sport, games)
             total_props += props_count
 
         except Exception as e:

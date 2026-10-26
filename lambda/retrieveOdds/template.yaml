@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Retrieve odds every 120 minutes and store snapshots in DynamoDB.
+Description: Retrieve odds every 5 minutes; store snapshots in DynamoDB and EV/arbitrage bets in S3.
 
 Parameters:
   OddsApiKey:
@@ -17,7 +17,7 @@ Resources:
       CodeUri: retrieveOdds/
       Handler: app.lambda_handler
       Runtime: python3.11
-      Timeout: 120
+      Timeout: 300
       MemorySize: 512
 
       Environment:
@@ -25,15 +25,11 @@ Resources:
           TABLE_NAME: !Ref AllOddsTable
           ODDS_API_KEY: !Ref OddsApiKey
           ODDS_API_BASE_URL: !Ref OddsApiBaseUrl
-          CACHE_BUCKET: !Ref OddsCacheBucket
-          CACHE_PREFIX: cache
 
 
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AllOddsTable
-        - S3WritePolicy:
-            BucketName: !Ref OddsCacheBucket
 
 
       Events:
@@ -46,10 +42,10 @@ Resources:
   CalculateEVFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: calculateEV/
-      Handler: app.lambda_handler
+      CodeUri: ./
+      Handler: calculateEV.app.lambda_handler
       Runtime: python3.11
-      Timeout: 30
+      Timeout: 300
       MemorySize: 512
 
       Events:
@@ -57,8 +53,17 @@ Resources:
           Type: Schedule
           Properties:
             Schedule: rate(5 minutes)
+            Enabled: true
+
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref AllOddsTable
+          ODDS_API_KEY: !Ref OddsApiKey
+          ODDS_API_BASE_URL: !Ref OddsApiBaseUrl
 
       Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AllOddsTable
         - AmazonS3FullAccess
   
   ArbitrageFunction:
@@ -83,6 +88,7 @@ Resources:
           Type: Schedule
           Properties:
             Schedule: rate(5 minutes)
+            Enabled: true
 
   OddsCacheBucket:
     Type: AWS::S3::Bucket

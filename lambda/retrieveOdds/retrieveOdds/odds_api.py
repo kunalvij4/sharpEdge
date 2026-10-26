@@ -3,8 +3,17 @@ from typing import Dict, List, Optional
 
 
 class OddsAPI:
+    league_keys = {
+        "NBA": "basketball_nba",
+        "MLB": "baseball_mlb",
+        "NFL": "americanfootball_nfl",
+        "NHL": "icehockey_nhl",
+        "NCAAF": "americanfootball_ncaaf",
+    }
     sport_keys = {
         "americanfootball_nfl": "nfl_football",
+        "icehockey_nhl": "nhl_hockey",
+        "americanfootball_ncaaf": "ncaaf_football",
         "baseball_mlb": "mlb_baseball",
         "basketball_nba": "nba_basketball",
     }
@@ -32,6 +41,16 @@ class OddsAPI:
         )
         response.raise_for_status()
         return response.json()
+
+    def get_games_with_props_events(self, sport):
+        sport_key = self.sport_keys.get(sport, sport)
+        response = self.session.get(
+            f"{self.base_url}/sports/{sport_key}/events",
+            headers={"X-API-Key": self.api_key}, timeout=20,
+        )
+        response.raise_for_status()
+        # Include events with props even when they have no moneyline quotes.
+        return self.parse_all_markets_odds(response.json() + self.get_odds(sport))
 
     def parse_all_markets_odds(self, raw_odds: List[Dict]) -> Dict[str, Dict]:
         """

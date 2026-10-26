@@ -1,9 +1,9 @@
 import json
-import gzip
 import boto3
+from .odds_store import load_market
 from datetime import datetime
 
-from player_props_model import PlayerPropsModel
+from .player_props_model import PlayerPropsModel
 
 s3 = boto3.client("s3")
 
@@ -18,20 +18,14 @@ def kelly_fraction(prob, odds):
     return max((b * prob - q) / b, 0)
 
 
-def load_props(sport):
-    key = f"cache/{sport}/props.json.gz"
+def load_props(sport, games=None):
+    return load_market(sport, "props", games)
 
-    obj = s3.get_object(Bucket=BUCKET, Key=key)
-
-    with gzip.GzipFile(fileobj=obj["Body"]) as gz:
-        return json.load(gz)
-
-
-def process_props_sport(sport):
+def process_props_sport(sport, games=None):
 
     print(f"Processing PROPS for {sport}")
 
-    data = load_props(sport)
+    data = load_props(sport, games)
     model = PlayerPropsModel(min_books=2)
 
     ev_bets = []
