@@ -1,28 +1,51 @@
-"""Odds API access and event-ID-based parsing of game markets."""
+"""In-house Odds API access and event-ID-based parsing of game markets."""
 
 import requests
 
 
-BOOK_NAMES = {"Caesars Sportsbook": "Caesars", "BetOnline.ag": "BetOnline", "MyBookie.ag": "MyBookie"}
+BOOK_NAMES = {
+    "Caesars Sportsbook": "Caesars", "BetOnline.ag": "BetOnline", "MyBookie.ag": "MyBookie",
+    "Novig": "NoVig", "Prophet Exchange": "ProphetX",
+}
 
 
 class OddsAPI:
-    def __init__(self, api_key):
+    sport_keys = {
+        "basketball_nba": "nba_basketball",
+        "americanfootball_nfl": "nfl_football",
+        "icehockey_nhl": "nhl_hockey",
+        "baseball_mlb": "mlb_baseball",
+        "americanfootball_ncaaf": "ncaaf_football",
+    }
+
+    def __init__(self, api_key, base_url):
         self.api_key = api_key
-        self.base_url = "https://api.the-odds-api.com/v4"
+        self.base_url = f"{base_url.rstrip('/')}/v1"
         self.session = requests.Session()
 
     def get_odds(self, sport, markets="h2h", bookmakers=None, odds_format="decimal"):
+        sport = self.sport_keys.get(sport, sport)
         return self._get(f"/sports/{sport}/odds", markets, bookmakers, odds_format)
 
-    def get_event_odds(self, sport, event_id, markets, bookmakers=None, odds_format="decimal"):
-        return self._get(f"/sports/{sport}/events/{event_id}/odds", markets, bookmakers, odds_format)
+    def get_events(self, sport):
+        sport = self.sport_keys.get(sport, sport)
+        return self._get(f"/sports/{sport}/events")
 
-    def _get(self, path, markets, bookmakers, odds_format):
-        params = {"apiKey": self.api_key, "regions": "us", "markets": markets, "oddsFormat": odds_format}
+    def get_event_odds(self, sport, event_id, markets, bookmakers=None, odds_format="decimal"):
+        return self._get(f"/events/{event_id}/odds", markets, bookmakers, odds_format, fresh_only=True)
+
+    def _get(self, path, markets=None, bookmakers=None, odds_format="decimal", fresh_only=False):
+        params = {}
+        if markets is not None:
+            params.update({"markets": markets, "oddsFormat": odds_format})
         if bookmakers:
             params["bookmakers"] = bookmakers
-        response = self.session.get(f"{self.base_url}{path}", params=params, timeout=20)
+        if fresh_only:
+            params["freshOnly"] = "true"
+        response = self.session.get(
+            f"{self.base_url}{path}", params=params,
+            headers={"X-API-Key": self.api_key}, timeout=20,
+        )
         response.raise_for_status()
         return response.json()
 

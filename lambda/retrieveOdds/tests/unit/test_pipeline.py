@@ -40,6 +40,7 @@ def runtime(monkeypatch, closing_store):
     cache = importlib.import_module("odds_pipeline.cache")
     results = importlib.import_module("odds_pipeline.results")
     monkeypatch.setenv("ODDS_API_KEY", "test-key")
+    monkeypatch.setenv("ODDS_API_BASE_URL", "https://odds.example.com")
     monkeypatch.setenv("REDIS_URL", "rediss://default:test-password@cache.invalid:6379")
     monkeypatch.setattr(app, "utc_now", lambda: NOW)
     monkeypatch.setattr(app, "ClosingOddsStore", lambda: closing_store)
@@ -50,25 +51,28 @@ def runtime(monkeypatch, closing_store):
     client = Mock()
     client.hset.side_effect = lambda table, field, body: snapshots.update({(table, field): json.loads(body)})
     monkeypatch.setattr(cache, "_get_client", lambda url: client)
-    api = app.OddsAPI("test-key")
+    api = app.OddsAPI("test-key", "https://odds.example.com")
 
     def get_odds(sport, **kwargs):
         league = next(league for league, key in app.LEAGUE_SPORT_KEYS.items() if key == sport)
         return [raw_event(league), raw_event(league, "far", 60), raw_event(league, "started", -5)]
 
     def get_event_odds(sport, event_id, markets):
+        assert markets == "all_props"
+        prop_markets = importlib.import_module("odds_pipeline.leagues").PROP_MARKETS_BY_SPORT[sport]
         return {"id": event_id, "bookmakers": [
             {"title": book, "markets": [
                 {"key": market, "outcomes": [
                     {"name": side, "description": "Player", "point": 20.5, "price": 2.2}
                     for side in ("Over", "Under")
-                ]} for market in markets.split(",")
+                ]} for market in prop_markets
             ]} for book in ("FanDuel", "DraftKings")
         ]}
 
     api.get_odds = Mock(side_effect=get_odds)
+    api.get_events = Mock(return_value=[])
     api.get_event_odds = Mock(side_effect=get_event_odds)
-    monkeypatch.setattr(app, "OddsAPI", lambda key: api)
+    monkeypatch.setattr(app, "OddsAPI", lambda key, base_url: api)
     return app, api, s3, snapshots, cache, closing_store
 
 
@@ -87,6 +91,7 @@ def test_one_run_fetches_all_leagues_archives_only_near_start_and_publishes_resu
     assert summary["status"] == "complete"
     assert summary["events_fetched"] == 15
     assert api.get_odds.call_count == 5
+    assert api.get_events.call_count == 5
     assert api.get_event_odds.call_count == 15
     assert summary["closing_prices_written"] > 0
     objects = s3_results(s3)
@@ -112,6 +117,31 @@ def test_one_run_fetches_all_leagues_archives_only_near_start_and_publishes_resu
             for bet in objects[f"ev/{league}/{category}_ev.json"]:
                 if bet["event_id"] == f"{league}-near":
                     assert bet["id"] in archive_keys
+
+
+def test_props_only_events_are_processed_and_archived_for_all_leagues(runtime):
+    app, api, s3, snapshots, _, store = runtime
+    api.get_odds.side_effect = lambda *args, **kwargs: []
+
+    def events(sport):
+        league = next(league for league, key in app.LEAGUE_SPORT_KEYS.items() if key == sport)
+        event = raw_event(league)
+        event.pop("bookmakers")
+        return [event]
+
+    api.get_events.side_effect = events
+    summary = app.lambda_handler({}, None)
+
+    assert summary["status"] == "complete"
+    assert summary["events_fetched"] == 5
+    assert api.get_event_odds.call_count == 5
+    objects = s3_results(s3)
+    for league in LEAGUES:
+        archived = store.get_event(f"{league}-near", now=NOW)
+        assert {row["category"] for row in archived} == {"props"}
+        assert objects[f"ev/{league}/props_ev.json"]
+        assert snapshots["EV", f"{league}/props"]["count"] > 0
+        assert objects[f"ev/{league}/moneyline_ev.json"] == []
 
 
 def test_event_ids_prevent_same_team_rematches_from_colliding(runtime):

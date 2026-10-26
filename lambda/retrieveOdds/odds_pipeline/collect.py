@@ -1,4 +1,4 @@
-"""Fetch league-specific props and attach them to the current in-memory odds."""
+"""Fetch all supported two-sided props and attach them to in-memory odds."""
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -8,7 +8,7 @@ import time
 
 import requests
 
-from .leagues import PROP_MARKETS_BY_SPORT
+from .provider import BOOK_NAMES
 
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,6 @@ def utc_now():
 
 
 def fetch_and_attach_player_props(api, sport_key, games, failed_events=None, on_event=None, clock=None):
-    markets = PROP_MARKETS_BY_SPORT[sport_key]
     failed_events = failed_events if failed_events is not None else []
     clock = clock or utc_now
 
@@ -29,7 +28,7 @@ def fetch_and_attach_player_props(api, sport_key, games, failed_events=None, on_
             raise ValueError("Missing provider event ID")
         for attempt in range(3):
             try:
-                event_odds = api.get_event_odds(sport_key, event_id, markets=",".join(markets))
+                event_odds = api.get_event_odds(sport_key, event_id, markets="all_props")
                 observed_at = clock()
                 break
             except requests.RequestException as error:
@@ -55,14 +54,17 @@ def fetch_and_attach_player_props(api, sport_key, games, failed_events=None, on_
             book_name = bookmaker.get("title")
             if not book_name:
                 continue
+            book_name = BOOK_NAMES.get(book_name, book_name)
             for market in bookmaker.get("markets", []):
                 stat = market.get("key")
-                if stat not in markets:
+                if not isinstance(stat, str) or not stat:
                     continue
                 for outcome in market.get("outcomes", []):
                     player = outcome.get("description")
                     side = outcome.get("name", "").lower()
-                    if not player or side not in {"over", "under"}:
+                    if (not player or side not in {"over", "under"}
+                            or outcome.get("actionable") is False
+                            or (outcome.get("freshness") or {}).get("status") == "stale"):
                         continue
                     try:
                         line, price = float(outcome["point"]), float(outcome["price"])

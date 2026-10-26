@@ -20,7 +20,7 @@ def utc_now():
 
 
 def lambda_handler(event, context):
-    api = OddsAPI(os.environ["ODDS_API_KEY"])
+    api = OddsAPI(os.environ["ODDS_API_KEY"], os.environ["ODDS_API_BASE_URL"])
     archive = ClosingOddsStore()
     publisher = ResultsPublisher()
     summary = {
@@ -38,14 +38,17 @@ def lambda_handler(event, context):
 
     for league, sport_key in LEAGUE_SPORT_KEYS.items():
         try:
-            raw = api.get_odds(sport_key, markets="h2h,spreads,totals")
+            raw = api.get_odds(sport_key, markets="h2h,spreads")
             observed_at = utc_now()
             games = api.parse_all_markets_odds(raw)
-            summary["events_fetched"] += len(games)
             # Archive game lines as soon as observed, before props can cross the
             # start-time boundary. Prop quotes use their own response timestamps.
             for game in games.values():
                 record_prices(league, game, observed_at)
+            # Some events have player props without actionable game lines.
+            for event_id, game in api.parse_all_markets_odds(api.get_events(sport_key)).items():
+                games.setdefault(event_id, game)
+            summary["events_fetched"] += len(games)
             failures = []
             fetch_and_attach_player_props(
                 api, sport_key, games, failed_events=failures,

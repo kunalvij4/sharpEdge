@@ -75,7 +75,7 @@ jobs:
         working-directory: lambda/retrieveOdds
         run: |
           python -m pip install -r tests/requirements.txt -r requirements.txt
-          python -m pytest -q tests/unit/test_archive.py tests/unit/test_pipeline.py
+          python -m pytest -q tests/unit
 
       - name: SAM deploy
         if: steps.changes.outputs.retrieveOdds == 'true'
@@ -83,9 +83,11 @@ jobs:
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          ODDS_API_BASE_URL: ${{ vars.ODDS_API_BASE_URL }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
         run: |
           [[ "$REDIS_URL" == rediss://* ]] || { echo 'Set the REDIS_URL repository secret to the full rediss:// connection URL.' >&2; exit 1; }
+          [[ "$ODDS_API_BASE_URL" == https://* ]] || { echo 'Set the ODDS_API_BASE_URL repository variable to the in-house API HTTPS origin.' >&2; exit 1; }
           sam deploy \
             --template-file .aws-sam/build/template.yaml \
             --stack-name retrieve-odds-stack \
@@ -94,4 +96,4 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --resolve-s3 \
-            --parameter-overrides "OddsApiKey=$ODDS_API_KEY" "RedisUrl=$REDIS_URL"
+            --parameter-overrides "OddsApiKey=$ODDS_API_KEY" "OddsApiBaseUrl=$ODDS_API_BASE_URL" "RedisUrl=$REDIS_URL"

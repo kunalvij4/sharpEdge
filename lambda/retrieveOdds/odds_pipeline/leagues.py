@@ -1,4 +1,4 @@
-"""The five leagues and player-prop markets collected on every pipeline run."""
+"""The five leagues and reference player-prop keys for pipeline verification."""
 
 LEAGUE_SPORT_KEYS = {
     "NBA": "basketball_nba",
@@ -9,7 +9,8 @@ LEAGUE_SPORT_KEYS = {
 }
 LEAGUES = tuple(LEAGUE_SPORT_KEYS)
 
-# Standard, two-sided player props supported by the existing EV model.
+# Reference two-sided markets used by the regression fixtures. Collection uses
+# the in-house all_props selector, so these lists do not restrict new markets.
 # Provider reference: https://the-odds-api.com/sports-odds-data/betting-markets.html
 FOOTBALL_PROP_MARKETS = (
     "player_pass_yds", "player_pass_tds", "player_pass_attempts",

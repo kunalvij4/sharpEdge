@@ -6,6 +6,9 @@ Parameters:
   OddsApiKey:
     Type: String
     NoEcho: true
+  OddsApiBaseUrl:
+    Type: String
+    Description: HTTPS origin of the in-house odds API (without the /v1 path).
   RedisUrl:
     Type: String
     NoEcho: true
@@ -28,6 +31,7 @@ Resources:
       Environment:
         Variables:
           ODDS_API_KEY: !Ref OddsApiKey
+          ODDS_API_BASE_URL: !Ref OddsApiBaseUrl
           CLOSING_ODDS_TABLE: !Ref ClosingOddsTable
           RESULTS_BUCKET: !Ref OddsCacheBucket
           REDIS_URL: !Ref RedisUrl

@@ -1,8 +1,10 @@
 # Five-minute odds pipeline
 
-One scheduled Lambda fetches NBA, NFL, NHL, MLB, and NCAAF every **five minutes**,
-including moneyline, spreads, totals, and the configured two-sided player props.
-The league and prop-market lists are in `odds_pipeline/leagues.py`.
+One scheduled Lambda fetches NBA, NFL, NHL, MLB, and NCAAF every **five minutes**
+from the in-house Odds API, including moneyline, spreads, and all supported
+two-sided player props. The league list is in `odds_pipeline/leagues.py`.
+The parser and result schema also support totals, but the current in-house API
+does not expose game totals, so those result arrays remain empty.
 
 ```mermaid
 flowchart LR
@@ -18,6 +20,12 @@ All freshly fetched odds are processed, including events outside the archival
 window. Raw odds are not written to S3. EV and arbitrage use the same collected
 data; there are no independent hourly processing functions or S3/DynamoDB
 snapshot readbacks in the processing path.
+
+The client uses `X-API-Key` authentication and maps league keys to the in-house
+`/v1/sports/{sport}/odds` and `/events` routes. Event discovery includes games
+with props but no game-line quotes. Props use `/v1/events/{event_id}/odds` with
+`markets=all_props&freshOnly=true`; stale cached prices are excluded. Each
+over/under market retains its player, line, and period-specific market key.
 
 ## Last-known prices in DynamoDB
 
@@ -102,16 +110,23 @@ independently; an outage of one store does not block the others.
 Add the GitHub **repository secret `REDIS_URL`** containing the full TLS URL,
 `rediss://default:<URL-encoded-password>@sharpedge-ruby-ruby.sage.cloud.layerbase.dev:6379`.
 Keep the existing AWS credentials, `AWS_REGION`, and `ODDS_API_KEY` secrets.
+`ODDS_API_KEY` must be a product key configured in the in-house API's `API_KEYS`.
+Set the GitHub **repository variable `ODDS_API_BASE_URL`** to that API's reachable
+HTTPS origin, without `/v1`. The local `lambda/.env` file is not read by Lambda.
 The workflow builds, tests, and deploys changes pushed to `main`.
 
-SAM supplies `CLOSING_ODDS_TABLE`, `RESULTS_BUCKET`, `REDIS_URL`, and `ODDS_API_KEY`
-to the Lambda and creates its DynamoDB/S3 permissions. Redis credentials are
+SAM supplies `CLOSING_ODDS_TABLE`, `RESULTS_BUCKET`, `REDIS_URL`, `ODDS_API_KEY`,
+and `ODDS_API_BASE_URL` to the Lambda and creates its DynamoDB/S3 permissions. Redis credentials are
 passed through a `NoEcho` parameter and are omitted from error logs. TLS verifies
 the Redis certificate and hostname.
 
 The scheduled function has reserved concurrency one and a five-minute timeout;
 asynchronous jobs expire after five minutes without retries. This avoids
 overlapping scheduled processing and stale invocation backlogs.
+
+For `sam local invoke`, copy `env.example.json`, fill in its values, and pass
+`--env-vars <private-file.json>`. Keep the filled-in file private. For a manual
+deployment, pass `OddsApiKey`, `OddsApiBaseUrl`, and `RedisUrl` as SAM parameters.
 
 The original `AllOdds` table is preserved during migration and no longer receives
 writes. Existing raw S3 objects are not deleted; their caches stop refreshing.
