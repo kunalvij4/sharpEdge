@@ -85,6 +85,8 @@ jobs:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           ODDS_API_BASE_URL: ${{ vars.ODDS_API_BASE_URL }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
+          ENABLE_RESERVED_CONCURRENCY: ${{ vars.ENABLE_RESERVED_CONCURRENCY || 'false' }}
+          EXISTING_CLOSING_ODDS_TABLE_NAME: ${{ vars.EXISTING_CLOSING_ODDS_TABLE_NAME }}
         run: |
           [[ "$REDIS_URL" == rediss://* ]] || { echo 'Set the REDIS_URL repository secret to the full rediss:// connection URL.' >&2; exit 1; }
           [[ "$ODDS_API_BASE_URL" == https://* ]] || { echo 'Set the ODDS_API_BASE_URL repository variable to the in-house API HTTPS origin.' >&2; exit 1; }
@@ -96,4 +98,9 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --resolve-s3 \
-            --parameter-overrides "OddsApiKey=$ODDS_API_KEY" "OddsApiBaseUrl=$ODDS_API_BASE_URL" "RedisUrl=$REDIS_URL"
+            --parameter-overrides \
+              "OddsApiKey=$ODDS_API_KEY" \
+              "OddsApiBaseUrl=$ODDS_API_BASE_URL" \
+              "RedisUrl=$REDIS_URL" \
+              "EnableReservedConcurrency=$ENABLE_RESERVED_CONCURRENCY" \
+              "ExistingClosingOddsTableName=\"$EXISTING_CLOSING_ODDS_TABLE_NAME\""

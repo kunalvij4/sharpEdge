@@ -29,7 +29,7 @@ over/under market retains its player, line, and period-specific market key.
 
 ## Last-known prices in DynamoDB
 
-SAM creates `${AWS::StackName}-ClosingOdds` with:
+By default, SAM creates `${AWS::StackName}-ClosingOdds` with:
 
 | Attribute | Meaning |
 | --- | --- |
@@ -120,9 +120,36 @@ and `ODDS_API_BASE_URL` to the Lambda and creates its DynamoDB/S3 permissions. R
 passed through a `NoEcho` parameter and are omitted from error logs. TLS verifies
 the Redis certificate and hostname.
 
-The scheduled function has reserved concurrency one and a five-minute timeout;
-asynchronous jobs expire after five minutes without retries. This avoids
-overlapping scheduled processing and stale invocation backlogs.
+The scheduled function uses shared account concurrency by default. Reserving even
+one execution can fail on accounts with a low regional Lambda concurrency quota,
+because AWS requires a minimum pool of unreserved executions. After obtaining
+enough quota, set the GitHub repository variable `ENABLE_RESERVED_CONCURRENCY` to
+`true` (or pass `EnableReservedConcurrency=true` to SAM) to cap this function at
+one concurrent execution. With the default setting, overlapping invocations are
+possible. The function has a five-minute timeout, and asynchronous jobs expire
+after five minutes with no retries for function errors.
+
+### Recovering a rolled-back deployment
+
+If deployment fails with `ReservedConcurrentExecutions` reducing unreserved
+concurrency below its minimum, leave `ENABLE_RESERVED_CONCURRENCY` unset or set
+it to `false`. A stack in `UPDATE_ROLLBACK_COMPLETE` can be updated again.
+
+Check whether rollback retained the newly created closing-odds table. For the
+`retrieve-odds-stack` deployment, its name is `retrieve-odds-stack-ClosingOdds`.
+If the rollback events show `ClosingOddsTable DELETE_SKIPPED` and the table still
+exists outside the stack, set the GitHub repository variable
+`EXISTING_CLOSING_ODDS_TABLE_NAME` to `retrieve-odds-stack-ClosingOdds` before
+pushing these changes to `main`. This reuses its data and grants the Lambda
+access without trying to create a second table with the same name. The existing
+table must have the `event_id`/`bet_key` key schema and TTL enabled on `expires_at`.
+It remains managed outside CloudFormation; keep the variable set on subsequent
+deployments. For manual SAM deployments, pass
+`ExistingClosingOddsTableName=retrieve-odds-stack-ClosingOdds`.
+
+Leave this variable unset for deployments that create a new table or already
+manage `ClosingOddsTable` in the stack. Only set it to reuse a table outside the
+stack; setting it for a managed table relinquishes CloudFormation ownership.
 
 For `sam local invoke`, copy `env.example.json`, fill in its values, and pass
 `--env-vars <private-file.json>`. Keep the filled-in file private. For a manual
