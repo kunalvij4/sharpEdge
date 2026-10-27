@@ -1,6 +1,8 @@
 """Redis event documents, atomically refreshed and expired at kickoff."""
 
+import base64
 import json
+import zlib
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -11,9 +13,29 @@ from odds_api.domain.models import Availability, League, Quote
 from odds_api.infrastructure.clock import SystemClock
 from odds_api.infrastructure.repository import SqlRepository
 
+DOCUMENT_PREFIX = "zlib:1:"
+SHRINK_DOCUMENT = """#!lua flags=allow-oom
+local current = redis.call('GET', KEYS[1])
+if not current or current ~= ARGV[1] then return 0 end
+if #ARGV[2] >= #current or string.sub(ARGV[2], 1, 7) ~= 'zlib:1:' then return -1 end
+redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL')
+return 1
+"""
+
 
 def encode(value):
     return json.dumps(value, default=str, separators=(",", ":"))
+
+
+def compress_document(raw):
+    packed = DOCUMENT_PREFIX + base64.b64encode(zlib.compress(raw.encode(), level=1)).decode("ascii")
+    return packed if len(packed) < len(raw.encode()) else raw
+
+
+def decode_document(value):
+    if value.startswith(DOCUMENT_PREFIX):
+        value = zlib.decompress(base64.b64decode(value[len(DOCUMENT_PREFIX) :]))
+    return json.loads(value)
 
 
 def decode_quote(data):
@@ -85,7 +107,7 @@ class RedisRepository:
                     try:
                         pipe.watch(key)
                         old = pipe.get(key)
-                        document = json.loads(old) if old else {"quotes": {}}
+                        document = decode_document(old) if old else {"quotes": {}}
                         document["event"] = {
                             **asdict(event),
                             "id": event.id,
@@ -104,7 +126,7 @@ class RedisRepository:
                                 "book_title": book.title,
                             }
                         pipe.multi()
-                        pipe.set(key, encode(document))
+                        pipe.set(key, compress_document(encode(document)))
                         pipe.pexpireat(key, int(event.start.timestamp() * 1000))
                         pipe.zadd(self.key("events:" + board.league.key), {event.id: event.start.timestamp()})
                         pipe.execute()
@@ -130,7 +152,9 @@ class RedisRepository:
                 pipe.get(self.key("event:" + eid))
             values = pipe.execute()
         return [
-            doc for value in values if value and (doc := json.loads(value))["event"]["league_key"] == sport
+            doc
+            for value in values
+            if value and (doc := decode_document(value))["event"]["league_key"] == sport
         ]
 
     @staticmethod
@@ -148,7 +172,7 @@ class RedisRepository:
         value = self.client.get(self.key("event:" + event_id))
         if not value:
             return None
-        event = self._event(json.loads(value))
+        event = self._event(decode_document(value))
         return event if event["league_key"] in self.configured and event["start"] > self.clock.now() else None
 
     def quotes(self, sport, event_id=None, now=None):
@@ -170,6 +194,26 @@ class RedisRepository:
 
     def heartbeat(self, now, metrics):
         self.client.set(self.key("collector"), encode({"heartbeat": now, "metrics": dict(metrics)}))
+
+    def compact_event_documents(self):
+        counts = {"compressed_events": 0, "bytes_before": 0, "bytes_after": 0}
+        for key in self.client.scan_iter(match=self.key("event:*"), count=100):
+            value = self.client.get(key)
+            if not value or value.startswith(DOCUMENT_PREFIX):
+                continue
+            # Validate legacy documents before preserving their exact JSON bytes.
+            decode_document(value)
+            packed = compress_document(value)
+            if packed == value:
+                continue
+            # The script can recover an already-full Redis, but only by shrinking
+            # an unchanged value. It preserves TTL and never deletes a quote/key.
+            result = self.client.eval(SHRINK_DOCUMENT, 1, key, value, packed)
+            if result == 1:
+                counts["compressed_events"] += 1
+                counts["bytes_before"] += len(value.encode())
+                counts["bytes_after"] += len(packed)
+        return counts
 
     def status(self, now, collected_ttl, source_ttl, propline_collected_ttl=600):
         collector = json.loads(self.client.get(self.key("collector")) or "{}")

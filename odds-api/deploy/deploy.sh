@@ -62,7 +62,7 @@ printf '%s\n' "$registry_token" | docker login ghcr.io --username "$registry_use
 unset registry_token
 compose pull api
 # Remove former SQL services without deleting their data volumes.
-compose up --no-build --remove-orphans --force-recreate --wait --wait-timeout 120 api
+compose up --no-build --remove-orphans --force-recreate --wait --wait-timeout 600 api
 
 # --wait uses compose.yaml's /health/ready probe. Only mark healthy releases current.
 printf '%s\n' "$image" > "$release_dir/image"

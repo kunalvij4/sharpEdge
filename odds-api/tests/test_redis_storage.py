@@ -13,8 +13,23 @@ from odds_api.http.app import create_app
 from odds_api.infrastructure.config import DEFAULT_LEAGUES, Settings
 from odds_api.infrastructure.provider import UnabatedClient
 from odds_api.infrastructure.rate_limit import RateLimiter
-from odds_api.infrastructure.redis_repository import RedisRepository
+from odds_api.infrastructure.redis_repository import (
+    DOCUMENT_PREFIX,
+    SHRINK_DOCUMENT,
+    RedisRepository,
+    decode_document,
+    encode,
+)
 from odds_api.infrastructure.storage import collector_lease
+
+
+class ScriptFlagRedis(fakeredis.FakeRedis):
+    def eval(self, script, *args):
+        # fakeredis runs Lua but does not parse Redis 7's shebang flags.
+        # The real Redis/OOM behavior is exercised by the container smoke test.
+        if script.startswith("#!lua flags=allow-oom\n"):
+            script = script.split("\n", 1)[1]
+        return super().eval(script, *args)
 
 
 def future_board(board, clock):
@@ -146,6 +161,74 @@ def test_redis_unabated_refresh_preserves_propline_bets(board, clock, refresh):
     assert {r["quote"].selection_id: r["quote"] for r in rows if r["book_key"].startswith("unabated_")} == {
         q.selection_id: q for q in (source.quotes if refresh == "empty" else updated)
     }
+
+
+def test_compaction_preserves_both_providers_and_exact_expiry(board, clock):
+    repository = RedisRepository(
+        "", DEFAULT_LEAGUES, clock=clock, client=ScriptFlagRedis(decode_responses=True)
+    )
+    source = future_board(board, clock)
+    books = {book.id: Sportsbook(book.source_id, book.title, "propline") for book in source.books}
+    repository.save(source)
+    repository.save(
+        replace(
+            source,
+            provider="propline",
+            books=tuple(books.values()),
+            quotes=tuple(replace(q, book_id=books[q.book_id].id) for q in source.quotes),
+            covered_markets=("h2h",),
+        )
+    )
+    key = repository.key("event:" + source.events[0].id)
+    legacy = encode(decode_document(repository.client.get(key)))
+    repository.client.set(key, legacy, keepttl=True)
+    expiry = repository.client.pexpiretime(key)
+    before = repository.quotes(source.league.key)
+    counts = repository.compact_event_documents()
+    packed = repository.client.get(key)
+    assert counts["compressed_events"] == 1
+    assert counts["bytes_after"] < counts["bytes_before"] / 2
+    assert packed.startswith(DOCUMENT_PREFIX)
+    assert decode_document(packed) == decode_document(legacy)
+    assert repository.client.pexpiretime(key) == expiry
+    assert repository.quotes(source.league.key) == before
+    assert {r["book_key"].split("_", 1)[0] for r in before} == {"unabated", "propline"}
+    assert repository.compact_event_documents()["compressed_events"] == 0
+
+
+@pytest.mark.parametrize("race", ["updated", "expired"])
+def test_compaction_cannot_overwrite_a_concurrent_update_or_resurrect_expiry(board, clock, monkeypatch, race):
+    repository = RedisRepository(
+        "", DEFAULT_LEAGUES, clock=clock, client=ScriptFlagRedis(decode_responses=True)
+    )
+    source = future_board(board, clock)
+    repository.save(source)
+    key = repository.key("event:" + source.events[0].id)
+    document = decode_document(repository.client.get(key))
+    repository.client.set(key, encode(document), keepttl=True)
+    next(iter(document["quotes"].values()))["quote"]["price"] = 155
+    updated = encode(document)
+    original_eval = repository.client.eval
+
+    def concurrent_change(*args):
+        if race == "updated":
+            repository.client.set(key, updated, keepttl=True)
+        else:
+            repository.client.delete(key)
+        return original_eval(*args)
+
+    monkeypatch.setattr(repository.client, "eval", concurrent_change)
+    assert repository.compact_event_documents()["compressed_events"] == 0
+    assert repository.client.get(key) == (updated if race == "updated" else None)
+
+
+@pytest.mark.parametrize("packed", [DOCUMENT_PREFIX + "x" * 10000, "bad"], ids=["growing", "unknown"])
+def test_memory_recovery_script_refuses_growth_and_unknown_encoding(packed):
+    client = ScriptFlagRedis(decode_responses=True)
+    original = '{"quotes":{}}'
+    client.set("event", original)
+    assert client.eval(SHRINK_DOCUMENT, 1, "event", original, packed) == -1
+    assert client.get("event") == original
 
 
 async def test_redis_cold_start_joins_propline_after_metadata(board, clock, tmp_path):

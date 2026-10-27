@@ -25,6 +25,13 @@ Lua locks, and TLS. Use a persistent, non-evicting Redis service if restart dura
 is required. No local PostgreSQL or Redis container is needed. The application image
 builds for the host architecture to avoid forced amd64 emulation on Apple Silicon.
 
+Event documents use lossless compression to keep both providers' quotes within
+the Redis memory limit. Startup compresses existing documents atomically before
+starting the API and collectors, preserving every quote and its original expiry.
+Plain JSON remains readable during migration. Redis 7 or newer is required for
+safe memory recovery when the store is already full. Older images without
+compressed-document support cannot read migrated event documents.
+
 The URL is secret configuration; never commit `.env`. Redis connection URL behavior:
 https://redis.io/docs/latest/develop/clients/connection-urls/
 

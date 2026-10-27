@@ -134,6 +134,40 @@ print("two-worker API, authentication, persisted moneylines/props, and OpenAPI p
         print(docker("exec", api, "python", "-c", check).stdout.strip())
         assert docker("exec", api, "id", "-u").stdout.strip() == "10001"
 
+        compact = """
+from redis.exceptions import OutOfMemoryError
+from odds_api.infrastructure.config import Settings
+from odds_api.infrastructure.redis_repository import decode_document, encode
+from odds_api.infrastructure.storage import create_repository
+repository = create_repository(Settings())
+event = repository.events("nba_basketball")[0]
+key = repository.key("event:" + event["id"])
+legacy = encode(decode_document(repository.client.get(key)))
+repository.client.set(key, legacy, keepttl=True)
+expiry = repository.client.pexpiretime(key)
+before = repository.quotes("nba_basketball")
+try:
+    repository.client.config_set("maxmemory", 1)
+    try:
+        repository.client.set(repository.key("oom-probe"), "blocked")
+    except OutOfMemoryError:
+        pass
+    else:
+        raise AssertionError("Redis did not enforce the synthetic memory limit")
+    counts = repository.compact_event_documents()
+    assert counts["compressed_events"] == 1
+    assert counts["bytes_after"] < counts["bytes_before"]
+    assert decode_document(repository.client.get(key)) == decode_document(legacy)
+    assert repository.client.pexpiretime(key) == expiry
+    assert repository.quotes("nba_basketball") == before
+finally:
+    repository.client.config_set("maxmemory", 0)
+    repository.close()
+print("lossless event compression recovered a full Redis and preserved quotes/expiry")
+"""
+        print(docker("exec", api, "python", "-c", compact).stdout.strip())
+        docker("exec", api, "python", "-c", check)
+
         docker("restart", database)
         wait_for(lambda: docker("exec", database, "redis-cli", "ping", check=False).stdout.strip() == "PONG")
         docker("restart", api)

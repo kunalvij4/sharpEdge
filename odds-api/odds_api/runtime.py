@@ -7,6 +7,7 @@ import sys
 
 from odds_api.infrastructure.config import Settings
 from odds_api.infrastructure.logging import configure_logging
+from odds_api.infrastructure.storage import create_repository
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +41,17 @@ async def run():
     loop = asyncio.get_running_loop()
     for signum in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(signum, stop.set)
+    if settings.storage_backend == "redis":
+        # Only the new, compression-aware processes start after this migration.
+        # Every rewrite is atomic; interrupted runs can safely resume.
+        repository = create_repository(settings)
+        try:
+            counts = await asyncio.to_thread(repository.compact_event_documents)
+            log.info("redis_event_compaction", extra={"counts": counts})
+        finally:
+            repository.close()
+        if stop.is_set():
+            return
     jobs = {
         "api": [
             "-m",
