@@ -1,0 +1,82 @@
+name: Inspect odds API collector
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST || '45.76.8.244' }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || 'root' }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT || 'in-house-odds' }}
+    steps:
+      - name: Inspect collector state without loading the full odds store
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_PASSWORD: ${{ secrets.DEPLOY_SSH_PASSWORD }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$DEPLOY_PORT" =~ ^[0-9]{1,5}$ ]]
+          [[ "$DEPLOY_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]]
+          umask 077
+          mkdir -p "$RUNNER_TEMP/odds-inspect"
+          trap 'rm -f -- "$RUNNER_TEMP/odds-inspect/key" "$RUNNER_TEMP/odds-inspect/known_hosts" "$RUNNER_TEMP/odds-inspect/askpass"' EXIT
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/odds-inspect/known_hosts"
+          ssh_options=(-p "$DEPLOY_PORT" -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$RUNNER_TEMP/odds-inspect/known_hosts" -o ConnectTimeout=15)
+          if [[ -n "$SSH_PRIVATE_KEY" ]]; then
+            printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/odds-inspect/key"
+            ssh_options+=(-i "$RUNNER_TEMP/odds-inspect/key" -o BatchMode=yes -o IdentitiesOnly=yes)
+          else
+            [[ -n "$SSH_PASSWORD" ]]
+            cat > "$RUNNER_TEMP/odds-inspect/askpass" <<'ASKPASS'
+          #!/usr/bin/env bash
+          printf '%s\n' "$SSH_PASSWORD"
+          ASKPASS
+            chmod 700 "$RUNNER_TEMP/odds-inspect/askpass"
+            export SSH_ASKPASS="$RUNNER_TEMP/odds-inspect/askpass" SSH_ASKPASS_REQUIRE=force DISPLAY=odds-inspect
+            ssh_options+=(-o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1)
+          fi
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          container=$(ssh "${ssh_options[@]}" "$target" "docker ps --filter 'label=com.docker.compose.project=$DEPLOY_PROJECT' --filter 'label=com.docker.compose.service=api' --format '{{.ID}}'")
+          [[ "$container" =~ ^[0-9a-f]{12,64}$ ]]
+          cat > "$RUNNER_TEMP/inspect_odds.py" <<'PY'
+          import json
+          from collections import Counter
+          from datetime import UTC, datetime
+          from pathlib import Path
+          from odds_api.infrastructure.config import Settings
+          from odds_api.infrastructure.storage import create_repository
+
+          settings = Settings()
+          repository = create_repository(settings)
+          result = {"observed_at": datetime.now(UTC).isoformat()}
+          if settings.storage_backend == "redis":
+              result["collector"] = json.loads(repository.client.get(repository.key("collector")) or "{}")
+              result["failures"] = repository.client.hgetall(repository.key("failures"))
+          for name, filename in (("schedule", settings.collection_state_path), ("propline", str(Path(settings.propline_output_dir) / "status.json"))):
+              try:
+                  result[name] = json.loads(Path(filename).read_text())
+              except (OSError, ValueError):
+                  result[name] = {"state": "unavailable"}
+          rows = repository.quotes("nba_basketball", event_id="165ea511badc5c4498ce36684d4ff968")
+          result["sample_nba_quotes"] = dict(Counter(row["book_key"].split("_", 1)[0] for row in rows))
+          result["sample_nba_collected_at"] = {
+              provider: sorted({row["quote"].collected_at.isoformat() for row in rows if row["book_key"].startswith(provider + "_")})
+              for provider in ("propline", "unabated")
+          }
+          repository.close()
+          print(json.dumps(result, indent=2))
+          PY
+          ssh "${ssh_options[@]}" "$target" "docker exec -i '$container' python -" < "$RUNNER_TEMP/inspect_odds.py"
+          ssh "${ssh_options[@]}" "$target" "docker logs --since 20m --tail 60 '$container'"
