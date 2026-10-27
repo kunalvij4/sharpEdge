@@ -35,6 +35,8 @@ if failure == "pull" and "pull" in args:
     sys.exit(11)
 if failure == "migration" and "--exit-code-from" in args:
     sys.exit(12)
+if failure == "redis_preflight" and "run" in args and "--entrypoint" in args:
+    sys.exit(14)
 if failure == "readiness" and "--wait" in args and args[-1] == "api":
     sys.exit(13)
 """
@@ -109,13 +111,17 @@ def test_deployment_preserves_project_and_pins_api_to_digest(deployment):
     assert all(args[: len(prefix)] == prefix for args in compose_calls)
     operations = [args[len(prefix) :] for args in compose_calls]
     assert ["pull", "api"] in operations
+    preflight = next(args for args in operations if args[0] == "run")
+    assert preflight[:7] == ["run", "--rm", "--no-deps", "--entrypoint", "python", "api", "-c"]
+    assert operations.index(["pull", "api"]) < operations.index(preflight)
+    assert operations.index(preflight) < next(i for i, args in enumerate(operations) if args[0] == "up")
     assert any("--remove-orphans" in args and "--wait" in args for args in operations)
     assert not any("migrate" in args or "db" in args for args in operations)
     assert all("--no-build" in args for args in operations if args[0] == "up")
     assert not any("down" in args or "build" in args for args in operations)
 
 
-@pytest.mark.parametrize("failure", ["pull", "readiness"])
+@pytest.mark.parametrize("failure", ["pull", "redis_preflight", "readiness"])
 def test_failed_deployment_keeps_successful_release_and_cleans_registry_credentials(deployment, failure):
     deploy_dir, release, previous, run = deployment
     result, calls = run(failure=failure)
@@ -125,8 +131,9 @@ def test_failed_deployment_keeps_successful_release_and_cleans_registry_credenti
     assert not (release / "image").exists()
     assert all(not Path(call["config"]).exists() for call in calls)
     args = [call["args"] for call in calls]
-    if failure == "pull":
+    if failure in {"pull", "redis_preflight"}:
         assert not any("stop" in call for call in args)
+        assert not any("up" in call for call in args)
     if failure == "migration":
         assert not any("up" in call and call[-1] == "api" for call in args)
 

@@ -46,7 +46,7 @@ cleanup() {
   trap - EXIT
   rm -rf -- "$DOCKER_CONFIG"
   if (( result != 0 )); then
-    printf 'Deployment failed; current still identifies the last successful release. Inspect the Compose services before retrying.\n' >&2
+    printf 'Deployment failed; current identifies the last successful release, but the running container may already have been replaced. Inspect the Compose services before retrying.\n' >&2
   fi
   exit "$result"
 }
@@ -61,6 +61,25 @@ compose config --quiet
 printf '%s\n' "$registry_token" | docker login ghcr.io --username "$registry_user" --password-stdin
 unset registry_token
 compose pull api
+# Check the new image's Redis connection before replacing the running API.
+# This sends only PING; it does not migrate, compact, or collect odds.
+compose run --rm --no-deps --entrypoint python api -c '
+import sys
+from odds_api.infrastructure.config import Settings
+from odds_api.infrastructure.storage import create_repository
+
+repository = None
+try:
+    repository = create_repository(Settings())
+    if not repository.client.ping():
+        raise RuntimeError("Redis did not answer PING")
+except Exception as error:
+    print("Redis preflight failed (" + type(error).__name__ + "). Existing API was not replaced.", file=sys.stderr)
+    sys.exit(1)
+finally:
+    if repository is not None:
+        repository.close()
+'
 # Remove former SQL services without deleting their data volumes.
 compose up --no-build --remove-orphans --force-recreate --wait --wait-timeout 600 api
 

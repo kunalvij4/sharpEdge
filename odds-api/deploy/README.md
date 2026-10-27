@@ -128,10 +128,11 @@ selected commit's `compose.yaml`, deployment script, and, after success, an
 release; `previous` points to the prior successful release. Neither pointer
 changes if migrations or readiness fail. Releases are retained for inspection.
 
-Before the outage window, deployment validates configuration, pulls the images,
-and waits for the existing database to be healthy. It then stops the API and its
-collector, runs migrations with the new image, and recreates the API. A brief
-API interruption is expected. Database and collection-artifact volumes are
+Before replacing the running API, the Redis deployment validates configuration,
+pulls the image, and runs a one-off container from that image to authenticate
+and PING the configured Redis endpoint. A failed connection leaves the running
+API untouched. It then recreates the API and waits for readiness. A brief API
+interruption is expected. Existing data and collection-artifact volumes are
 preserved. Deployments are serialized in GitHub and by a server-side lock.
 
 ## Redeploy an earlier version or recover a failure
@@ -154,6 +155,14 @@ project=in-house-odds
 docker compose --project-name "$project" --env-file "$deploy_dir/.env" \
   --file "$release_dir/compose.yaml" ps --all
 ```
+
+The `current` pointer records release success; it does not roll back the running
+container after a readiness failure. Use **Inspect odds API collector** to view
+the container image, exit status, restart count, and startup logs, including
+when the container is restarting. A Redis TLS handshake failure occurs before
+authentication; verify the database is running and Quick Connect still shows
+the configured host and port. Changing `ODDS_REDIS_URL` alone does not update an
+existing server `.env` entry (see Redis secret injection below).
 
 Keep previous images in GHCR if you want to redeploy them. Deleting the package
 version removes the workflow's ability to pull it again. Normal Docker restarts
