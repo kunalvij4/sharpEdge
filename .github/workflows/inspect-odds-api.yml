@@ -52,6 +52,7 @@ jobs:
           [[ "$container" =~ ^[0-9a-f]{12,64}$ ]]
           cat > "$RUNNER_TEMP/inspect_odds.py" <<'PY'
           import json
+          import zlib
           from collections import Counter
           from datetime import UTC, datetime
           from pathlib import Path
@@ -64,6 +65,20 @@ jobs:
           if settings.storage_backend == "redis":
               result["collector"] = json.loads(repository.client.get(repository.key("collector")) or "{}")
               result["failures"] = repository.client.hgetall(repository.key("failures"))
+              for section, fields in (("server", ("redis_version",)), ("memory", ("used_memory", "used_memory_human", "maxmemory", "maxmemory_human", "maxmemory_policy"))):
+                  try:
+                      details = repository.client.info(section)
+                      result[section] = {field: details.get(field) for field in fields}
+                  except Exception as error:
+                      result[section] = {"error_type": type(error).__name__}
+              try:
+                  result["oom_script_flags_supported"] = repository.client.eval("#!lua flags=allow-oom\nreturn 1", 0) == 1
+              except Exception as error:
+                  result["oom_script_flags_supported"] = {"error_type": type(error).__name__}
+              document = repository.client.get(repository.key("event:165ea511badc5c4498ce36684d4ff968"))
+              if document:
+                  raw = document.encode()
+                  result["sample_event_bytes"] = {"current": len(raw), "zlib_level_one": len(zlib.compress(raw, 1))}
           for name, filename in (("schedule", settings.collection_state_path), ("propline", str(Path(settings.propline_output_dir) / "status.json"))):
               try:
                   result[name] = json.loads(Path(filename).read_text())
