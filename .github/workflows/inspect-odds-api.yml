@@ -51,9 +51,11 @@ jobs:
           container=$(ssh "${ssh_options[@]}" "$target" "docker ps --filter 'label=com.docker.compose.project=$DEPLOY_PROJECT' --filter 'label=com.docker.compose.service=api' --format '{{.ID}}'")
           [[ "$container" =~ ^[0-9a-f]{12,64}$ ]]
           cat > "$RUNNER_TEMP/inspect_odds.py" <<'PY'
+          import hashlib
           import json
           import zlib
           from collections import Counter
+          from dataclasses import asdict
           from datetime import UTC, datetime
           from pathlib import Path
           from odds_api.infrastructure.config import Settings
@@ -88,6 +90,13 @@ jobs:
           result["sample_nba_quotes"] = dict(Counter(row["book_key"].split("_", 1)[0] for row in rows))
           result["sample_nba_collected_at"] = {
               provider: sorted({row["quote"].collected_at.isoformat() for row in rows if row["book_key"].startswith(provider + "_")})
+              for provider in ("propline", "unabated")
+          }
+          result["sample_provider_fingerprints"] = {
+              provider: hashlib.sha256(json.dumps(
+                  {row["quote"].selection_id: asdict(row["quote"]) for row in rows if row["book_key"].startswith(provider + "_")},
+                  sort_keys=True, default=str,
+              ).encode()).hexdigest()
               for provider in ("propline", "unabated")
           }
           repository.close()
