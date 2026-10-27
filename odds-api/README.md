@@ -18,6 +18,25 @@ Both providers retain separate selections: refreshing Unabated does not replace
 or remove Propline bets. Set `UNABATED_ODDS_ENABLED=false` only to use Unabated
 for event/team metadata instead of odds.
 
+PropLine's bulk odds request filters bookmakers upstream with `bookmakers=`.
+The same single request per league retrieves game lines and props from the
+configured books, reducing the payload before JSON/model validation and
+normalization. The configured PropLine keys are:
+
+```text
+onexbet,bet25,bet99,betfair_ex,betmgm,betrivers,betus,bookmaker_eu,bovada,
+courtside,draftkings,fanatics,fanduel,fliff,hardrock,kalshi,novig,pinnacle,
+polymarket,polymarket_us,prophetx,rebet,thescorebet,thrillzz
+```
+
+These are the documented keys for the requested bookmakers. PropLine's
+[full reference](https://prop-line.com/llms-full.txt) identifies `thescorebet`
+as the Ontario book; it does not document separate TheScore US/CA keys or a
+Caesars bookmaker key. Those entries need confirmed provider support before
+they can be requested. Book/market availability varies by league. This filter
+applies to PropLine collection; existing stored quotes retain their original
+timestamps and expiry, and Unabated collection keeps its existing behavior.
+
 Redis holds event documents and quotes, read directly for API calls. Updates use
 bounded batches of optimistic transactions, preserve prior observations on partial/stale responses,
 and expire event documents at kickoff. Redis must support WATCH/MULTI/EXEC,

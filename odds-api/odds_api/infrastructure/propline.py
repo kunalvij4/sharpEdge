@@ -1,7 +1,7 @@
 """PropLine bulk retrieval. This module does not write to the canonical odds store.
 
-Contract reviewed against https://prop-line.com/docs and /llms-full.txt, 2026-10-24.
-One request includes every listed event and book for the sport, including props.
+Contract reviewed against https://prop-line.com/docs and /llms-full.txt, 2026-10-27.
+One request includes the selected bookmakers across the sport, including props.
 """
 
 import math
@@ -21,6 +21,34 @@ SPORT_KEYS = {
     "nba_basketball": "basketball_nba",
     "ncaaf_football": "football_ncaaf",
 }
+# Provider keys from https://prop-line.com/llms-full.txt#bookmaker-keys.
+# Caesars and separate TheScore US/CA keys are not listed in that reference.
+BOOKMAKERS = (
+    "onexbet",
+    "bet25",
+    "bet99",
+    "betfair_ex",
+    "betmgm",
+    "betrivers",
+    "betus",
+    "bookmaker_eu",
+    "bovada",
+    "courtside",
+    "draftkings",
+    "fanatics",
+    "fanduel",
+    "fliff",
+    "hardrock",
+    "kalshi",
+    "novig",
+    "pinnacle",
+    "polymarket",
+    "polymarket_us",
+    "prophetx",
+    "rebet",
+    "thescorebet",
+    "thrillzz",
+)
 GAME_MARKETS = ("h2h", "spreads")
 PROP_MARKETS = {
     "nhl_hockey": (
@@ -240,12 +268,14 @@ class ProplineClient:
             raise ProplineError("daily_quota_exhausted")
         params = {
             "markets": ",".join((*GAME_MARKETS, *PROP_MARKETS[league])),
+            "bookmakers": ",".join(BOOKMAKERS),
             "period": "all",
             "includeBookIds": "true",
             "includeLinks": "true",
         }
         # No per-event discovery, per-book fanout, or automatic retries.
-        # Omitting bookmakers includes all books; omitting max_age preserves diagnostic coverage.
+        # Filter upstream to avoid downloading and validating irrelevant bookmakers.
+        # Omitting max_age preserves diagnostic coverage.
         started = self.clock.monotonic()
         self.requests += 1
         try:

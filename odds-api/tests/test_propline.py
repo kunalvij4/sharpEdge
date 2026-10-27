@@ -82,14 +82,39 @@ def settings():
     return Settings(_env_file=None, propline_api_key="offline-propline-key")
 
 
-async def test_bulk_probe_covers_three_sports_with_exactly_three_calls(tmp_path, clock, propline_raw):
+async def test_bulk_probe_filters_requested_books_with_one_call_per_league(tmp_path, clock, propline_raw):
     requested = []
 
     def handler(request):
         assert request.method == "GET" and request.url.host == "api.prop-line.com"
         assert request.headers["X-API-Key"] == "offline-propline-key"
         assert "apiKey" not in request.url.params
-        assert "bookmakers" not in request.url.params
+        assert set(request.url.params["bookmakers"].split(",")) == {
+            "onexbet",
+            "bet25",
+            "bet99",
+            "betfair_ex",
+            "betmgm",
+            "betrivers",
+            "betus",
+            "bookmaker_eu",
+            "bovada",
+            "courtside",
+            "draftkings",
+            "fanatics",
+            "fanduel",
+            "fliff",
+            "hardrock",
+            "kalshi",
+            "novig",
+            "pinnacle",
+            "polymarket",
+            "polymarket_us",
+            "prophetx",
+            "rebet",
+            "thescorebet",
+            "thrillzz",
+        }
         assert "max_age" not in request.url.params
         assert request.url.params["period"] == "all"
         assert request.url.params["includeBookIds"] == "true"
