@@ -98,7 +98,6 @@ async def test_both_feeds_share_five_league_api_after_cold_start(repo, board, cl
     settings = Settings(
         _env_file=None,
         api_keys="offline-product",
-        unabated_odds_enabled=True,
         propline_api_key="offline-key",
         propline_output_dir=str(tmp_path),
         leagues_json=json.dumps(DEFAULT_LEAGUES),

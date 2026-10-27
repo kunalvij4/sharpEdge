@@ -4,9 +4,11 @@ from unittest.mock import Mock
 
 import fakeredis
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from odds_api.collector import CombinedCollection
+from odds_api.domain.models import Sportsbook
 from odds_api.http.app import create_app
 from odds_api.infrastructure.config import DEFAULT_LEAGUES, Settings
 from odds_api.infrastructure.provider import UnabatedClient
@@ -79,6 +81,7 @@ async def test_metadata_only_never_requests_unabated_odds(raw, clock, repo, tmp_
 
     settings = Settings(
         _env_file=None,
+        unabated_odds_enabled=False,
         leagues_json='{"nba_basketball":{"title":"NBA","route":"nba"}}',
         propline_output_dir=str(tmp_path),
     )
@@ -96,8 +99,6 @@ def test_redis_collector_lease_excludes_second_owner(clock):
     repository = RedisRepository(
         "", DEFAULT_LEAGUES, clock=clock, client=fakeredis.FakeRedis(decode_responses=True)
     )
-    import pytest
-
     with collector_lease(repository) as lease:
         lease.ping()
         with pytest.raises(RuntimeError):
@@ -105,6 +106,46 @@ def test_redis_collector_lease_excludes_second_owner(clock):
                 pass
     with collector_lease(repository):
         pass
+
+
+@pytest.mark.parametrize("refresh", ["complete", "partial", "empty"])
+def test_redis_unabated_refresh_preserves_propline_bets(board, clock, refresh):
+    repository = RedisRepository(
+        "", DEFAULT_LEAGUES, clock=clock, client=fakeredis.FakeRedis(decode_responses=True)
+    )
+    source = future_board(board, clock)
+    # Identical bookmaker names and source IDs must still retain provider identity.
+    books = {book.id: Sportsbook(book.source_id, book.title, "propline") for book in source.books}
+    propline_quotes = tuple(replace(q, book_id=books[q.book_id].id, price=150) for q in source.quotes)
+    repository.save(source)
+    repository.save(
+        replace(
+            source,
+            provider="propline",
+            books=tuple(books.values()),
+            quotes=propline_quotes,
+            covered_markets=("h2h",),
+        )
+    )
+    clock.value += 10
+    updated = tuple(
+        replace(q, price=180, collected_at=clock.now(), source_updated_at=clock.now()) for q in source.quotes
+    )
+    repository.save(
+        replace(
+            source,
+            quotes=() if refresh == "empty" else updated,
+            collected_at=clock.now(),
+            complete=refresh != "partial",
+        )
+    )
+    rows = repository.quotes(source.league.key)
+    assert {r["quote"].selection_id: r["quote"] for r in rows if r["book_key"].startswith("propline_")} == {
+        q.selection_id: q for q in propline_quotes
+    }
+    assert {r["quote"].selection_id: r["quote"] for r in rows if r["book_key"].startswith("unabated_")} == {
+        q.selection_id: q for q in (source.quotes if refresh == "empty" else updated)
+    }
 
 
 async def test_redis_cold_start_joins_propline_after_metadata(board, clock, tmp_path):
@@ -139,6 +180,7 @@ async def test_redis_cold_start_joins_propline_after_metadata(board, clock, tmp_
     settings = Settings(
         _env_file=None,
         api_keys="test",
+        unabated_odds_enabled=False,
         propline_api_key="test",
         propline_output_dir=str(tmp_path),
         leagues_json='{"nba_basketball":{"title":"NBA","route":"nba"}}',

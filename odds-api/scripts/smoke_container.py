@@ -186,7 +186,7 @@ with urllib.request.urlopen(request,timeout=3) as response:
     status=json.load(response)
 assert status["collector_healthy"]
 assert status["provider_metrics"].get("requests", 0) > 0
-assert status["unabated"]["odds_enabled"] is False
+assert status["unabated"]["odds_enabled"] is True
 from odds_api.infrastructure.config import Settings
 from odds_api.infrastructure.storage import create_repository
 repository = create_repository(Settings())

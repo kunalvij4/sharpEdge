@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     redis_url: SecretStr = SecretStr("")
     redis_prefix: str = "sharpedge:odds:v1"
     unabated_enabled: bool = True
-    unabated_odds_enabled: bool = False
+    unabated_odds_enabled: bool = True
     database_url: str = "sqlite:///./odds.db"
     api_keys: SecretStr = SecretStr("")
     unabated_api_key: SecretStr = SecretStr("")
@@ -74,6 +74,8 @@ class Settings(BaseSettings):
             key = aliases.get(key, key)
             if key in result:
                 raise ValueError("Duplicate canonical league key in LEAGUES_JSON")
+            if key == "ncaaf_football" and value["route"] == "ncaaf":
+                value = {**value, "route": "cfb"}
             result[key] = value
         return result
 

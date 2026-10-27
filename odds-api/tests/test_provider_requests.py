@@ -11,6 +11,33 @@ from odds_api.infrastructure.provider import UnabatedClient
 from odds_api.infrastructure.rate_limit import RateLimiter
 
 
+async def test_legacy_ncaaf_route_uses_discovered_cfb_catalog(raw, clock):
+    raw["leagues"][0]["name"] = "CFB"
+    payloads = {
+        "/league": raw["leagues"],
+        "/event/cfb/upcoming": raw["events"],
+        "/team/cfb": raw["teams"],
+    }
+    paths = []
+
+    def handler(request):
+        paths.append(request.url.path)
+        return httpx.Response(200, json={"success": True, "data": payloads[request.url.path]})
+
+    settings = Settings(
+        _env_file=None,
+        leagues_json='{"ncaaf_football":{"title":"NCAAF","route":"ncaaf"}}',
+    )
+    http = httpx.AsyncClient(base_url="https://data.unabated.com", transport=httpx.MockTransport(handler))
+    client = UnabatedClient(settings, clock, RateLimiter(clock, 0, 0), http)
+    try:
+        board = await client.fetch_catalog("ncaaf_football")
+        assert board.league.route == "cfb" and board.events
+        assert set(paths) == set(payloads)
+    finally:
+        await client.close()
+
+
 @pytest.mark.parametrize("sport", DEFAULT_LEAGUES)
 @pytest.mark.parametrize("kind", ["moneyline", "props"])
 async def test_real_client_builds_documented_requests(raw, clock, monkeypatch, sport, kind):

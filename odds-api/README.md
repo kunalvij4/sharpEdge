@@ -1,7 +1,7 @@
-## Redis / Propline deployment
+## Redis / combined-provider deployment
 
-The default deployment now stores current odds in hosted Redis and collects only
-Propline odds, retaining Unabated event/team metadata. Copy `.env.example` to `.env`, supply the full TLS `REDIS_URL`, product
+The default deployment stores current odds from Propline and Unabated in hosted
+Redis. Copy `.env.example` to `.env`, supply the full TLS `REDIS_URL`, product
 `API_KEYS`, `UNABATED_API_KEY`, and `PROPLINE_API_KEY`, then run from this directory:
 
 ```sh
@@ -9,11 +9,14 @@ docker compose up -d --build --remove-orphans
 ```
 
 This replaces the former PostgreSQL/migration containers without deleting their
-volume. Old SQL odds are not migrated. Unabated metadata supplies canonical event IDs;
-Propline prices are joined after catalog discovery, including on a fresh Redis store. Propline polls every eight minutes (one bulk call per configured supported league
-per cycle); Unabated slots fetch only `/league`, `/team/{league}`, and
-`/event/{league}/upcoming`; no Unabated odds endpoints are called.
-Coverage follows Propline’s supported markets for each league.
+volume. Old SQL odds are not migrated. Unabated supplies canonical event IDs;
+Propline prices are joined after discovery, including on a fresh Redis store.
+Collection alternates Propline and Unabated every four minutes, so each provider
+repeats every eight minutes. Each Unabated slot collects straight odds and props;
+each Propline slot makes one bulk call per configured supported league.
+Both providers retain separate selections: refreshing Unabated does not replace
+or remove Propline bets. Set `UNABATED_ODDS_ENABLED=false` only to use Unabated
+for event/team metadata instead of odds.
 
 Redis holds event documents and quotes, read directly for API calls. Updates use
 optimistic transactions, preserve prior observations on partial/stale responses,
