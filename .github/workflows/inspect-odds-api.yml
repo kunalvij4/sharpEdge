@@ -48,8 +48,11 @@ jobs:
             ssh_options+=(-o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1)
           fi
           target="$DEPLOY_USER@$DEPLOY_HOST"
-          container=$(ssh "${ssh_options[@]}" "$target" "docker ps --filter 'label=com.docker.compose.project=$DEPLOY_PROJECT' --filter 'label=com.docker.compose.service=api' --format '{{.ID}}'")
+          container=$(ssh "${ssh_options[@]}" "$target" "docker ps -a --filter 'label=com.docker.compose.project=$DEPLOY_PROJECT' --filter 'label=com.docker.compose.service=api' --format '{{.ID}}'")
           [[ "$container" =~ ^[0-9a-f]{12,64}$ ]]
+          # Capture startup failures even while the runtime is restarting.
+          ssh "${ssh_options[@]}" "$target" "docker inspect --format 'image={{.Config.Image}} status={{.State.Status}} restarts={{.RestartCount}} exit={{.State.ExitCode}} oom_killed={{.State.OOMKilled}}' '$container'"
+          ssh "${ssh_options[@]}" "$target" "docker logs --since 20m --tail 80 '$container'"
           cat > "$RUNNER_TEMP/inspect_odds.py" <<'PY'
           import hashlib
           import inspect
@@ -109,5 +112,6 @@ jobs:
           repository.close()
           print(json.dumps(result, indent=2))
           PY
-          ssh "${ssh_options[@]}" "$target" "docker exec -i '$container' python -" < "$RUNNER_TEMP/inspect_odds.py"
-          ssh "${ssh_options[@]}" "$target" "docker logs --since 20m --tail 60 '$container'"
+          if ! ssh "${ssh_options[@]}" "$target" "docker exec -i '$container' python -" < "$RUNNER_TEMP/inspect_odds.py"; then
+            printf 'Runtime inspection unavailable; container state and startup logs are shown above.\n'
+          fi
