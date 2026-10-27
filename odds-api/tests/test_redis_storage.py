@@ -231,6 +231,93 @@ def test_memory_recovery_script_refuses_growth_and_unknown_encoding(packed):
     assert client.get("event") == original
 
 
+def test_batched_write_retries_without_losing_another_providers_update(board, clock, monkeypatch):
+    server = fakeredis.FakeServer()
+    client = fakeredis.FakeRedis(server=server, decode_responses=True)
+    repository = RedisRepository("", DEFAULT_LEAGUES, clock=clock, client=client)
+    concurrent = RedisRepository(
+        "", DEFAULT_LEAGUES, clock=clock, client=fakeredis.FakeRedis(server=server, decode_responses=True)
+    )
+    source = future_board(board, clock)
+    second = replace(source.events[0], source_id="second", start=source.events[0].start + timedelta(hours=1))
+    second_quotes = tuple(replace(q, event_id=second.id) for q in source.quotes)
+    source = replace(source, events=(*source.events, second), quotes=(*source.quotes, *second_quotes))
+    repository.save(source)
+    clock.value += 10
+    updated = tuple(
+        replace(q, price=180, collected_at=clock.now(), source_updated_at=clock.now()) for q in second_quotes
+    )
+    refresh = replace(source, events=(second,), quotes=updated, collected_at=clock.now())
+    original_pipeline = client.pipeline
+    raced = False
+
+    def pipeline(*args, **kwargs):
+        pipe = original_pipeline(*args, **kwargs)
+        original_execute = pipe.execute
+
+        def execute(*args, **kwargs):
+            nonlocal raced
+            if pipe.explicit_transaction and not raced:
+                raced = True
+                concurrent.save(refresh)
+            return original_execute(*args, **kwargs)
+
+        pipe.execute = execute
+        return pipe
+
+    monkeypatch.setattr(client, "pipeline", pipeline)
+    books = {book.id: Sportsbook(book.source_id, book.title, "propline") for book in source.books}
+    propline_quotes = tuple(replace(q, book_id=books[q.book_id].id, price=150) for q in source.quotes)
+    repository.save(
+        replace(
+            source,
+            provider="propline",
+            books=tuple(books.values()),
+            quotes=propline_quotes,
+            collected_at=clock.now(),
+            covered_markets=("h2h",),
+        )
+    )
+    rows = repository.quotes(source.league.key)
+    expected_unabated = {q.selection_id: q for q in source.quotes}
+    expected_unabated.update({q.selection_id: q for q in updated})
+    assert raced
+    assert {
+        r["quote"].selection_id: r["quote"] for r in rows if r["book_key"].startswith("unabated_")
+    } == expected_unabated
+    assert {r["quote"].selection_id: r["quote"] for r in rows if r["book_key"].startswith("propline_")} == {
+        q.selection_id: q for q in propline_quotes
+    }
+
+
+def test_batched_write_rechecks_kickoff_after_reading_the_previous_documents(board, clock, monkeypatch):
+    client = fakeredis.FakeRedis(decode_responses=True)
+    repository = RedisRepository("", DEFAULT_LEAGUES, clock=clock, client=client)
+    source = future_board(board, clock)
+    first = source.events[0]
+    second = replace(first, source_id="second", start=first.start + timedelta(hours=1))
+    source = replace(source, events=(first, second))
+    repository.save(source)
+    original_pipeline = client.pipeline
+
+    def pipeline(*args, **kwargs):
+        pipe = original_pipeline(*args, **kwargs)
+        original_mget = pipe.mget
+
+        def mget(*args, **kwargs):
+            values = original_mget(*args, **kwargs)
+            clock.value = 86400
+            return values
+
+        pipe.mget = mget
+        return pipe
+
+    monkeypatch.setattr(client, "pipeline", pipeline)
+    repository.save(source)
+    assert not client.exists(repository.key("event:" + first.id))
+    assert repository.event(second.id)
+
+
 async def test_redis_cold_start_joins_propline_after_metadata(board, clock, tmp_path):
     from test_propline_integration import snapshot
 

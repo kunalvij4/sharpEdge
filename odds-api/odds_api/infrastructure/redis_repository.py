@@ -6,6 +6,7 @@ import zlib
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from decimal import Decimal
+from itertools import batched
 
 from redis import Redis, WatchError
 
@@ -95,40 +96,51 @@ class RedisRepository:
         grouped = {}
         for quote in board.quotes:
             grouped.setdefault(quote.event_id, []).append(quote)
-        now = self.clock.now()
-        for event in board.events:
-            key = self.key("event:" + event.id)
-            if event.start <= now:
-                self.client.delete(key)
-                continue
-            # WATCH prevents concurrent scope refreshes from overwriting one another.
+        for batch in batched(board.events, 16):
+            keys = [self.key("event:" + event.id) for event in batch]
+            # One bounded transaction avoids three network round trips per event.
+            # Watching every key preserves concurrent updates to either provider.
             while True:
                 with self.client.pipeline() as pipe:
                     try:
-                        pipe.watch(key)
-                        old = pipe.get(key)
-                        document = decode_document(old) if old else {"quotes": {}}
-                        document["event"] = {
-                            **asdict(event),
-                            "id": event.id,
-                            "sport_title": board.league.title,
-                        }
-                        for quote in grouped.get(event.id, []):
-                            previous = document["quotes"].get(quote.selection_id)
-                            if previous and not self._valid_replacement(
-                                quote, asdict(decode_quote(previous["quote"])), now, board.provider
-                            ):
+                        pipe.watch(*keys)
+                        previous_values = pipe.mget(keys)
+                        now = self.clock.now()
+                        documents = []
+                        for event, old in zip(batch, previous_values):
+                            if event.start <= now:
+                                documents.append(None)
                                 continue
-                            book = books[quote.book_id]
-                            document["quotes"][quote.selection_id] = {
-                                "quote": asdict(quote),
-                                "book_key": book.key,
-                                "book_title": book.title,
+                            document = decode_document(old) if old else {"quotes": {}}
+                            document["event"] = {
+                                **asdict(event),
+                                "id": event.id,
+                                "sport_title": board.league.title,
                             }
+                            for quote in grouped.get(event.id, []):
+                                selection_id = quote.selection_id
+                                previous = document["quotes"].get(selection_id)
+                                if previous and not self._valid_replacement(
+                                    quote, asdict(decode_quote(previous["quote"])), now, board.provider
+                                ):
+                                    continue
+                                book = books[quote.book_id]
+                                document["quotes"][selection_id] = {
+                                    "quote": asdict(quote),
+                                    "book_key": book.key,
+                                    "book_title": book.title,
+                                }
+                            documents.append(compress_document(encode(document)))
                         pipe.multi()
-                        pipe.set(key, compress_document(encode(document)))
-                        pipe.pexpireat(key, int(event.start.timestamp() * 1000))
-                        pipe.zadd(self.key("events:" + board.league.key), {event.id: event.start.timestamp()})
+                        for key, event, document in zip(keys, batch, documents):
+                            if document is None:
+                                pipe.delete(key)
+                                continue
+                            pipe.set(key, document)
+                            pipe.pexpireat(key, int(event.start.timestamp() * 1000))
+                            pipe.zadd(
+                                self.key("events:" + board.league.key), {event.id: event.start.timestamp()}
+                            )
                         pipe.execute()
                         break
                     except WatchError:
@@ -197,22 +209,22 @@ class RedisRepository:
 
     def compact_event_documents(self):
         counts = {"compressed_events": 0, "bytes_before": 0, "bytes_after": 0}
-        for key in self.client.scan_iter(match=self.key("event:*"), count=100):
-            value = self.client.get(key)
-            if not value or value.startswith(DOCUMENT_PREFIX):
-                continue
-            # Validate legacy documents before preserving their exact JSON bytes.
-            decode_document(value)
-            packed = compress_document(value)
-            if packed == value:
-                continue
-            # The script can recover an already-full Redis, but only by shrinking
-            # an unchanged value. It preserves TTL and never deletes a quote/key.
-            result = self.client.eval(SHRINK_DOCUMENT, 1, key, value, packed)
-            if result == 1:
-                counts["compressed_events"] += 1
-                counts["bytes_before"] += len(value.encode())
-                counts["bytes_after"] += len(packed)
+        for keys in batched(self.client.scan_iter(match=self.key("event:*"), count=100), 16):
+            for key, value in zip(keys, self.client.mget(keys)):
+                if not value or value.startswith(DOCUMENT_PREFIX):
+                    continue
+                # Validate legacy documents before preserving their exact JSON bytes.
+                decode_document(value)
+                packed = compress_document(value)
+                if packed == value:
+                    continue
+                # The script can recover an already-full Redis, but only by shrinking
+                # an unchanged value. It preserves TTL and never deletes a quote/key.
+                result = self.client.eval(SHRINK_DOCUMENT, 1, key, value, packed)
+                if result == 1:
+                    counts["compressed_events"] += 1
+                    counts["bytes_before"] += len(value.encode())
+                    counts["bytes_after"] += len(packed)
         return counts
 
     def status(self, now, collected_ttl, source_ttl, propline_collected_ttl=600):

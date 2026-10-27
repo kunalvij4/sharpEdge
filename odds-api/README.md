@@ -19,7 +19,7 @@ or remove Propline bets. Set `UNABATED_ODDS_ENABLED=false` only to use Unabated
 for event/team metadata instead of odds.
 
 Redis holds event documents and quotes, read directly for API calls. Updates use
-optimistic transactions, preserve prior observations on partial/stale responses,
+bounded batches of optimistic transactions, preserve prior observations on partial/stale responses,
 and expire event documents at kickoff. Redis must support WATCH/MULTI/EXEC,
 Lua locks, and TLS. Use a persistent, non-evicting Redis service if restart durability
 is required. No local PostgreSQL or Redis container is needed. The application image
