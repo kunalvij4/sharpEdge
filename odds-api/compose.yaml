@@ -1,41 +1,14 @@
 name: in-house-odds
 x-database: &database
-  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-odds}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-odds}
+  STORAGE_BACKEND: redis
+  REDIS_URL: ${REDIS_URL:?Set REDIS_URL}
+  REDIS_PREFIX: ${REDIS_PREFIX:-sharpedge:odds:v1}
   LEAGUES_JSON: ${LEAGUES_JSON:?Set LEAGUES_JSON}
 
 services:
-  db:
-    image: postgres:17.6-bookworm
-    shm_size: 256mb
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-odds}
-      POSTGRES_USER: ${POSTGRES_USER:-odds}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
-    volumes:
-      - odds-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-
-  migrate:
-    image: ${ODDS_API_IMAGE:-in-house-odds-api:integrated}
-    platform: linux/amd64
-    build: .
-    restart: "no"
-    entrypoint: []
-    command: ["alembic", "upgrade", "head"]
-    environment:
-      <<: *database
-    depends_on:
-      db:
-        condition: service_healthy
-
   api:
     image: ${ODDS_API_IMAGE:-in-house-odds-api:integrated}
-    platform: linux/amd64
+    build: .
     init: true
     restart: unless-stopped
     stop_grace_period: 45s
@@ -51,6 +24,8 @@ services:
       PROPLINE_REQUEST_TIMEOUT: ${PROPLINE_REQUEST_TIMEOUT:-90}
       PROPLINE_COLLECTED_TTL: ${PROPLINE_COLLECTED_TTL:-600}
       PROPLINE_MAX_AGE: ${PROPLINE_MAX_AGE:-900}
+      UNABATED_ENABLED: "true"
+      UNABATED_ODDS_ENABLED: "false"
       UNABATED_API_KEY: ${UNABATED_API_KEY:?Set UNABATED_API_KEY}
       UNABATED_API_BASE_URL: ${UNABATED_API_BASE_URL:-https://data.unabated.com}
       UNABATED_PARTNER_CODE: ${UNABATED_PARTNER_CODE:-}
@@ -64,17 +39,14 @@ services:
       SCOPE_METADATA_TTL: ${SCOPE_METADATA_TTL:-300}
       SNAPSHOT_RETENTION_DAYS: ${SNAPSHOT_RETENTION_DAYS:-0}
       SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-20}
-      UNABATED_BET_TYPE_MAP: ${UNABATED_BET_TYPE_MAP:?Set UNABATED_BET_TYPE_MAP}
-      UNABATED_PERIOD_MAP: ${UNABATED_PERIOD_MAP:?Set UNABATED_PERIOD_MAP}
+      UNABATED_BET_TYPE_MAP: '{}'
+      UNABATED_PERIOD_MAP: '{}'
       BET365_ENABLED: "false"
       TZ: America/New_York
     volumes:
       - collection-artifacts:/app/artifacts
     ports:
       - "0.0.0.0:${API_PORT:-8000}:8000"
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=3)"]
       interval: 10s
@@ -82,5 +54,4 @@ services:
       retries: 3
 
 volumes:
-  odds-data:
   collection-artifacts:

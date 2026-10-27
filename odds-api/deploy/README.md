@@ -162,3 +162,16 @@ use the already downloaded image and its restart policy.
 GitHub references: [publishing Docker images](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images),
 [manual workflow runs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow),
 and [GHCR authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+
+## Redis secret injection
+
+Set the repository or production-environment Actions secret `ODDS_REDIS_URL` to
+the complete Redis connection URL. The deployment workflow passes it over SSH
+stdin and adds a single-quoted `REDIS_URL` entry to `DEPLOY_DIR/.env` only if that
+key is absent. Existing entries are preserved, including explicit empty entries
+(which Compose rejects). The URL is never placed in command arguments or logs.
+Other API/provider credentials must already be in the server's `.env`.
+
+The Redis deployment pulls only the API image and removes obsolete PostgreSQL
+and migration containers without deleting their volumes. SQL migration steps in
+the older instructions above apply only to older releases.

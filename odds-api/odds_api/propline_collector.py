@@ -9,11 +9,10 @@ from pathlib import Path
 from odds_api.application.async_work import blocking_work
 from odds_api.infrastructure.clock import SystemClock
 from odds_api.infrastructure.config import Settings
-from odds_api.infrastructure.lease import CollectorLease
 from odds_api.infrastructure.logging import configure_logging
 from odds_api.infrastructure.propline import SPORT_KEYS, ProplineClient, ProplineError, request_budget
 from odds_api.infrastructure.propline_normalization import boards
-from odds_api.infrastructure.repository import SqlRepository
+from odds_api.infrastructure.storage import collector_lease, create_repository
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +35,7 @@ async def collect_cycle(client, repository, settings, state, *, lease=None, snap
                 repository,
                 max_age=settings.propline_max_age,
                 collected_ttl=settings.propline_collected_ttl,
+                discover_events=not settings.unabated_enabled,
             )
             if lease:
                 lease.ping()
@@ -77,13 +77,7 @@ async def run():
     key = settings.propline_api_key.get_secret_value()
     if not key:
         raise RuntimeError("Set PROPLINE_API_KEY")
-    repository = SqlRepository(
-        settings.database_url,
-        settings.leagues,
-        collected_ttl=settings.collected_ttl,
-        source_ttl=settings.source_ttl,
-        propline_collected_ttl=settings.propline_collected_ttl,
-    )
+    repository = create_repository(settings, clock)
     client = ProplineClient(settings, clock)
     loop = asyncio.get_running_loop()
     for signum in (signal.SIGINT, signal.SIGTERM):
@@ -95,7 +89,7 @@ async def run():
     directory.mkdir(parents=True, exist_ok=True)
     state = {}
     try:
-        with CollectorLease(repository.engine, key=911712352) as lease:
+        with collector_lease(repository, key=911712352) as lease:
             while not stop.is_set():
                 started = clock.monotonic()
                 await collect_cycle(client, repository, settings, state, lease=lease)

@@ -63,7 +63,7 @@ def match_event(source, events):
     return matches[0] if len(matches) == 1 else None
 
 
-def boards(result, repository, *, max_age=900, collected_ttl=600):
+def boards(result, repository, *, max_age=900, collected_ttl=600, discover_events=False):
     now, league_key = result.collected_at, result.league
     league = next(league for league in repository.leagues() if league.key == league_key)
     events = [event for event in repository.events(league_key) if event["start"] > now]
@@ -84,6 +84,17 @@ def boards(result, repository, *, max_age=900, collected_ttl=600):
             counts["commenced_or_outright_events"] += 1
             continue
         event = match_event(source, events)
+        if event is None and discover_events:
+            discovered = Event(
+                "propline:" + source.id,
+                league_key,
+                source.commence_time,
+                source.home_team,
+                source.away_team,
+                "pregame",
+            )
+            event = {**vars(discovered), "id": discovered.id}
+            counts["discovered_events"] += 1
         if event is None:
             counts["unmatched_or_ambiguous_events"] += 1
             continue

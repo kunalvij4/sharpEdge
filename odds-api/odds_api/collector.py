@@ -10,13 +10,12 @@ from odds_api.application.services import CollectionService
 from odds_api.infrastructure.bet365_runtime import write_json
 from odds_api.infrastructure.clock import SystemClock
 from odds_api.infrastructure.config import Settings
-from odds_api.infrastructure.lease import CollectorLease
 from odds_api.infrastructure.logging import configure_logging
 from odds_api.infrastructure.propline import ProplineClient, request_budget
 from odds_api.infrastructure.propline_normalization import boards
 from odds_api.infrastructure.provider import UnabatedClient
 from odds_api.infrastructure.rate_limit import RateLimiter
-from odds_api.infrastructure.repository import SqlRepository
+from odds_api.infrastructure.storage import collector_lease, create_repository
 from odds_api.propline_collector import collect_cycle
 
 
@@ -52,10 +51,15 @@ class CombinedCollection:
                 },
             )
         else:
+            if not self.settings.unabated_enabled:
+                return
             for league in self.settings.leagues:
-                for kind in ("moneyline", "props"):
+                kinds = ("moneyline", "props") if self.settings.unabated_odds_enabled else ("moneyline",)
+                for kind in kinds:
                     self.lease.ping()
-                    await self.service.collect(league, kind)
+                    await self.service.collect(
+                        league, kind, metadata_only=not self.settings.unabated_odds_enabled
+                    )
                 # Rejoin the first PropLine snapshot after canonical discovery.
                 # Its collection time and expiry remain unchanged.
                 result = self.snapshots.get(league)
@@ -97,18 +101,11 @@ async def run():
         raise RuntimeError("Combined collection requires POLL_INTERVAL=480 and PROPLINE_POLL_INTERVAL=480")
     if settings.collected_ttl < 480 or settings.propline_collected_ttl < 480:
         raise RuntimeError("Collection TTLs must cover the eight-minute cycle")
-    if not settings.unabated_api_key.get_secret_value():
+    if settings.unabated_enabled and not settings.unabated_api_key.get_secret_value():
         raise RuntimeError("Set UNABATED_API_KEY")
     if settings.propline_enabled and not settings.propline_api_key.get_secret_value():
         raise RuntimeError("Set PROPLINE_API_KEY")
-    repository = SqlRepository(
-        settings.database_url,
-        settings.leagues,
-        settings.snapshot_retention_days,
-        collected_ttl=settings.collected_ttl,
-        source_ttl=settings.source_ttl,
-        propline_collected_ttl=settings.propline_collected_ttl,
-    )
+    repository = create_repository(settings, clock)
     unabated = UnabatedClient(
         settings, clock, RateLimiter(clock, settings.rate_min_interval, settings.odds_min_interval)
     )
@@ -120,13 +117,17 @@ async def run():
         except NotImplementedError:
             signal.signal(signum, lambda *_: loop.call_soon_threadsafe(stop.set))
     try:
-        with CollectorLease(repository.engine) as lease, CollectorLease(repository.engine, key=911712352):
+        with (
+            collector_lease(repository) as lease,
+            collector_lease(repository, key=911712352) as propline_lease,
+        ):
             collection = CombinedCollection(settings, clock, repository, unabated, propline, lease)
             scheduler = FeedSchedule(clock, settings.collection_state_path)
 
             async def heartbeat():
                 while not stop.is_set():
                     lease.ping()
+                    propline_lease.ping()
                     repository.heartbeat(clock.now(), unabated.metrics)
                     await asyncio.sleep(2)
 

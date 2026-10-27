@@ -53,8 +53,7 @@ class UnabatedClient:
         self.allowed_paths = {"/league", "/bettype", "/market-type"}
         for config in settings.leagues.values():
             route = config["route"]
-            if route == "cfb":
-                self.allowed_paths.add("/event/cfb/upcoming")
+            self.allowed_paths.add("/event/" + route + "/upcoming")
             self.allowed_paths.update({"/period-type/" + route, "/team/" + route, "/player/" + route})
             self.allowed_paths.update(
                 "/market/" + route + "/" + market + "/" + operation
@@ -137,6 +136,21 @@ class UnabatedClient:
                 raise error
             self.cache[path] = (self.clock.monotonic(), data)
             return data
+
+    async def fetch_catalog(self, league_key):
+        """Fetch identities only; never request an odds endpoint."""
+        config = self.settings.leagues[league_key]
+        route = config["route"]
+        leagues = await self.metadata("/league", self.settings.metadata_ttl)
+        found = [league for league in values(leagues) if league["name"].casefold() == route.casefold()]
+        if len(found) != 1:
+            raise ProviderError("league_not_discovered_check_LEAGUES_JSON")
+        league = League(league_key, config["title"], route, str(found[0]["id"]))
+        events = await self.metadata("/event/" + route + "/upcoming", self.settings.scope_metadata_ttl)
+        teams = await self.metadata("/team/" + route, self.settings.metadata_ttl)
+        return self.normalizer.parse(
+            league, "moneyline", {"odds": {}}, [], [], [], events, {}, teams, self.clock.now()
+        )
 
     async def fetch(self, league_key, kind):
         config = self.settings.leagues[league_key]

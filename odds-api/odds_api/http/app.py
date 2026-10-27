@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, Security
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader, APIKeyQuery
+from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
 
 from odds_api.application.services import OddsQueryService, QueryError
@@ -24,7 +25,7 @@ from odds_api.infrastructure.clock import SystemClock
 from odds_api.infrastructure.config import Settings
 from odds_api.infrastructure.normalization import BET_NAMES, PERIOD_NAMES
 from odds_api.infrastructure.propline_normalization import public_markets
-from odds_api.infrastructure.repository import SqlRepository
+from odds_api.infrastructure.storage import create_repository
 
 header_key = APIKeyHeader(name="X-API-Key", auto_error=False)
 query_key = APIKeyQuery(name="apiKey", auto_error=False)
@@ -46,7 +47,7 @@ def create_app(settings=None, repository=None, clock=None):
     async def lifespan(app):
         if not settings.api_keys.get_secret_value().strip():
             raise RuntimeError("Set API_KEYS to one or more comma-separated product keys")
-        app.state.repository = repository or SqlRepository(settings.database_url, settings.leagues)
+        app.state.repository = repository or create_repository(settings, clock)
         bases = set(BET_NAMES.values()) | set(settings.unabated_bet_type_map.values())
         periods = set(PERIOD_NAMES.values()) | set(settings.unabated_period_map.values())
         markets = {
@@ -79,6 +80,7 @@ def create_app(settings=None, repository=None, clock=None):
         lifespan=lifespan,
     )
 
+    @app.exception_handler(RedisError)
     @app.exception_handler(SQLAlchemyError)
     async def database_error(_, error):
         return JSONResponse(status_code=503, content={"detail": "Database temporarily unavailable"})
@@ -199,7 +201,15 @@ def create_app(settings=None, repository=None, clock=None):
                 propline.update(json.loads((Path(settings.propline_output_dir) / "status.json").read_text()))
             except (OSError, ValueError):
                 propline["state"] = "unavailable"
-        return {**result, "bet365": bet365, "propline": propline}
+        return {
+            **result,
+            "unabated": {
+                "enabled": settings.unabated_enabled,
+                "odds_enabled": settings.unabated_odds_enabled,
+            },
+            "bet365": bet365,
+            "propline": propline,
+        }
 
     @app.get(
         "/v1/sports",

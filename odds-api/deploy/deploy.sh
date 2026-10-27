@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Invoked by GitHub Actions; the registry token arrives on stdin, never in argv.
+# Invoked by GitHub Actions; registry token and optional Redis URL arrive as stdin lines.
 set -Eeuo pipefail
 umask 077
 
@@ -25,6 +25,19 @@ canonical_dir=$(cd -- "$deploy_dir" && pwd -P)
 exec 9>"$deploy_dir/.deploy.lock"
 flock -n 9 || die 'Another deployment is already running.'
 
+# Do not source .env: credentials may contain shell metacharacters.
+IFS= read -r registry_token || die 'Missing registry token on stdin.'
+redis_url=''
+IFS= read -r redis_url || true
+if ! grep -Eq '^[[:space:]]*(export[[:space:]]+)?REDIS_URL[[:space:]]*=' "$deploy_dir/.env"; then
+  [[ "$redis_url" == rediss://* || "$redis_url" == redis://* ]] || die 'REDIS_URL is missing from .env; set GitHub secret ODDS_REDIS_URL.'
+  [[ "$redis_url" != *"'"* && "$redis_url" != *$'\r'* ]] || die 'URL-encode quotes and control characters in ODDS_REDIS_URL.'
+  chmod 600 "$deploy_dir/.env"
+  # Single quotes prevent Compose interpolation of dollar signs in credentials.
+  printf "\nREDIS_URL='%s'\n" "$redis_url" >> "$deploy_dir/.env"
+fi
+unset redis_url
+
 export ODDS_API_IMAGE="$image"
 export DOCKER_CONFIG
 DOCKER_CONFIG=$(mktemp -d)
@@ -45,14 +58,11 @@ compose() {
 
 # Validate configuration and pull everything before stopping the existing API.
 compose config --quiet
-docker login ghcr.io --username "$registry_user" --password-stdin
-compose pull db migrate api
-compose up --no-build --no-recreate --detach --wait --wait-timeout 120 db
-
-# The API image also runs the collector. Stop all its writers before migrations.
-compose stop api
-compose up --no-build --no-deps --force-recreate --exit-code-from migrate migrate
-compose up --no-build --no-deps --force-recreate --wait --wait-timeout 120 api
+printf '%s\n' "$registry_token" | docker login ghcr.io --username "$registry_user" --password-stdin
+unset registry_token
+compose pull api
+# Remove former SQL services without deleting their data volumes.
+compose up --no-build --remove-orphans --force-recreate --wait --wait-timeout 120 api
 
 # --wait uses compose.yaml's /health/ready probe. Only mark healthy releases current.
 printf '%s\n' "$image" > "$release_dir/image"

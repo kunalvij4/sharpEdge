@@ -4,13 +4,12 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 pytestmark = pytest.mark.skipif(
-    sys.platform != "linux" or not shutil.which("bash") or not shutil.which("flock"),
+    not shutil.which("bash") or not shutil.which("flock"),
     reason="Production deployment requires Linux, Bash, and flock",
 )
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,10 +63,10 @@ def deployment(tmp_path):
         "DOCKER_CALLS": str(calls_path),
     }
 
-    def run(*, failure="", image=IMAGE):
+    def run(*, failure="", image=IMAGE, redis_url="rediss://default:test-redis-secret@example.test:6379"):
         result = subprocess.run(
             ["bash", str(release / "deploy/deploy.sh"), str(deploy_dir), image, "test-user", "existing-odds"],
-            input="test-registry-token\n",
+            input="test-registry-token\n" + redis_url + "\n",
             text=True,
             capture_output=True,
             env={**env, "FAIL_AT": failure},
@@ -81,14 +80,19 @@ def deployment(tmp_path):
     return deploy_dir, release, previous, run
 
 
-def test_deployment_preserves_project_and_pins_migration_and_api_to_one_digest(deployment):
+def test_deployment_preserves_project_and_pins_api_to_digest(deployment):
     deploy_dir, release, previous, run = deployment
     result, calls = run()
     assert result.returncode == 0, result.stderr
     assert (deploy_dir / "current").resolve() == release
     assert (deploy_dir / "previous").resolve() == previous
     assert (release / "image").read_text().strip() == IMAGE
-    assert (deploy_dir / ".env").read_text() == "POSTGRES_PASSWORD=existing-database-password\n"
+    assert (deploy_dir / ".env").read_text() == (
+        "POSTGRES_PASSWORD=existing-database-password\n\n"
+        "REDIS_URL='rediss://default:test-redis-secret@example.test:6379'\n"
+    )
+    assert (deploy_dir / ".env").stat().st_mode & 0o777 == 0o600
+    assert "test-redis-secret" not in result.stdout + result.stderr
     assert all(call["image"] == IMAGE for call in calls)
     assert all(not Path(call["config"]).exists() for call in calls)
     assert "test-registry-token" not in result.stdout + result.stderr
@@ -104,15 +108,14 @@ def test_deployment_preserves_project_and_pins_migration_and_api_to_one_digest(d
     ]
     assert all(args[: len(prefix)] == prefix for args in compose_calls)
     operations = [args[len(prefix) :] for args in compose_calls]
-    stop = next(i for i, args in enumerate(operations) if args == ["stop", "api"])
-    migration = next(i for i, args in enumerate(operations) if "--exit-code-from" in args)
-    ready = next(i for i, args in enumerate(operations) if "--wait" in args and args[-1] == "api")
-    assert stop < migration < ready
+    assert ["pull", "api"] in operations
+    assert any("--remove-orphans" in args and "--wait" in args for args in operations)
+    assert not any("migrate" in args or "db" in args for args in operations)
     assert all("--no-build" in args for args in operations if args[0] == "up")
     assert not any("down" in args or "build" in args for args in operations)
 
 
-@pytest.mark.parametrize("failure", ["pull", "migration", "readiness"])
+@pytest.mark.parametrize("failure", ["pull", "readiness"])
 def test_failed_deployment_keeps_successful_release_and_cleans_registry_credentials(deployment, failure):
     deploy_dir, release, previous, run = deployment
     result, calls = run(failure=failure)
@@ -144,3 +147,31 @@ def test_mutable_image_tag_is_rejected_before_touching_docker(deployment):
     assert result.returncode != 0
     assert "digest" in result.stderr
     assert calls == []
+
+
+@pytest.mark.parametrize(
+    "existing", ["REDIS_URL='rediss://existing:6379'", "export REDIS_URL = existing", "REDIS_URL="]
+)
+def test_existing_redis_url_is_preserved(deployment, existing):
+    deploy_dir, _, _, run = deployment
+    (deploy_dir / ".env").write_text(existing + "\n")
+    result, _ = run(redis_url="")
+    assert result.returncode == 0, result.stderr
+    assert (deploy_dir / ".env").read_text() == existing + "\n"
+
+
+def test_missing_redis_secret_fails_before_docker(deployment):
+    _, _, _, run = deployment
+    result, calls = run(redis_url="")
+    assert result.returncode != 0
+    assert "ODDS_REDIS_URL" in result.stderr
+    assert not calls
+
+
+def test_redis_credentials_are_literal_and_not_executed(deployment):
+    deploy_dir, _, _, run = deployment
+    url = "rediss://default:p$word$(false)`false`#x@example.test:6379"
+    result, _ = run(redis_url=url)
+    assert result.returncode == 0, result.stderr
+    assert "REDIS_URL='" + url + "'" in (deploy_dir / ".env").read_text()
+    assert url not in result.stdout + result.stderr

@@ -23,14 +23,18 @@ class CollectionService:
     def __init__(self, provider: Provider, repository: Repository, clock: Clock):
         self.provider, self.repository, self.clock = provider, repository, clock
 
-    async def collect(self, sport: str, kind: str) -> None:
+    async def collect(self, sport: str, kind: str, *, metadata_only=False) -> None:
         from uuid import uuid4
 
         run, started = uuid4().hex, self.clock.monotonic()
         outcome, count = "failed", 0
         diagnostics = {}
         try:
-            board = await self.provider.fetch(sport, kind)
+            board = (
+                await self.provider.fetch_catalog(sport)
+                if metadata_only
+                else await self.provider.fetch(sport, kind)
+            )
             await blocking_work(self.repository.save, board)
             count = len(board.quotes)
             diagnostics["warnings"] = list(board.warnings[:20])

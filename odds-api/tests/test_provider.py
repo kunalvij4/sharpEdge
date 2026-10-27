@@ -207,7 +207,8 @@ def discovery_routes(raw):
 
 
 @pytest.mark.parametrize(
-    "path", ["/event/nba/upcoming", "/market/nba/futures/odds", "/season/nba", "/market/nba/straight/people"]
+    "path",
+    ["/event/unknown/upcoming", "/market/nba/futures/odds", "/season/nba", "/market/nba/straight/people"],
 )
 async def test_unnecessary_provider_endpoints_are_blocked_before_http(clock, path):
     def handler(_):

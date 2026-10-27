@@ -1,3 +1,33 @@
+## Redis / Propline deployment
+
+The default deployment now stores current odds in hosted Redis and collects only
+Propline odds, retaining Unabated event/team metadata. Copy `.env.example` to `.env`, supply the full TLS `REDIS_URL`, product
+`API_KEYS`, `UNABATED_API_KEY`, and `PROPLINE_API_KEY`, then run from this directory:
+
+```sh
+docker compose up -d --build --remove-orphans
+```
+
+This replaces the former PostgreSQL/migration containers without deleting their
+volume. Old SQL odds are not migrated. Unabated metadata supplies canonical event IDs;
+Propline prices are joined after catalog discovery, including on a fresh Redis store. Propline polls every eight minutes (one bulk call per configured supported league
+per cycle); Unabated slots fetch only `/league`, `/team/{league}`, and
+`/event/{league}/upcoming`; no Unabated odds endpoints are called.
+Coverage follows Propline’s supported markets for each league.
+
+Redis holds event documents and quotes, read directly for API calls. Updates use
+optimistic transactions, preserve prior observations on partial/stale responses,
+and expire event documents at kickoff. Redis must support WATCH/MULTI/EXEC,
+Lua locks, and TLS. Use a persistent, non-evicting Redis service if restart durability
+is required. No local PostgreSQL or Redis container is needed. The application image
+builds for the host architecture to avoid forced amd64 emulation on Apple Silicon.
+
+The URL is secret configuration; never commit `.env`. Redis connection URL behavior:
+https://redis.io/docs/latest/develop/clients/connection-urls/
+
+Legacy SQL operation is still available with `STORAGE_BACKEND=sql`, `DATABASE_URL`,
+and Alembic migrations. The older deployment sections below describe that setup.
+
 # In-House Odds API — Phase 1
 
 The API combines Unabated and PropLine for **NHL, NBA, NFL, MLB, and NCAAF**.

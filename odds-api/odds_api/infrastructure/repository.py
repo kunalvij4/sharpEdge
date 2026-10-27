@@ -124,7 +124,7 @@ class SqlRepository:
                         "status": e.status,
                     }
                     for e in board.events
-                    if board.provider == "unabated" and e.start > now
+                    if board.provider in {"unabated", "propline"} and e.start > now
                 ],
             )
             # A corrected kickoff may move a previously future event into the past.

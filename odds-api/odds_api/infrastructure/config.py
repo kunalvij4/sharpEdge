@@ -1,5 +1,6 @@
 import json
 from functools import cached_property
+from typing import Literal
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -15,6 +16,11 @@ DEFAULT_LEAGUES = {
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    storage_backend: Literal["redis", "sql"] = "redis"
+    redis_url: SecretStr = SecretStr("")
+    redis_prefix: str = "sharpedge:odds:v1"
+    unabated_enabled: bool = True
+    unabated_odds_enabled: bool = False
     database_url: str = "sqlite:///./odds.db"
     api_keys: SecretStr = SecretStr("")
     unabated_api_key: SecretStr = SecretStr("")

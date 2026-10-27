@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Persisted Unabated odds with a v4-compatible FastAPI interface"
 requires-python = ">=3.12,<3.14"
 dependencies = [
+  "redis==6.4.0",
   "fastapi==0.119.0",
   "uvicorn==0.37.0",
   "httpx==0.28.1",
@@ -18,7 +19,7 @@ bet365-probe = [
     "playwright==1.64.0",
 ]
 [dependency-groups]
-dev = ["pytest==8.4.2", "pytest-asyncio==1.2.0", "ruff==0.14.1"]
+dev = ["fakeredis[lua]==2.31.1", "pytest==8.4.2", "pytest-asyncio==1.2.0", "ruff==0.14.1"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
