@@ -31,8 +31,8 @@ def main():
     prefix = "odds-smoke-" + uuid4().hex[:10]
     network, database, api, collector = (prefix + suffix for suffix in ("-net", "-db", "-api", "-collector"))
     names = [collector, api, database]
-    url = f"postgresql+psycopg://odds:smoke-only@{database}:5432/odds"
-    common = ["--network", network, "--env", "DATABASE_URL=" + url]
+    url = f"redis://{database}:6379/0"
+    common = ["--network", network, "--env", "STORAGE_BACKEND=redis", "--env", "REDIS_URL=" + url]
     try:
         docker("network", "create", network)
         docker(
@@ -42,21 +42,14 @@ def main():
             database,
             "--network",
             network,
-            "--env",
-            "POSTGRES_USER=odds",
-            "--env",
-            "POSTGRES_PASSWORD=smoke-only",
-            "--env",
-            "POSTGRES_DB=odds",
-            "postgres:17.6-bookworm",
+            "redis:7.4.2-bookworm",
+            "redis-server",
+            "--appendonly",
+            "yes",
+            "--appendfsync",
+            "always",
         )
-        wait_for(
-            lambda: docker(
-                "exec", database, "pg_isready", "-h", "127.0.0.1", "-U", "odds", "-d", "odds", check=False
-            ).returncode
-            == 0
-        )
-        docker("run", "--rm", *common, args.image, "alembic", "upgrade", "head")
+        wait_for(lambda: docker("exec", database, "redis-cli", "ping", check=False).stdout.strip() == "PONG")
 
         fixture = json.loads(
             (Path(__file__).resolve().parents[1] / "tests/fixtures/provider.json").read_text()
@@ -65,9 +58,9 @@ def main():
 import json, os
 from datetime import UTC, datetime, timedelta
 from odds_api.domain.models import League
-from odds_api.infrastructure.config import DEFAULT_LEAGUES
+from odds_api.infrastructure.config import Settings
 from odds_api.infrastructure.normalization import Normalizer
-from odds_api.infrastructure.repository import SqlRepository
+from odds_api.infrastructure.storage import create_repository
 raw = json.loads(FIXTURE)
 now = datetime.now(UTC)
 def refresh(node):
@@ -78,7 +71,7 @@ def refresh(node):
     elif isinstance(node, list):
         for value in node: refresh(value)
 refresh(raw)
-repository = SqlRepository(os.environ["DATABASE_URL"], DEFAULT_LEAGUES)
+repository = create_repository(Settings())
 for kind in ("moneyline", "props"):
     board = Normalizer().parse(League("nba_basketball", "NBA", "nba", "42"), kind,
         raw[kind]["data"], raw["sources"], raw["bets"], raw["periods"], raw["events"],
@@ -142,12 +135,7 @@ print("two-worker API, authentication, persisted moneylines/props, and OpenAPI p
         assert docker("exec", api, "id", "-u").stdout.strip() == "10001"
 
         docker("restart", database)
-        wait_for(
-            lambda: docker(
-                "exec", database, "pg_isready", "-h", "127.0.0.1", "-U", "odds", "-d", "odds", check=False
-            ).returncode
-            == 0
-        )
+        wait_for(lambda: docker("exec", database, "redis-cli", "ping", check=False).stdout.strip() == "PONG")
         docker("restart", api)
         wait_for(lambda: docker("exec", api, "python", "-c", ready, check=False).returncode == 0)
         docker("exec", api, "python", "-c", check)
@@ -197,7 +185,13 @@ request=urllib.request.Request("http://localhost:8000/v1/status",headers={"X-API
 with urllib.request.urlopen(request,timeout=3) as response:
     status=json.load(response)
 assert status["collector_healthy"]
-assert any(scope["failures"] for scope in status["scopes"])
+assert status["provider_metrics"].get("requests", 0) > 0
+assert status["unabated"]["odds_enabled"] is False
+from odds_api.infrastructure.config import Settings
+from odds_api.infrastructure.storage import create_repository
+repository = create_repository(Settings())
+assert repository.client.hlen(repository.key("failures")) > 0
+repository.close()
 """
         wait_for(lambda: docker("exec", api, "python", "-c", check_health, check=False).returncode == 0)
         second = docker(
@@ -225,13 +219,15 @@ repository.close()
         docker("run", "--rm", "-i", *common, args.image, "python", "-", input=expiry_seed)
         expiry_check = """
 import os
-from sqlalchemy import select, func
-from odds_api.infrastructure.repository import SqlRepository
-from odds_api.infrastructure.config import DEFAULT_LEAGUES
-repository = SqlRepository(os.environ["DATABASE_URL"], DEFAULT_LEAGUES)
-with repository.engine.connect() as conn:
-    for name, expected in (("events", 1), ("markets", 3), ("selections", 5), ("odds", 5)):
-        assert conn.scalar(select(func.count()).select_from(repository.t[name])) == expected
+from odds_api.infrastructure.storage import create_repository
+from odds_api.infrastructure.config import Settings
+from odds_api.domain.models import Event
+from datetime import UTC, datetime
+repository = create_repository(Settings())
+expired = Event("expires-during-outage", "nba_basketball", datetime.now(UTC), "home", "away", "pregame")
+assert not repository.client.exists(repository.key("event:" + expired.id))
+assert len(repository.events("nba_basketball")) == 1
+assert len(repository.quotes("nba_basketball")) == 5
 repository.close()
 """
         wait_for(lambda: docker("exec", api, "python", "-c", expiry_check, check=False).returncode == 0)
@@ -244,6 +240,15 @@ repository.close()
         print(
             "provider outage cache, collector ownership, credential redaction, and graceful shutdown passed"
         )
+    except Exception:
+        # Only synthetic credentials are used by these disposable containers.
+        for name in (api, collector, database):
+            logs = docker("logs", "--tail", "80", name, check=False)
+            output = logs.stdout + logs.stderr
+            for secret in ("smoke-product-key", "smoke-provider-key"):
+                output = output.replace(secret, "[REDACTED]")
+            print(f"Smoke failure logs ({name}):\n{output}", flush=True)
+        raise
     finally:
         for name in names:
             docker("rm", "--force", "--volumes", name, check=False)
