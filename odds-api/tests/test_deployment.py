@@ -52,7 +52,9 @@ def deployment(tmp_path):
     shutil.copy2(ROOT / "deploy/deploy.sh", release / "deploy/deploy.sh")
     shutil.copy2(ROOT / "compose.yaml", release / "compose.yaml")
     shutil.copy2(ROOT / "compose.local-redis.yaml", release / "compose.local-redis.yaml")
-    (deploy_dir / ".env").write_text("ODDS_REDIS_MODE=external\nPOSTGRES_PASSWORD=existing-database-password\n")
+    (deploy_dir / ".env").write_text(
+        "ODDS_REDIS_MODE=external\nPOSTGRES_PASSWORD=existing-database-password\n"
+    )
     previous = deploy_dir / "releases/old"
     previous.mkdir()
     (deploy_dir / "current").symlink_to(previous)
@@ -226,7 +228,8 @@ def test_deployment_adds_local_mode_once_and_preserves_existing_credentials(depl
         assert env_file.stat().st_mode & 0o777 == 0o600
         assert all(
             str(release / "compose.local-redis.yaml") in call["args"]
-            for call in calls if call["args"][0] == "compose"
+            for call in calls
+            if call["args"][0] == "compose"
         )
 
 
