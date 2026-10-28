@@ -40,8 +40,8 @@ timestamps and expiry, and Unabated collection keeps its existing behavior.
 Redis holds event documents and quotes, read directly for API calls. Updates use
 bounded batches of optimistic transactions, preserve prior observations on partial/stale responses,
 and expire event documents at kickoff. Redis must support WATCH/MULTI/EXEC,
-Lua locks, and TLS. Use a persistent, non-evicting Redis service if restart durability
-is required. No local PostgreSQL or Redis container is needed. The application image
+Lua locks, and TLS for remote connections. Use a persistent, non-evicting Redis service if restart durability
+is required. Local Redis is optional (see below). The application image
 builds for the host architecture to avoid forced amd64 emulation on Apple Silicon.
 
 Event documents use lossless compression to keep both providers' quotes within
@@ -53,6 +53,46 @@ compressed-document support cannot read migrated event documents.
 
 The URL is secret configuration; never commit `.env`. Redis connection URL behavior:
 https://redis.io/docs/latest/develop/clients/connection-urls/
+
+### Self-hosted Redis on a 4 GB / 2 vCPU server
+
+The local override adds Redis with `maxmemory 512mb`, a 1 GB container limit,
+and `noeviction`. It uses the existing zlib-compressed event documents and
+kickoff expiration. Redis is reachable only on an internal Docker network shared
+with the API; port 6379 is not published. This endpoint is not accessible to Lambda.
+
+Set `REDIS_URL=redis://redis:6379/0` in `.env`, then run:
+
+```sh
+docker compose -f compose.yaml -f compose.local-redis.yaml up -d --build
+```
+
+Use both Compose files for subsequent commands. For GitHub deployments, the script adds `ODDS_REDIS_MODE=local` to the
+server's `.env` when the mode is absent, then selects the override and local URL
+automatically, even if an old hosted URL remains in the file. Set
+`ODDS_REDIS_MODE=external` explicitly to keep using hosted Redis. Local mode does not require the `ODDS_REDIS_URL` GitHub secret.
+
+Persistence is disabled: a Redis restart loses cached odds and collector state.
+Providers refill the store on their collection schedule; coverage is incomplete
+until collection succeeds. Existing hosted data is not copied. Do not use this
+instance for durable data or the Lambda opportunity cache. At the memory limit,
+writes fail rather than evicting event documents or indexes.
+
+Measure a peak collection cycle and concurrent API requests before increasing
+the budget: decompressed Python objects consume additional API memory. The 1 GB
+container limit leaves about 3 GB for the application, OS, and headroom; it is
+not a guarantee that the combined workload fits. Inspect with:
+
+```sh
+docker compose -f compose.yaml -f compose.local-redis.yaml stats --no-stream
+docker compose -f compose.yaml -f compose.local-redis.yaml exec redis redis-cli INFO memory
+docker compose -f compose.yaml -f compose.local-redis.yaml exec redis redis-cli INFO stats
+```
+
+Watch `used_memory`, `used_memory_rss`, peak usage, errors, and API latency.
+The GitHub inspection workflow also reports Redis RSS, peak usage, and evictions.
+Keep the Redis container limit above `maxmemory` to allow allocator and buffer
+overhead. Enabling persistence requires revisiting the memory budget.
 
 Legacy SQL operation is still available with `STORAGE_BACKEND=sql`, `DATABASE_URL`,
 and Alembic migrations. The older deployment sections below describe that setup.

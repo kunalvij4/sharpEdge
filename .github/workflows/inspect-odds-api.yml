@@ -77,7 +77,7 @@ jobs:
           if settings.storage_backend == "redis":
               result["collector"] = json.loads(repository.client.get(repository.key("collector")) or "{}")
               result["failures"] = repository.client.hgetall(repository.key("failures"))
-              for section, fields in (("server", ("redis_version",)), ("memory", ("used_memory", "used_memory_human", "maxmemory", "maxmemory_human", "maxmemory_policy"))):
+              for section, fields in (("server", ("redis_version",)), ("memory", ("used_memory", "used_memory_human", "used_memory_rss", "used_memory_peak", "mem_fragmentation_ratio", "maxmemory", "maxmemory_human", "maxmemory_policy")), ("stats", ("evicted_keys", "expired_keys", "total_error_replies"))):
                   try:
                       details = repository.client.info(section)
                       result[section] = {field: details.get(field) for field in fields}

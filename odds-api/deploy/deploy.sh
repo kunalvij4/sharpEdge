@@ -29,7 +29,20 @@ flock -n 9 || die 'Another deployment is already running.'
 IFS= read -r registry_token || die 'Missing registry token on stdin.'
 redis_url=''
 IFS= read -r redis_url || true
-if ! grep -Eq '^[[:space:]]*(export[[:space:]]+)?REDIS_URL[[:space:]]*=' "$deploy_dir/.env"; then
+local_redis=false
+compose_files=(--file "$release_dir/compose.yaml")
+# Default deployments to local Redis without executing secret configuration.
+if ! grep -Eq '^[[:space:]]*(export[[:space:]]+)?ODDS_REDIS_MODE[[:space:]]*=' "$deploy_dir/.env"; then
+  [[ -f "$release_dir/compose.local-redis.yaml" ]] || die 'Local Redis Compose file is missing.'
+  chmod 600 "$deploy_dir/.env"
+  printf '\nODDS_REDIS_MODE=local\n' >> "$deploy_dir/.env"
+fi
+if grep -Eq '^ODDS_REDIS_MODE=local[[:space:]]*$' "$deploy_dir/.env"; then
+  local_redis=true
+  [[ -f "$release_dir/compose.local-redis.yaml" ]] || die 'Local Redis Compose file is missing.'
+  compose_files+=(--file "$release_dir/compose.local-redis.yaml")
+  export REDIS_URL=redis://redis:6379/0
+elif ! grep -Eq '^[[:space:]]*(export[[:space:]]+)?REDIS_URL[[:space:]]*=' "$deploy_dir/.env"; then
   [[ "$redis_url" == rediss://* || "$redis_url" == redis://* ]] || die 'REDIS_URL is missing from .env; set GitHub secret ODDS_REDIS_URL.'
   [[ "$redis_url" != *"'"* && "$redis_url" != *$'\r'* ]] || die 'URL-encode quotes and control characters in ODDS_REDIS_URL.'
   chmod 600 "$deploy_dir/.env"
@@ -53,7 +66,7 @@ cleanup() {
 trap cleanup EXIT
 
 compose() {
-  docker compose --project-name "$project" --env-file "$deploy_dir/.env" --file "$release_dir/compose.yaml" "$@"
+  docker compose --project-name "$project" --env-file "$deploy_dir/.env" "${compose_files[@]}" "$@"
 }
 
 # Validate configuration and pull everything before stopping the existing API.
@@ -61,6 +74,10 @@ compose config --quiet
 printf '%s\n' "$registry_token" | docker login ghcr.io --username "$registry_user" --password-stdin
 unset registry_token
 compose pull api
+if "$local_redis"; then
+  compose pull redis
+  compose up --no-build --wait --wait-timeout 60 redis
+fi
 # Check the new image's Redis connection before replacing the running API.
 # This sends only PING; it does not migrate, compact, or collect odds.
 compose run --rm --no-deps --entrypoint python api -c '
@@ -81,7 +98,7 @@ finally:
         repository.close()
 '
 # Remove former SQL services without deleting their data volumes.
-compose up --no-build --remove-orphans --force-recreate --wait --wait-timeout 600 api
+compose up --no-build --no-deps --remove-orphans --force-recreate --wait --wait-timeout 600 api
 
 # --wait uses compose.yaml's /health/ready probe. Only mark healthy releases current.
 printf '%s\n' "$image" > "$release_dir/image"

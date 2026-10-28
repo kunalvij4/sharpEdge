@@ -1,0 +1,46 @@
+# Opt in with -f compose.yaml -f compose.local-redis.yaml.
+services:
+  api:
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - default
+      - odds-store
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    mem_limit: 1g
+    command:
+      - redis-server
+      # Cross-container access is restricted by the internal Docker network.
+      - --protected-mode
+      - "no"
+      - --maxmemory
+      - 512mb
+      - --maxmemory-policy
+      - noeviction
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+    # Only the API joins this network; no host port is published.
+    networks:
+      - odds-store
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  odds-store:
+    internal: true

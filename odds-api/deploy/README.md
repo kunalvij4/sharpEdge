@@ -174,6 +174,25 @@ and [GHCR authentication](https://docs.github.com/en/packages/working-with-a-git
 
 ## Redis secret injection
 
+The deployment script adds `ODDS_REDIS_MODE=local` to `DEPLOY_DIR/.env` when
+the mode is absent, preserving other entries and restricting permissions to 0600.
+Existing mode entries are preserved; set `ODDS_REDIS_MODE=external` to keep using
+hosted Redis. The release includes `compose.local-redis.yaml`; the deployment
+script selects it, overrides the API endpoint with `redis://redis:6379/0`, pulls
+and starts Redis, and waits for its health check before the API connection test.
+API recreation does not force Redis recreation. No hosted Redis secret is needed
+in this mode, and existing `.env` credentials remain untouched.
+
+The local service has a 512 MB Redis budget, a 1 GB container limit, no eviction,
+and no persistence. Restarting Redis empties the store; allow the collectors to
+rebuild it. The endpoint is private to the API's internal Docker network and is
+not suitable for external Lambda connections. See the [memory and monitoring
+instructions](../README.md#self-hosted-redis-on-a-4-gb--2-vcpu-server).
+When manually inspecting a local deployment, include
+`--file "$release_dir/compose.local-redis.yaml"` after the base Compose file.
+Setting `ODDS_REDIS_MODE=external` switches back to the hosted URL on the next deployment;
+ensure that URL is valid first.
+
 Set the repository or production-environment Actions secret `ODDS_REDIS_URL` to
 the complete Redis connection URL. The deployment workflow passes it over SSH
 stdin and adds a single-quoted `REDIS_URL` entry to `DEPLOY_DIR/.env` only if that
@@ -181,6 +200,6 @@ key is absent. Existing entries are preserved, including explicit empty entries
 (which Compose rejects). The URL is never placed in command arguments or logs.
 Other API/provider credentials must already be in the server's `.env`.
 
-The Redis deployment pulls only the API image and removes obsolete PostgreSQL
+The hosted Redis deployment pulls only the API image and removes obsolete PostgreSQL
 and migration containers without deleting their volumes. SQL migration steps in
 the older instructions above apply only to older releases.

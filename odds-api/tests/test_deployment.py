@@ -39,6 +39,8 @@ if failure == "redis_preflight" and "run" in args and "--entrypoint" in args:
     sys.exit(14)
 if failure == "readiness" and "--wait" in args and args[-1] == "api":
     sys.exit(13)
+if failure == "redis_readiness" and "--wait" in args and args[-1] == "redis":
+    sys.exit(15)
 """
 
 
@@ -49,7 +51,8 @@ def deployment(tmp_path):
     (release / "deploy").mkdir(parents=True)
     shutil.copy2(ROOT / "deploy/deploy.sh", release / "deploy/deploy.sh")
     shutil.copy2(ROOT / "compose.yaml", release / "compose.yaml")
-    (deploy_dir / ".env").write_text("POSTGRES_PASSWORD=existing-database-password\n")
+    shutil.copy2(ROOT / "compose.local-redis.yaml", release / "compose.local-redis.yaml")
+    (deploy_dir / ".env").write_text("ODDS_REDIS_MODE=external\nPOSTGRES_PASSWORD=existing-database-password\n")
     previous = deploy_dir / "releases/old"
     previous.mkdir()
     (deploy_dir / "current").symlink_to(previous)
@@ -90,7 +93,7 @@ def test_deployment_preserves_project_and_pins_api_to_digest(deployment):
     assert (deploy_dir / "previous").resolve() == previous
     assert (release / "image").read_text().strip() == IMAGE
     assert (deploy_dir / ".env").read_text() == (
-        "POSTGRES_PASSWORD=existing-database-password\n\n"
+        "ODDS_REDIS_MODE=external\nPOSTGRES_PASSWORD=existing-database-password\n\n"
         "REDIS_URL='rediss://default:test-redis-secret@example.test:6379'\n"
     )
     assert (deploy_dir / ".env").stat().st_mode & 0o777 == 0o600
@@ -161,10 +164,10 @@ def test_mutable_image_tag_is_rejected_before_touching_docker(deployment):
 )
 def test_existing_redis_url_is_preserved(deployment, existing):
     deploy_dir, _, _, run = deployment
-    (deploy_dir / ".env").write_text(existing + "\n")
+    (deploy_dir / ".env").write_text("ODDS_REDIS_MODE=external\n" + existing + "\n")
     result, _ = run(redis_url="")
     assert result.returncode == 0, result.stderr
-    assert (deploy_dir / ".env").read_text() == existing + "\n"
+    assert (deploy_dir / ".env").read_text() == "ODDS_REDIS_MODE=external\n" + existing + "\n"
 
 
 def test_missing_redis_secret_fails_before_docker(deployment):
@@ -182,3 +185,57 @@ def test_redis_credentials_are_literal_and_not_executed(deployment):
     assert result.returncode == 0, result.stderr
     assert "REDIS_URL='" + url + "'" in (deploy_dir / ".env").read_text()
     assert url not in result.stdout + result.stderr
+
+
+def test_local_redis_starts_before_preflight_and_does_not_recreate_with_api(deployment):
+    deploy_dir, release, _, run = deployment
+    configuration = "ODDS_REDIS_MODE=local\nREDIS_URL='rediss://old.example:6379'\n"
+    (deploy_dir / ".env").write_text(configuration)
+    result, calls = run(redis_url="")
+    assert result.returncode == 0, result.stderr
+    assert (deploy_dir / ".env").read_text() == configuration
+    operations = []
+    for call in calls:
+        args = call["args"]
+        if args[0] == "compose":
+            index = args.index(str(release / "compose.local-redis.yaml"))
+            operations.append(args[index + 1 :])
+    start = ["up", "--no-build", "--wait", "--wait-timeout", "60", "redis"]
+    assert operations.index(["pull", "redis"]) < operations.index(start)
+    assert operations.index(start) < next(i for i, args in enumerate(operations) if args[0] == "run")
+    api_start = next(args for args in operations if args[0] == "up" and args[-1] == "api")
+    assert "--no-deps" in api_start
+
+
+def test_local_redis_needs_no_external_url(deployment):
+    deploy_dir, _, _, run = deployment
+    (deploy_dir / ".env").write_text("ODDS_REDIS_MODE=local\n")
+    result, _ = run(redis_url="")
+    assert result.returncode == 0, result.stderr
+
+
+def test_deployment_adds_local_mode_once_and_preserves_existing_credentials(deployment):
+    deploy_dir, release, _, run = deployment
+    original = "API_KEYS=keep-me\nREDIS_URL='rediss://old.example:6379'\n"
+    env_file = deploy_dir / ".env"
+    env_file.write_text(original)
+    for _ in range(2):
+        result, calls = run(redis_url="")
+        assert result.returncode == 0, result.stderr
+        assert env_file.read_text() == original + "\nODDS_REDIS_MODE=local\n"
+        assert env_file.stat().st_mode & 0o777 == 0o600
+        assert all(
+            str(release / "compose.local-redis.yaml") in call["args"]
+            for call in calls if call["args"][0] == "compose"
+        )
+
+
+def test_unhealthy_local_redis_does_not_replace_api(deployment):
+    deploy_dir, _, previous, run = deployment
+    (deploy_dir / ".env").write_text("ODDS_REDIS_MODE=local\n")
+    result, calls = run(redis_url="", failure="redis_readiness")
+    assert result.returncode != 0
+    assert (deploy_dir / "current").resolve() == previous
+    assert not any("up" in call["args"] and call["args"][-1] == "api" for call in calls)
+    assert not any("run" in call["args"] for call in calls)
+    assert all(not Path(call["config"]).exists() for call in calls)
