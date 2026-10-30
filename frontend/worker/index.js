@@ -1,4 +1,5 @@
 // Generated asset map is inserted by scripts/build.mjs. Credentials exist only in env.
+import { AuthError, firebaseConfig, sessionCookie, sameOrigin, authenticate, membershipFor, publicAccount, authorizeFeed, PAID_PLANS } from './auth.js';
 const assets = __ASSETS__;
 const headers = { 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' };
 const states = JSON.parse(assets['data/state-platform-filter-2026-10-26.json'].text).states;
@@ -171,11 +172,11 @@ function renderServerPage(route, feed, state, timezone) {
   const headings = route !== 'arbitrage' ? '<th>¼ Kelly ↓</th><th>Selection</th><th>Event</th><th>Book</th><th>Best odds</th><th>EV</th>' : '<th>Side A</th><th>Selection</th><th>Event</th><th>Opposite</th><th>Side B</th><th>Return</th>';
   return `<div class="demo">${feed.status === 'error' ? 'FEED TEMPORARILY UNAVAILABLE' : `LIVE FEED · Updated ${safe(feed.fetchedAt)}`}</div><div class="page"><div class="eyebrow">SHARPEDGE / LIVE DATA</div><div class="page-title"><div><h1>${label}</h1><p>Data from the latest market snapshot.</p></div></div><div class="preview table-wrap">${items.length ? `<table class="feed-table"><thead><tr>${headings}</tr></thead><tbody>${items.join('')}</tbody></table>` : `<div class="empty"><h2>${feed.status === 'error' ? 'Feed temporarily unavailable.' : 'No opportunities right now.'}</h2><p>Check back later.</p></div>`}</div></div>`;
 }
-function pageHtml(route, feed, state, timezone) {
+function pageHtml(route, feed, state, timezone, account = null) {
   let html = assets['index.html'].text;
   html = html.replace(/href="#(ev|arbitrage|parlay)"/g, (_, p) => `href="/${p}"`).replace(/href="#(home|pricing|analysis|coverage|privacy|terms|cookies|billing|accessibility|copyright|responsible)"/g, (_, p) => `href="/#${p}"`);
-  html = html.replace('</head>', '<script>window.__SHARPEDGE_SERVER__=true;</script></head>');
-  if (route === 'ev' || route === 'arbitrage' || route === 'parlay') {
+  html = html.replace('</head>', `<script>window.__SHARPEDGE_SERVER__=true;window.__SHARPEDGE_ACCOUNT__=${JSON.stringify(account).replace(/</g, '\\u003c')};</script></head>`);
+  if (feed && (route === 'ev' || route === 'arbitrage' || route === 'parlay')) {
     html = html.replace('<main id="app" tabindex="-1"></main>', `<main id="app" tabindex="-1">${renderServerPage(route, feed, state, timezone)}</main>`);
     const boot = JSON.stringify(feed).replace(/</g, '\\u003c');
     html = html.replace('</head>', `<script>window.__SHARPEDGE_FEED__=${boot};</script></head>`);
@@ -184,22 +185,60 @@ function pageHtml(route, feed, state, timezone) {
 }
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url), path = decodeURIComponent(url.pathname).replace(/^\//, '');
-    if (path === 'api/feeds' || path === 'ev' || path === 'arbitrage' || path === 'parlay') {
-      try {
-        const feed = await loadFeed(env);
-        if (path === 'api/feeds') return new Response(JSON.stringify(feed), { headers: { ...headers, 'content-type':'application/json; charset=utf-8' } });
-        const state = stateNames[request.headers.get('cookie')?.match(/(?:^|;\s*)se-region=([A-Z]{2})/)?.[1]] ? request.headers.get('cookie').match(/(?:^|;\s*)se-region=([A-Z]{2})/)[1] : '';
-        let timezone = 'UTC';
-        try { timezone = decodeURIComponent(request.headers.get('cookie')?.match(/(?:^|;\s*)se-timezone=([^;]+)/)?.[1] ?? 'UTC').slice(0, 80); } catch {}
-        return new Response(pageHtml(path, feed, state, timezone), { headers: { ...headers, 'content-type':'text/html; charset=utf-8' } });
-      } catch (error) {
-        console.error('SharpEdge feed query:', error instanceof Error ? error.message : 'Unknown error');
-        // Do not expose credentials, provider responses, or internal errors to visitors.
-        if (path === 'api/feeds') return new Response(JSON.stringify({ error:'Feed temporarily unavailable' }), { status:503, headers: { ...headers, 'content-type':'application/json' } });
-        return new Response(pageHtml(path, { ev:[], arbs:[], fetchedAt:'Unavailable', status:'error' }, ''), { headers: { ...headers, 'content-type':'text/html; charset=utf-8' } });
+    const url = new URL(request.url), path = url.pathname.replace(/^\//, '');
+    const json = (body, status = 200, extra = {}) => Response.json(body, { status, headers:{...headers, ...extra} });
+    const page = (route, feed, account) => new Response(pageHtml(route, feed, '', 'UTC', account), {headers:{...headers, 'content-type':'text/html; charset=utf-8'}});
+    try {
+      if (path === 'api/auth/config') {
+        if (request.method !== 'GET') return json({error:'Method not allowed'}, 405, {allow:'GET'});
+        return json(firebaseConfig(env));
       }
+      if (path === 'api/session') {
+        if (!['POST', 'DELETE'].includes(request.method)) return json({error:'Method not allowed'}, 405, {allow:'POST, DELETE'});
+        sameOrigin(request);
+        if (request.method === 'DELETE') return json({ok:true}, 200, {'set-cookie':sessionCookie()});
+        if (!request.headers.has('authorization')) throw new AuthError(401, 'Sign in to continue.');
+        const user = await authenticate(request, env), membership = await membershipFor(user, env);
+        return json(publicAccount(user, membership), 200, {'set-cookie':sessionCookie(user.token, Math.min(3600, user.expiresAt - Math.floor(Date.now() / 1000)))});
+      }
+      if (path === 'api/account') {
+        if (request.method !== 'GET') return json({error:'Method not allowed'}, 405, {allow:'GET'});
+        const user = await authenticate(request, env);
+        return json(publicAccount(user, await membershipFor(user, env)));
+      }
+      if (['api/feeds', 'ev', 'arbitrage', 'parlay', 'analysis'].includes(path)) {
+        if (request.method !== 'GET') return json({error:'Method not allowed'}, 405, {allow:'GET'});
+        const user = await authenticate(request, env), membership = await membershipFor(user, env), account = publicAccount(user, membership), plan = membership.plan;
+        if (path === 'analysis') return page(path, null, account);
+        if (!PAID_PLANS.has(plan)) {
+          if (path === 'api/feeds') return json({error:'An unexpired membership is required to view market data.', account}, 403);
+          return page(path, null, account);
+        }
+        if ((path === 'arbitrage' && !['plus', 'platinum'].includes(plan)) || (path === 'parlay' && !['fantasy', 'fantasyplus', 'platinum'].includes(plan))) return page(path, null, account);
+        try {
+          const feed = authorizeFeed(await loadFeed(env), plan);
+          if (path === 'api/feeds') return json(feed);
+          const cookie = request.headers.get('cookie');
+          const region = cookie?.match(/(?:^|;\s*)se-region=([A-Z]{2})/)?.[1];
+          const state = stateNames[region] ? region : '';
+          let timezone = 'UTC';
+          try { timezone = decodeURIComponent(cookie?.match(/(?:^|;\s*)se-timezone=([^;]+)/)?.[1] ?? 'UTC').slice(0, 80); } catch {}
+          return new Response(pageHtml(path, feed, state, timezone, account), { headers: { ...headers, 'content-type':'text/html; charset=utf-8' } });
+        } catch (error) {
+          console.error('SharpEdge feed query:', error instanceof Error ? error.message : 'Unknown error');
+          // Do not expose credentials, provider responses, or internal errors to visitors.
+          if (path === 'api/feeds') return json({error:'Feed temporarily unavailable'}, 503);
+          return page(path, {ev:[], arbs:[], fetchedAt:'Unavailable', status:'error'}, account);
+        }
+      }
+    } catch (error) {
+      const status = error instanceof AuthError ? error.status : 503;
+      if (!path.startsWith('api/') && status === 401) return new Response(null, {status:302, headers:{...headers, location:'/signin?next='+encodeURIComponent(url.pathname + url.search), 'set-cookie':sessionCookie()}});
+      if (path.startsWith('api/')) return json({error:error instanceof AuthError ? error.message : 'Your account is temporarily unavailable.', code:error instanceof AuthError ? error.code : 'AUTH_UNAVAILABLE'}, status);
+      return page('signin');
     }
+    if (path === 'signin') return page('signin');
+    if (path.startsWith('api/')) return json({error:'Not found'}, 404);
     const name = path || 'index.html', asset = assets[name];
     if (name === 'index.html') return new Response(pageHtml('home'), { headers: { ...headers, 'content-type':'text/html; charset=utf-8' } });
     if (!asset || name.startsWith('data/')) return new Response('Not found', { status:404 });

@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owner(uid) {
+      return request.auth != null && request.auth.uid == uid
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+    function validProfile() {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'displayName', 'email', 'photoURL', 'provider', 'lastSignInAt',
+          'signupDate', 'plan', 'expiresAt', 'bankroll', 'betHistory', 'savedEntry',
+          'requestedPlan', 'planRequestedAt', 'updatedAt'
+        ])
+        && data.displayName is string && data.displayName.size() <= 256
+        && data.email == request.auth.token.email
+        && data.photoURL is string && data.photoURL.size() <= 2048
+        && data.provider == 'google.com'
+        && data.lastSignInAt is timestamp && data.signupDate is timestamp
+        && data.plan in ['guest', 'gold', 'plus', 'fantasy', 'fantasyplus', 'platinum']
+        && (data.expiresAt == null || data.expiresAt is timestamp)
+        && data.bankroll is number && data.bankroll >= 1 && data.bankroll <= 1000000000
+        && data.betHistory is list && data.betHistory.size() <= 500
+        && (data.savedEntry == null || data.savedEntry is map)
+        && data.get('requestedPlan', '') in ['', 'gold', 'plus', 'fantasy', 'fantasyplus', 'platinum']
+        && (!data.keys().hasAny(['requestedPlan']) || data.planRequestedAt is timestamp);
+    }
+    match /users/{uid} {
+      allow get: if owner(uid);
+      // The browser may create only a Guest account with no paid expiration.
+      allow create: if owner(uid) && validProfile()
+        && request.resource.data.plan == 'guest'
+        && request.resource.data.expiresAt == null
+        && request.resource.data.signupDate == request.time
+        && request.resource.data.lastSignInAt == request.time;
+      // Only trusted administration/billing can change plan or expiration.
+      // Defaults let older profiles gain missing Guest fields safely.
+      allow update: if owner(uid) && validProfile()
+        && request.resource.data.plan == resource.data.get('plan', 'guest')
+        && request.resource.data.expiresAt == resource.data.get('expiresAt', null)
+        && request.resource.data.signupDate == resource.data.get('signupDate', request.time)
+        && (request.resource.data.lastSignInAt == resource.data.get('lastSignInAt', request.time)
+          || request.resource.data.lastSignInAt == request.time)
+        && (request.resource.data.get('updatedAt', null) == resource.data.get('updatedAt', null)
+          || request.resource.data.get('updatedAt', null) == request.time)
+        && (request.resource.data.get('planRequestedAt', null) == resource.data.get('planRequestedAt', null)
+          || request.resource.data.get('planRequestedAt', null) == request.time);
+      // Read-only access supports migration of the previous journal location.
+      match /app/state {
+        allow get: if owner(uid);
+        allow write: if false;
+      }
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -21,7 +21,8 @@ function walk(dir) {
 }
 walk(web);
 assets['data/state-platform-filter-2026-10-26.json'] = { text:fs.readFileSync(path.join(root,'data/state-platform-filter-2026-10-26.json'),'utf8'), type:'application/json' };
-const source = fs.readFileSync(path.join(root, 'worker/index.js'), 'utf8');
+const auth = fs.readFileSync(path.join(root, 'worker/auth.js'), 'utf8').replace(/^export \{.*\};\r?$/gm, '');
+const source = fs.readFileSync(path.join(root, 'worker/index.js'), 'utf8').replace(/^import .* from '\.\/auth\.js';$/m, () => auth);
 if (!source.includes('__ASSETS__')) throw new Error('Missing asset placeholder');
 fs.rmSync(dist,{recursive:true,force:true});
 fs.mkdirSync(path.join(dist,'server'),{recursive:true});

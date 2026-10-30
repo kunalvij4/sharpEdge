@@ -1,1 +1,10 @@
-{"name":"sharpedge-site","private":true,"type":"module","scripts":{"build":"node scripts/build.mjs","dev":"node scripts/dev.mjs"}}
+{
+  "name": "sharpedge-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
+    "test": "npm run build && node tests/auth.mjs && node tests/auth-client.mjs && node tests/signup.mjs && node tests/account-ui.mjs && node tests/parlay-feed.mjs"
+  }
+}
