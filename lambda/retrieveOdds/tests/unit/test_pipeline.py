@@ -29,10 +29,9 @@ def raw_event(league, label="near", minutes=5):
                     {"name": "Under", "price": 2.2, "point": 220.5},
                 ]},
             ]}
-            for book in ("FanDuel", "DraftKings")
+            for book in ("FanDuel", "DraftKings", "BetMGM")
         ],
     }
-
 
 @pytest.fixture
 def runtime(monkeypatch, closing_store):
@@ -157,6 +156,7 @@ def test_event_ids_prevent_same_team_rematches_from_colliding(runtime):
 def test_different_spread_and_total_lines_cannot_create_false_arbitrage(runtime):
     _, api, *_ = runtime
     raw = raw_event("NBA")
+    raw["bookmakers"] = raw["bookmakers"][:2]
     raw["bookmakers"][0]["markets"][1]["outcomes"][1]["point"] = 4.5
     raw["bookmakers"][0]["markets"][2]["outcomes"] = [{"name": "Over", "price": 3, "point": 220.5}]
     raw["bookmakers"][1]["markets"][1]["outcomes"] = [{"name": "Away", "price": 3, "point": 5.5}]

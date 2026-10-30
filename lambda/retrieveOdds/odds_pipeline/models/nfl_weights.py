@@ -144,18 +144,10 @@ class NFLWeightingEngine:
             total_weight = sum(available_fallback.values())
             return {book: weight/total_weight for book, weight in available_fallback.items()}
         
-        # Strategy 3: Emergency mode - use whatever books are available
+        # Strategy 3: not enough weighted books, so the market is not offered
         else:
-            print(f"   EMERGENCY MODE for {market_type}: Using all available books with equal weights")
-            emergency_books = [book for book in available_book_names 
-                             if self.normalize_book_name(book) not in self.never_use_books]
-            
-            if emergency_books:
-                equal_weight = 1.0 / len(emergency_books)
-                return {self.normalize_book_name(book): equal_weight for book in emergency_books}
-            else:
-                print(f"   No usable books available for {market_type}")
-                return {}
+            print(f"  No EV for {market_type}: only {len(available_fallback)} weighted books available")
+            return {}
     
     def should_include_book(self, book_name, market_type, available_book_names=None):
         """Determine if book should be included with fallback logic"""
