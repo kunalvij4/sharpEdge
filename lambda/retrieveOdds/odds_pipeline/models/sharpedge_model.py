@@ -1,5 +1,7 @@
 """Existing weighted fair-odds and expected-value model."""
 
+from .liquidity import apply_liquidity_boost
+
 class SharpEdge:
     def __init__(self, weights, exchange_weights, liquidity_threshold=1000):
         self.weights = weights
@@ -206,10 +208,15 @@ class SharpEdge:
             "exchanges_used": 0
         }
 
-    def get_fair_odds_and_ev(self, odds_data, exchange_data=None, offered_odds=None, game_info=None):
+    def get_fair_odds_and_ev(self, odds_data, exchange_data=None, offered_odds=None, game_info=None,
+                             liquidity=None):
         """
         Enhanced method that returns comprehensive analysis results.
+
+        liquidity: optional {book: (side_a_liquidity, side_b_liquidity)}; deep
+        NoVig/ProphetX markets get extra weight (see liquidity.py).
         """
+        boosted = apply_liquidity_boost(self.weights, liquidity)
         market_probs = []
         books_used = 0
         exchanges_used = 0
@@ -217,12 +224,12 @@ class SharpEdge:
         
         # Process regular sportsbook odds (keep existing logic)
         for book, odds in odds_data.items():
-            if book not in self.weights:
+            if book not in self.weights or boosted[book] <= 0:
                 continue
             
             try:
                 devigged = self.devig_multiplicative(odds)
-                weight = self.weights[book]
+                weight = boosted[book]
                 
                 market_probs.append({
                     'prob': devigged[0],
@@ -233,6 +240,7 @@ class SharpEdge:
                 book_contributions[book] = {
                     'probability': devigged[0],
                     'weight': weight,
+                    'liquidity_multiplier': weight / self.weights[book] if self.weights[book] else 1.0,
                     'original_odds': odds,
                     'devigged_odds': [1/devigged[0], 1/devigged[1]],
                     'book_type': self._classify_book_type(book)

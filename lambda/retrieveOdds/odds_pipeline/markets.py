@@ -34,14 +34,14 @@ def iter_quotes(league, game):
         "commence_time": game["commence_time"],
     }
 
-    def make(category, market, book, side, selection, price, line=None, player=None):
+    def make(category, market, book, side, selection, price, line=None, player=None, liquidity=None):
         odds = number(price)
         if not book or odds is None or odds <= 1:
             return None
         return {
             **common, "category": category, "market": market, "book": book,
             "side": side, "selection": selection, "odds": odds,
-            "line": line, "player": player,
+            "line": line, "player": player, "liquidity": number(liquidity),
         }
 
     for category, data in game.get("markets", {}).items():
@@ -61,7 +61,8 @@ def iter_quotes(league, game):
                             continue
                         sides.append((side, game[f"{side}_team"], f"{side}_odds", line))
                 for side, selection, price_key, line in sides:
-                    quote = make(category, category, book, side, selection, prices.get(price_key), line)
+                    quote = make(category, category, book, side, selection, prices.get(price_key), line,
+                                 liquidity=prices.get(price_key.replace("_odds", "_liquidity")))
                     if quote is not None:
                         yield quote
         elif category == "props":
@@ -73,7 +74,8 @@ def iter_quotes(league, game):
                             continue
                         for book, prices in books.items():
                             for side in ("over", "under"):
-                                quote = make("props", market, book, side, side.title(), prices.get(f"{side}_odds"), line, player)
+                                quote = make("props", market, book, side, side.title(), prices.get(f"{side}_odds"), line, player,
+                                             liquidity=prices.get(f"{side}_liquidity"))
                                 if quote is not None:
                                     yield quote
 

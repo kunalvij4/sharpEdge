@@ -4,6 +4,8 @@ import statistics
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 
+from .liquidity import apply_liquidity_boost
+
 class PlayerPropsModel:
     def __init__(self, main_line_weights: Dict[str, float] = None, min_books: int = 3):
         """
@@ -146,7 +148,7 @@ class PlayerPropsModel:
         return sum(weighted_lines) / total_weight
     
     def analyze_over_under_prop(self, prop_data: Dict[str, Dict], player_name: str, 
-                               prop_type: str) -> Dict:
+                               prop_type: str, liquidity: Optional[Dict] = None) -> Dict:
         """
         Analyze an over/under player prop market using specialized prop weights.
         
@@ -154,6 +156,8 @@ class PlayerPropsModel:
         - prop_data: {book_name: {"over_odds": 1.91, "under_odds": 1.91, "line": 250.5}}
         - player_name: Name of the player
         - prop_type: Type of prop (e.g., "passing_yards", "points")
+        - liquidity: optional {book: (over_liquidity, under_liquidity)}; deep
+          NoVig/ProphetX markets get extra weight (see liquidity.py)
         
         Returns:
         - Dict with fair odds analysis
@@ -163,6 +167,10 @@ class PlayerPropsModel:
         
         self._validate_tier_books(list(prop_data.keys()))
         dynamic_weights = self._get_dynamic_weights(list(prop_data.keys()))
+        if dynamic_weights and liquidity:
+            boosted = apply_liquidity_boost(dynamic_weights, liquidity)
+            boosted_total = sum(boosted.values())
+            dynamic_weights = {book: weight / boosted_total for book, weight in boosted.items()}
         
         if not dynamic_weights:
             raise ValueError("No valid weighted books available for prop analysis")

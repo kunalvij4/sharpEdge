@@ -32,17 +32,23 @@ def _fair_probability(category, quotes, sides):
         book: (prices[sides[0]]["odds"], prices[sides[1]]["odds"])
         for book, prices in by_book.items() if all(side in prices for side in sides)
     }
+    liquidity = {
+        book: tuple(prices[side].get("liquidity") for side in sides)
+        for book, prices in by_book.items() if book in pairs
+    }
     if category == "props":
         model = PlayerPropsModel(min_books=2)
         data = {
             book: {"over_odds": odds[0], "under_odds": odds[1], "line": quotes[0]["line"]}
             for book, odds in pairs.items() if min(odds) > 1.01
         }
-        analysis = model.analyze_over_under_prop(data, quotes[0]["player"], quotes[0]["market"].removeprefix("player_"))
+        analysis = model.analyze_over_under_prop(
+            data, quotes[0]["player"], quotes[0]["market"].removeprefix("player_"), liquidity=liquidity,
+        )
         return analysis["fair_over_prob"], model
     weights = NFLWeightingEngine().get_nfl_weights(category, list(pairs))
     model = SharpEdge(weights, exchange_weights={})
-    return model.get_fair_odds_and_ev(pairs)["fair_prob"], model
+    return model.get_fair_odds_and_ev(pairs, liquidity=liquidity)["fair_prob"], model
 
 
 def _base(quote):
