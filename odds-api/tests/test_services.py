@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import replace
 from datetime import timedelta
 from unittest.mock import AsyncMock
@@ -26,6 +27,21 @@ async def test_collection_outage_preserves_cache_and_logs_no_secret(repo, board,
     await CollectionService(provider, repo, clock).collect("nba_basketball", "moneyline")
     assert len(repo.quotes("nba_basketball")) == 2
     assert "should-never-be-logged" not in caplog.text
+
+
+async def test_cancelled_collection_is_logged_as_cancelled_and_preserves_cache(repo, board, clock, caplog):
+    import logging
+
+    repo.save(board())
+    provider = AsyncMock()
+    provider.fetch.side_effect = asyncio.CancelledError
+    caplog.set_level(logging.INFO)
+    with pytest.raises(asyncio.CancelledError):
+        await CollectionService(provider, repo, clock).collect("nba_basketball", "props")
+    record = next(record for record in caplog.records if record.message == "collection")
+    assert record.outcome == "cancelled"
+    assert record.error_type == "CancelledError"
+    assert len(repo.quotes("nba_basketball")) == 2
 
 
 async def test_collection_logs_safe_provider_context(repo, clock, caplog):

@@ -1,9 +1,17 @@
+import asyncio
+import threading
+from unittest.mock import AsyncMock
+
+import fakeredis
 import httpx
 import pytest
 
 from odds_api.infrastructure.config import Settings
+from odds_api.infrastructure.normalization import Normalizer
 from odds_api.infrastructure.provider import ProviderError, UnabatedClient, retry_after
 from odds_api.infrastructure.rate_limit import RateLimiter
+from odds_api.infrastructure.redis_repository import RedisRepository
+from odds_api.infrastructure.storage import collector_lease
 
 
 def client_for(clock, handler, **kwargs):
@@ -16,6 +24,58 @@ def client_for(clock, handler, **kwargs):
     )
     http = httpx.AsyncClient(base_url="https://example.test", transport=httpx.MockTransport(handler))
     return UnabatedClient(settings, clock, RateLimiter(clock, 0.1, 5), http=http)
+
+
+@pytest.mark.parametrize("stage", ["decode", "normalize", "catalog"])
+async def test_slow_provider_processing_allows_lease_renewal(raw, clock, monkeypatch, stage):
+    started, renewed = threading.Event(), threading.Event()
+
+    def slow(function):
+        def run(*args, **kwargs):
+            started.set()
+            assert renewed.wait(2), "Provider processing blocked the lease heartbeat"
+            return function(*args, **kwargs)
+
+        return run
+
+    response = httpx.Response(200, json=raw["props"])
+    if stage == "decode":
+        monkeypatch.setattr(response, "json", slow(response.json))
+    else:
+        monkeypatch.setattr(Normalizer, "parse", slow(Normalizer.parse))
+    client = client_for(clock, lambda _: response)
+    metadata = {
+        "/league": raw["leagues"],
+        "/bettype": raw["bets"],
+        "/market-type": [{"id": 500, "name": "props"}],
+        "/period-type/nba": raw["periods"],
+        "/market/nba/props/sources": raw["sources"],
+        "/team/nba": raw["teams"],
+        "/player/nba": raw["people"],
+        "/event/nba/upcoming": raw["events"],
+    }
+    client.metadata = AsyncMock(side_effect=lambda path, ttl: metadata[path])
+    repository = RedisRepository(
+        "", client.settings.leagues, clock=clock, client=fakeredis.FakeRedis(decode_responses=True)
+    )
+    try:
+        with collector_lease(repository) as lease:
+
+            async def heartbeat():
+                while not started.is_set():
+                    await asyncio.sleep(0)
+                lease.ping()
+                assert lease.lock.owned()
+                renewed.set()
+
+            fetch = client.fetch_catalog if stage == "catalog" else lambda sport: client.fetch(sport, "props")
+            board, _ = await asyncio.gather(fetch("nba_basketball"), heartbeat())
+            assert board.events
+            if stage != "catalog":
+                assert board.quotes
+    finally:
+        renewed.set()
+        await client.close()
 
 
 @pytest.mark.parametrize(

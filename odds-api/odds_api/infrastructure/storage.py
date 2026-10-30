@@ -1,3 +1,5 @@
+from redis.exceptions import LockNotOwnedError
+
 from odds_api.infrastructure.repository import SqlRepository
 
 
@@ -41,5 +43,11 @@ class RedisLease:
     def ping(self):
         self.lock.extend(120, replace_ttl=True)
 
-    def __exit__(self, *_):
-        self.lock.release()
+    def __exit__(self, exc_type, *_):
+        try:
+            self.lock.release()
+        except LockNotOwnedError:
+            # Expiry or a new owner must not hide the error that stopped collection.
+            # Never reacquire here: the old collector must exit on ownership loss.
+            if exc_type is None:
+                raise

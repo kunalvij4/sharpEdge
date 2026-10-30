@@ -159,6 +159,14 @@ def create_app(settings=None, repository=None, clock=None):
         response.headers["X-Odds-PropLine-TTL"] = str(settings.propline_collected_ttl)
         response.headers["Cache-Control"] = "no-store"
 
+    def odds_payload(payload, response, service):
+        if service.prepared_responses:
+            # Prepared JSON already has the public shape and wire types. Avoid
+            # constructing/validating thousands of Pydantic response objects.
+            headers = {key: value for key, value in response.headers.items() if key != "content-length"}
+            return JSONResponse(content=payload, headers=headers)
+        return payload
+
     @app.get(
         "/health/live", response_model=HealthResponse, tags=["Health"], summary="Check HTTP process liveness"
     )
@@ -256,7 +264,7 @@ def create_app(settings=None, repository=None, clock=None):
     )
     def odds(sport: str, response: Response, options=Depends(filters), service=Depends(queries)):
         freshness(response)
-        return service.moneylines(sport, **options)
+        return odds_payload(service.moneylines(sport, **options), response, service)
 
     @app.get(
         "/v1/events/{event_id}/odds",
@@ -274,7 +282,7 @@ def create_app(settings=None, repository=None, clock=None):
         payload = service.event_odds(event_id, **options)
         if "freshness" in payload:
             response.headers["X-Odds-Data-Status"] = payload["freshness"]["status"]
-        return payload
+        return odds_payload(payload, response, service)
 
     @app.get(
         "/v1/events/{event_id}/props",
@@ -296,6 +304,6 @@ def create_app(settings=None, repository=None, clock=None):
         freshness(response)
         payload = service.event_props(event_id, **options)
         response.headers["X-Odds-Data-Status"] = payload["freshness"]["status"]
-        return payload
+        return odds_payload(payload, response, service)
 
     return app

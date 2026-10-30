@@ -6,6 +6,7 @@ import fakeredis
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from redis.exceptions import LockNotOwnedError
 
 from odds_api.collector import CombinedCollection
 from odds_api.domain.models import Sportsbook
@@ -123,6 +124,32 @@ def test_redis_collector_lease_excludes_second_owner(clock):
         pass
 
 
+def test_redis_lease_cleanup_preserves_original_failure_and_new_owner(clock):
+    repository = RedisRepository(
+        "", DEFAULT_LEAGUES, clock=clock, client=fakeredis.FakeRedis(decode_responses=True)
+    )
+    successor = collector_lease(repository)
+    try:
+        with pytest.raises(LockNotOwnedError, match="extend"):
+            with collector_lease(repository) as lease:
+                # Model expiry followed by another collector taking ownership.
+                repository.client.delete(lease.lock.name)
+                successor.__enter__()
+                lease.ping()
+        assert successor.lock.owned()
+    finally:
+        successor.__exit__(None, None, None)
+
+
+def test_redis_lease_loss_on_clean_exit_is_still_an_error(clock):
+    repository = RedisRepository(
+        "", DEFAULT_LEAGUES, clock=clock, client=fakeredis.FakeRedis(decode_responses=True)
+    )
+    with pytest.raises(LockNotOwnedError):
+        with collector_lease(repository) as lease:
+            repository.client.delete(lease.lock.name)
+
+
 @pytest.mark.parametrize("refresh", ["complete", "partial", "empty"])
 def test_redis_unabated_refresh_preserves_propline_bets(board, clock, refresh):
     repository = RedisRepository(
@@ -206,7 +233,9 @@ def test_compaction_cannot_overwrite_a_concurrent_update_or_resurrect_expiry(boa
     key = repository.key("event:" + source.events[0].id)
     document = decode_document(repository.client.get(key))
     repository.client.set(key, encode(document), keepttl=True)
-    next(iter(document["quotes"].values()))["quote"]["price"] = 155
+    outcome = document["bookmakers"][0]["markets"][0]["outcomes"][0]
+    outcome["price"] = 2.55
+    outcome["_storage"]["price"] = 155
     updated = encode(document)
     original_eval = repository.client.eval
 

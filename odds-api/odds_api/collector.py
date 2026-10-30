@@ -1,6 +1,7 @@
 """One owner collects PropLine at minute 0 and Unabated at minute 4, repeating every 8."""
 
 import asyncio
+import logging
 import signal
 from pathlib import Path
 
@@ -17,6 +18,8 @@ from odds_api.infrastructure.provider import UnabatedClient
 from odds_api.infrastructure.rate_limit import RateLimiter
 from odds_api.infrastructure.storage import collector_lease, create_repository
 from odds_api.propline_collector import collect_cycle
+
+log = logging.getLogger(__name__)
 
 
 class CombinedCollection:
@@ -125,11 +128,15 @@ async def run():
             scheduler = FeedSchedule(clock, settings.collection_state_path)
 
             async def heartbeat():
-                while not stop.is_set():
-                    lease.ping()
-                    propline_lease.ping()
-                    repository.heartbeat(clock.now(), unabated.metrics)
-                    await asyncio.sleep(2)
+                try:
+                    while not stop.is_set():
+                        lease.ping()
+                        propline_lease.ping()
+                        repository.heartbeat(clock.now(), unabated.metrics)
+                        await asyncio.sleep(2)
+                except Exception as error:
+                    log.error("collector_heartbeat_failed", extra={"error_type": type(error).__name__})
+                    raise
 
             tasks = [
                 asyncio.create_task(scheduler.run(collection.collect, stop)),

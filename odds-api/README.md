@@ -37,7 +37,11 @@ they can be requested. Book/market availability varies by league. This filter
 applies to PropLine collection; existing stored quotes retain their original
 timestamps and expiry, and Unabated collection keeps its existing behavior.
 
-Redis holds event documents and quotes, read directly for API calls. Updates use
+Redis holds compressed event JSON in the API's bookmaker/market/outcome shape.
+The collector prepares prices and grouping; API reads apply filters and current
+freshness without reconstructing domain quotes. Existing flat records remain
+readable and upgrade on collection. See [Redis response storage](deploy/redis-response-storage.md)
+for the format, benchmark, migration, and rollback commands. Updates use
 bounded batches of optimistic transactions, preserve prior observations on partial/stale responses,
 and expire event documents at kickoff. Redis must support WATCH/MULTI/EXEC,
 Lua locks, and TLS for remote connections. Use a persistent, non-evicting Redis service if restart durability
@@ -308,6 +312,12 @@ Optional snapshot retention is disabled with `SNAPSHOT_RETENTION_DAYS=0`. When e
 API workers never start collection or synchronously contact Unabated. A dedicated collector owns a PostgreSQL session advisory lock. A second collector exits instead of creating a schedule. An ownership-connection failure terminates collection. In-flight jobs are cancelled and awaited before releasing ownership and closing the HTTP client/database. Do not share the same provider key across separate databases or unrelated deployments; their rate limiters would not coordinate.
 
 HTTP liveness, database readiness, collector heartbeat, and per-scope provider health are separate. A provider outage does not make healthy persisted reads depend on the provider. Old prices are served only while within the configured freshness policy. Structured collector logs include league, scope, run ID, duration, selection count, and outcome; provider exception messages, response bodies, headers, and signed URLs are not logged.
+
+Unabated response decoding and normalization run in worker threads so large
+props boards do not block ownership renewal. Heartbeat failures log their
+exception class; interrupted collections report `cancelled`. See the
+[October 30 collector incident analysis](deploy/collector-incident-2026-10-30.md)
+for the reproduced defect, validation, and remaining production checks.
 
 Configuration is documented in `.env.example`. To add a league, extend `LEAGUES_JSON` with its public key, title, and discovered route. Scheduling divides the cycle into two slots per league. Check that the configured interval and the provider's limits can accommodate the new number of requests; no orchestration or schema rewrite is needed.
 

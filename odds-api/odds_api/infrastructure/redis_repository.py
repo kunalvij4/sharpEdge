@@ -1,4 +1,4 @@
-"""Redis event documents, atomically refreshed and expired at kickoff."""
+"""Compressed response-shaped event JSON, atomically merged and expired at kickoff."""
 
 import base64
 import json
@@ -10,6 +10,7 @@ from itertools import batched
 
 from redis import Redis, WatchError
 
+from odds_api.application.prepared_odds import prepare_document, stored_event, stored_rows, time_value
 from odds_api.domain.models import Availability, League, Quote
 from odds_api.infrastructure.clock import SystemClock
 from odds_api.infrastructure.repository import SqlRepository
@@ -19,6 +20,12 @@ SHRINK_DOCUMENT = """#!lua flags=allow-oom
 local current = redis.call('GET', KEYS[1])
 if not current or current ~= ARGV[1] then return 0 end
 if #ARGV[2] >= #current or string.sub(ARGV[2], 1, 7) ~= 'zlib:1:' then return -1 end
+redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL')
+return 1
+"""
+REWRITE_DOCUMENT = """
+local current = redis.call('GET', KEYS[1])
+if not current or current ~= ARGV[1] then return 0 end
 redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL')
 return 1
 """
@@ -111,25 +118,40 @@ class RedisRepository:
                             if event.start <= now:
                                 documents.append(None)
                                 continue
-                            document = decode_document(old) if old else {"quotes": {}}
-                            document["event"] = {
+                            # Legacy flat records are upgraded in the same transaction.
+                            rows = dict(stored_rows(decode_document(old))) if old else {}
+                            event_data = {
                                 **asdict(event),
                                 "id": event.id,
                                 "sport_title": board.league.title,
                             }
                             for quote in grouped.get(event.id, []):
                                 selection_id = quote.selection_id
-                                previous = document["quotes"].get(selection_id)
+                                previous = rows.get(selection_id)
                                 if previous and not self._valid_replacement(
-                                    quote, asdict(decode_quote(previous["quote"])), now, board.provider
+                                    quote,
+                                    {
+                                        field: time_value(previous["quote"][field])
+                                        for field in ("collected_at", "source_updated_at")
+                                    },
+                                    now,
+                                    board.provider,
                                 ):
                                     continue
                                 book = books[quote.book_id]
-                                document["quotes"][selection_id] = {
+                                rows[selection_id] = {
                                     "quote": asdict(quote),
                                     "book_key": book.key,
                                     "book_title": book.title,
                                 }
+                            document = prepare_document(
+                                event_data,
+                                rows,
+                                now,
+                                self.collected_ttl,
+                                self.source_ttl,
+                                self.propline_collected_ttl,
+                            )
                             documents.append(compress_document(encode(document)))
                         pipe.multi()
                         for key, event, document in zip(keys, batch, documents):
@@ -166,12 +188,36 @@ class RedisRepository:
         return [
             doc
             for value in values
-            if value and (doc := decode_document(value))["event"]["league_key"] == sport
+            if value and stored_event(doc := decode_document(value))["league_key"] == sport
         ]
+
+    def response_documents(self, sport=None, *, event_id=None):
+        if event_id:
+            value = self.client.get(self.key("event:" + event_id))
+            documents = [decode_document(value)] if value else []
+        else:
+            documents = self._documents(sport)
+        result = []
+        for document in documents:
+            event = stored_event(document)
+            if event["league_key"] not in self.configured or (sport and event["league_key"] != sport):
+                continue
+            if "quotes" in document:
+                # Read old deployments immediately; the next collection persists v2.
+                document = prepare_document(
+                    event,
+                    dict(stored_rows(document)),
+                    self.clock.now(),
+                    self.collected_ttl,
+                    self.source_ttl,
+                    self.propline_collected_ttl,
+                )
+            result.append(document)
+        return result
 
     @staticmethod
     def _event(document):
-        event = document["event"]
+        event = stored_event(document)
         return {**event, "start": datetime.fromisoformat(event["start"])}
 
     def events(self, sport):
@@ -192,11 +238,20 @@ class RedisRepository:
             {**row, "quote": decode_quote(row["quote"])}
             for doc in self._documents(sport, event_id)
             if self._event(doc)["start"] > (now or self.clock.now())
-            for row in doc["quotes"].values()
+            for _, row in stored_rows(doc)
         ]
 
     def bookmakers(self):
-        return {row["book_key"] for sport in self.configured for row in self.quotes(sport)}
+        books = set()
+        for sport in self.configured:
+            for document in self._documents(sport):
+                if self._event(document)["start"] <= self.clock.now():
+                    continue
+                if "quotes" in document:
+                    books.update(row["book_key"] for row in document["quotes"].values())
+                else:
+                    books.update(book["key"] for book in document["bookmakers"])
+        return books
 
     def prune_started(self):
         return sum(
@@ -225,6 +280,50 @@ class RedisRepository:
                     counts["compressed_events"] += 1
                     counts["bytes_before"] += len(value.encode())
                     counts["bytes_after"] += len(packed)
+        return counts
+
+    def rewrite_event_documents(self, target_format, *, dry_run=True):
+        """Explicit forward/rollback migration; preserve TTL and concurrent writes."""
+        if target_format not in {"response", "legacy"}:
+            raise ValueError("Expected response or legacy format")
+        counts = {
+            "candidate_events": 0,
+            "rewritten_events": 0,
+            "raced_events": 0,
+            "bytes_before": 0,
+            "bytes_after": 0,
+            "dry_run": dry_run,
+        }
+        for keys in batched(self.client.scan_iter(match=self.key("event:*"), count=100), 16):
+            for key, value in zip(keys, self.client.mget(keys)):
+                if not value:
+                    continue
+                document = decode_document(value)
+                legacy = "quotes" in document
+                if legacy == (target_format == "legacy"):
+                    continue
+                event, rows = stored_event(document), dict(stored_rows(document))
+                rewritten = (
+                    {"event": event, "quotes": rows}
+                    if target_format == "legacy"
+                    else prepare_document(
+                        event,
+                        rows,
+                        self.clock.now(),
+                        self.collected_ttl,
+                        self.source_ttl,
+                        self.propline_collected_ttl,
+                    )
+                )
+                packed = compress_document(encode(rewritten))
+                counts["candidate_events"] += 1
+                counts["bytes_before"] += len(value.encode())
+                counts["bytes_after"] += len(packed.encode())
+                if not dry_run:
+                    if self.client.eval(REWRITE_DOCUMENT, 1, key, value, packed) == 1:
+                        counts["rewritten_events"] += 1
+                    else:
+                        counts["raced_events"] += 1
         return counts
 
     def status(self, now, collected_ttl, source_ttl, propline_collected_ttl=600):

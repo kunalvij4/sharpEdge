@@ -1,9 +1,11 @@
+import asyncio
 import logging
 from datetime import datetime
 from decimal import Decimal
 
 from odds_api.application.async_work import blocking_work
 from odds_api.application.ports import Clock, Provider, Repository
+from odds_api.application.prepared_odds import project_response, time_value, wire_time
 from odds_api.domain.models import Availability, decimal_odds
 
 log = logging.getLogger(__name__)
@@ -39,6 +41,10 @@ class CollectionService:
             count = len(board.quotes)
             diagnostics["warnings"] = list(board.warnings[:20])
             outcome = ("empty" if not count else "success") if board.complete else "partial"
+        except asyncio.CancelledError:
+            outcome = "cancelled"
+            diagnostics = {"error_type": "CancelledError"}
+            raise
         except Exception as error:
             # Exception messages can contain upstream secrets. Log a safe classification only.
             outcome = getattr(error, "code", "collection_error")
@@ -53,7 +59,7 @@ class CollectionService:
                     )
                 },
             }
-            self.repository.failure(sport, kind, outcome)
+            await blocking_work(self.repository.failure, sport, kind, outcome)
         finally:
             log.info(
                 "collection",
@@ -89,6 +95,7 @@ class OddsQueryService:
         self.bet365_collected_ttl = bet365_collected_ttl
         self.propline_collected_ttl = propline_collected_ttl
         self.bet365_enabled = bet365_enabled
+        self.prepared_responses = callable(getattr(repository, "response_documents", None))
 
     def sports(self) -> list[dict]:
         return [
@@ -182,10 +189,70 @@ class OddsQueryService:
         return event["league_key"]
 
     def event_props(self, event_id: str, **options):
+        if self.prepared_responses:
+            options.setdefault("markets", "all_props")
+            return self._prepared_odds(None, event_id=event_id, props_only=True, **options)
         return self.props(self.event_sport(event_id), event_id, **options)
 
     def event_odds(self, event_id: str, **options):
+        if self.prepared_responses:
+            return self._prepared_odds(None, event_id=event_id, **options)
         return self.odds(self.event_sport(event_id), event_id=event_id, **options)
+
+    def _prepared_odds(
+        self,
+        sport,
+        *,
+        event_id=None,
+        markets="h2h",
+        bookmakers=None,
+        odds_format="decimal",
+        start=None,
+        end=None,
+        fresh_only=False,
+        props_only=False,
+    ):
+        documents = self.repository.response_documents(sport, event_id=event_id)
+        now = self.clock.now()
+        if event_id:
+            if not documents or time_value(documents[0]["commence_time"]) <= now:
+                raise QueryError("Unknown or commenced event", 404)
+            sport = documents[0]["sport_key"]
+        market_set, book_set = self.validate(sport, markets, bookmakers, start, end)
+        if props_only and any(is_game_market(market) for market in market_set):
+            raise QueryError("The props endpoint accepts only player prop markets")
+        if odds_format not in {"american", "decimal"}:
+            raise QueryError("Invalid oddsFormat")
+        prop_query = bool(market_set and any(not is_game_market(market) for market in market_set))
+        result = []
+        for document in sorted(documents, key=lambda d: (time_value(d["commence_time"]), d["id"])):
+            if time_value(document["commence_time"]) <= self.clock.now():
+                continue
+            payload = project_response(
+                document,
+                now=now,
+                markets=market_set,
+                bookmakers=book_set,
+                odds_format=odds_format,
+                start=start,
+                end=end,
+                fresh_only=fresh_only,
+                collected_ttl=self.collected_ttl,
+                source_ttl=self.source_ttl,
+                props_cache_ttl=self.props_cache_ttl,
+                propline_collected_ttl=self.propline_collected_ttl,
+            )
+            if time_value(document["commence_time"]) <= self.clock.now():
+                continue
+            if prop_query:
+                payload["freshness"] = {**self.freshness(payload, now), "observed_at": wire_time(now)}
+            if event_id or payload["bookmakers"]:
+                result.append(payload)
+        if event_id:
+            if not result or time_value(result[0]["commence_time"]) <= self.clock.now():
+                raise QueryError("Unknown or commenced event", 404)
+            return result[0]
+        return result
 
     def odds(
         self,
@@ -199,6 +266,17 @@ class OddsQueryService:
         end=None,
         fresh_only=False,
     ) -> list[dict] | dict:
+        if self.prepared_responses:
+            return self._prepared_odds(
+                sport,
+                event_id=event_id,
+                markets=markets,
+                bookmakers=bookmakers,
+                odds_format=odds_format,
+                start=start,
+                end=end,
+                fresh_only=fresh_only,
+            )
         market_set, book_set = self.validate(sport, markets, bookmakers, start, end)
         prop_query = bool(market_set and any(not is_game_market(market) for market in market_set))
         if odds_format not in {"american", "decimal"}:

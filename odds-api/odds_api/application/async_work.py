@@ -1,4 +1,4 @@
-"""Keep heartbeats responsive while finishing SQL work before releasing ownership."""
+"""Keep heartbeats responsive and finish worker threads before releasing ownership."""
 
 import asyncio
 

@@ -5,6 +5,7 @@ from email.utils import parsedate_to_datetime
 
 import httpx
 
+from odds_api.application.async_work import blocking_work
 from odds_api.domain.models import League
 from odds_api.infrastructure.normalization import Normalizer, values
 
@@ -98,7 +99,8 @@ class UnabatedClient:
                 elif status >= 300:
                     raise ProviderError("unexpected_http_status", http_status=status)
                 else:
-                    body = response.json()
+                    # Large props responses must not delay collector lease renewal.
+                    body = await blocking_work(response.json)
                     if not isinstance(body, dict) or body.get("success") is not True:
                         self.metrics["operation_failures"] += 1
                         raise ProviderError(
@@ -148,8 +150,18 @@ class UnabatedClient:
         league = League(league_key, config["title"], route, str(found[0]["id"]))
         events = await self.metadata("/event/" + route + "/upcoming", self.settings.scope_metadata_ttl)
         teams = await self.metadata("/team/" + route, self.settings.metadata_ttl)
-        return self.normalizer.parse(
-            league, "moneyline", {"odds": {}}, [], [], [], events, {}, teams, self.clock.now()
+        return await blocking_work(
+            self.normalizer.parse,
+            league,
+            "moneyline",
+            {"odds": {}},
+            [],
+            [],
+            [],
+            events,
+            {},
+            teams,
+            self.clock.now(),
         )
 
     async def fetch(self, league_key, kind):
@@ -209,7 +221,8 @@ class UnabatedClient:
             if type_ids & {str(i) for i in (s.get("disabledMarketTypeIds") or [])}
         }
         try:
-            board = normalizer.parse(
+            board = await blocking_work(
+                normalizer.parse,
                 league,
                 kind,
                 data,
