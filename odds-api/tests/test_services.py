@@ -199,3 +199,27 @@ def test_legacy_cache_setting_does_not_remove_last_known_odds(repo, board, clock
     clock.value = 91
     assert service.props("nba_basketball", snapshot.events[0].id)["bookmakers"]
     assert service.props("nba_basketball", snapshot.events[0].id, fresh_only=True)["bookmakers"] == []
+
+
+def test_disabled_direct_collector_cannot_hide_api_odds_for_same_sportsbook(repo, board, clock):
+    from odds_api.domain.models import Sportsbook
+
+    source = board()
+    api_book = Sportsbook("91", "Bet365")
+    direct_book = Sportsbook("365", "Bet365", "bet365")
+    api_quotes = tuple(replace(q, book_id=api_book.id) for q in source.quotes)
+    repo.save(replace(source, books=(api_book,), quotes=api_quotes))
+    clock.value = 10
+    direct_quotes = tuple(
+        replace(q, book_id=direct_book.id, price=175, collected_at=clock.now(), source_updated_at=clock.now())
+        for q in source.quotes
+    )
+    repo.save(
+        replace(
+            source, provider="bet365", books=(direct_book,), quotes=direct_quotes, covered_markets=("h2h",)
+        )
+    )
+    service = OddsQueryService(repo, clock, 90, 3600, {"h2h"}, bet365_enabled=False)
+    books = service.odds("nba_basketball", odds_format="american")[0]["bookmakers"]
+    assert [b["key"] for b in books] == ["bet365"]
+    assert {o["price"] for m in books[0]["markets"] for o in m["outcomes"]} == {q.price for q in api_quotes}

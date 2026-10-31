@@ -304,7 +304,11 @@ class OddsQueryService:
             )
             and (q.expires_at is None or q.expires_at > now)
         }
-        candidates = [{**row, "quote": vars(row["quote"]), "original": row} for row in rows]
+        candidates = [
+            {**row, "quote": vars(row["quote"]), "original": row}
+            for row in rows
+            if self.bet365_enabled or row["book_key"] != "bet365"
+        ]
         rows = [
             r["original"]
             for r in select_public_quotes(
