@@ -272,8 +272,8 @@ def test_legacy_records_are_readable_and_upgrade_losslessly_on_partial_collectio
     assert saved == expected
 
 
-@pytest.mark.parametrize("age,expected", [(0, True), (601, False)])
-def test_disabling_cached_props_hides_expired_selections(prepared, clock, age, expected):
+@pytest.mark.parametrize("age,expected", [(0, True), (601, True)])
+def test_expired_selections_remain_visible_without_legacy_prop_cache(prepared, clock, age, expected):
     redis, _, settings, event_id = prepared
     settings.props_cache_ttl = 0
     clock.value = age

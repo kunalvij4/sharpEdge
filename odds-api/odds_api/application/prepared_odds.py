@@ -3,6 +3,7 @@
 from datetime import datetime
 from decimal import Decimal
 
+from odds_api.application.quote_merge import select_public_quotes
 from odds_api.domain.models import Availability, decimal_odds
 from odds_api.domain.sportsbooks import sportsbook_key
 
@@ -174,82 +175,77 @@ def project_response(
         or (end and commence > end)
     ):
         return payload
-    # Storage stays provider-scoped. Merge only the public hierarchy so a later
-    # collection cannot reinterpret another feed's quote as its own.
-    public_books = {}
+    candidates = []
     for stored_book in document["bookmakers"]:
-        public_key = sportsbook_key(stored_book["key"], stored_book["title"])
-        if bookmakers and public_key not in bookmakers:
-            continue
-        book = {"key": public_key, "title": stored_book["title"], "last_update": None, "markets": []}
-        ttl = propline_collected_ttl if stored_book["key"].startswith("propline_") else collected_ttl
-        for stored_market in stored_book["markets"]:
-            if markets and stored_market["key"] not in markets:
-                continue
-            market = {"key": stored_market["key"], "last_update": None, "outcomes": []}
-            seen = set()
-            for stored_outcome in stored_market["outcomes"]:
-                quote = stored_outcome["_storage"]
-                if quote["state"] != Availability.AVAILABLE:
-                    continue
-                times = stored_outcome.get("freshness", quote)
-                age, source_valid, fresh = quote_freshness(times, now, ttl, source_ttl)
-                cached = (
-                    not fresh_only
-                    and quote["player_id"] is not None
-                    and source_valid
-                    and props_cache_ttl > 0
-                    and age <= props_cache_ttl
-                )
-                if not fresh and not cached:
-                    continue
-                outcome = {key: value for key, value in stored_outcome.items() if key != "_storage"}
-                if odds_format == "american":
-                    outcome["price"] = quote["price"]
-                if "freshness" in outcome:
-                    outcome["freshness"] = {
-                        **outcome["freshness"],
-                        "status": "fresh" if fresh else "stale",
-                        "actionable": fresh,
-                        "age_seconds": round(age, 3),
+        for market in stored_book["markets"]:
+            for outcome in market["outcomes"]:
+                metadata = outcome["_storage"]
+                times = outcome.get("freshness", metadata)
+                candidates.append(
+                    {
+                        "book_key": stored_book["key"],
+                        "book_title": stored_book["title"],
+                        "outcome": outcome,
+                        "quote": {
+                            **metadata,
+                            **{k: times[k] for k in QUOTE_TIMES},
+                            "event_id": document["id"],
+                            "market": market["key"],
+                            "name": outcome["name"],
+                            "description": outcome.get("description", metadata.get("description")),
+                        },
                     }
-                signature = (
-                    outcome["name"],
-                    outcome["price"],
-                    outcome.get("point"),
-                    outcome.get("description"),
-                    tuple(outcome.get("freshness", {}).items()),
                 )
-                if signature not in seen:
-                    seen.add(signature)
-                    market["outcomes"].append(outcome)
-                source = time_value(times["source_updated_at"])
-                if source is not None:
-                    for item in (book, market):
-                        item["last_update"] = max(filter(None, (item["last_update"], source)))
-            if market["outcomes"]:
-                market["last_update"] = wire_time(market["last_update"])
-                book["markets"].append(market)
-        if book["markets"]:
-            book["last_update"] = wire_time(book["last_update"])
-            existing = public_books.setdefault(public_key, book)
-            if existing is not book:
-                updates = [time_value(b["last_update"]) for b in (existing, book) if b["last_update"]]
-                existing["last_update"] = wire_time(max(updates)) if updates else None
-                by_market = {m["key"]: m for m in existing["markets"]}
-                for market in book["markets"]:
-                    prior = by_market.get(market["key"])
-                    if prior is None:
-                        existing["markets"].append(market)
-                        continue
-                    updates = [time_value(m["last_update"]) for m in (prior, market) if m["last_update"]]
-                    prior["last_update"] = wire_time(max(updates)) if updates else None
-                    for outcome in market["outcomes"]:
-                        if outcome not in prior["outcomes"]:
-                            prior["outcomes"].append(outcome)
-    payload["bookmakers"] = [public_books[key] for key in sorted(public_books)]
-    for book in payload["bookmakers"]:
-        book["markets"].sort(key=lambda m: m["key"])
+    books = {}
+    for row in select_public_quotes(candidates, now, collected_ttl, source_ttl, propline_collected_ttl):
+        quote = row["quote"]
+        public_key = sportsbook_key(row["book_key"], row["book_title"])
+        if (bookmakers and public_key not in bookmakers) or (markets and quote["market"] not in markets):
+            continue
+        ttl = propline_collected_ttl if row["book_key"].startswith("propline_") else collected_ttl
+        age, _, fresh = quote_freshness(quote, now, ttl, source_ttl)
+        if fresh_only and not fresh:
+            continue
+        book = books.setdefault(
+            public_key,
+            {
+                "key": public_key,
+                "title": row["book_title"],
+                "last_update": None,
+                "markets": {},
+            },
+        )
+        market = book["markets"].setdefault(
+            quote["market"],
+            {
+                "key": quote["market"],
+                "last_update": None,
+                "outcomes": [],
+            },
+        )
+        outcome = {key: value for key, value in row["outcome"].items() if key != "_storage"}
+        if odds_format == "american":
+            outcome["price"] = quote["price"]
+        if quote["player_id"] is not None or not fresh:
+            outcome["freshness"] = {
+                "status": "fresh" if fresh else "stale",
+                "actionable": fresh,
+                "collected_at": wire_time(quote["collected_at"]),
+                "source_updated_at": wire_time(quote["source_updated_at"]),
+                "expires_at": wire_time(quote["expires_at"]),
+                "age_seconds": round(age, 3),
+            }
+        market["outcomes"].append(outcome)
+        source = time_value(quote["source_updated_at"])
+        if source is not None:
+            for item in (book, market):
+                item["last_update"] = max(filter(None, (item["last_update"], source)))
+    for key in sorted(books):
+        book = books[key]
+        book["last_update"] = wire_time(book["last_update"])
+        book["markets"] = [book["markets"][key] for key in sorted(book["markets"])]
         for market in book["markets"]:
+            market["last_update"] = wire_time(market["last_update"])
             market["outcomes"].sort(key=lambda o: (o.get("description", ""), o.get("point", 0), o["name"]))
+        payload["bookmakers"].append(book)
     return payload

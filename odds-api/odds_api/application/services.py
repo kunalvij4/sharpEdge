@@ -6,6 +6,7 @@ from decimal import Decimal
 from odds_api.application.async_work import blocking_work
 from odds_api.application.ports import Clock, Provider, Repository
 from odds_api.application.prepared_odds import project_response, time_value, wire_time
+from odds_api.application.quote_merge import select_public_quotes
 from odds_api.domain.models import Availability, decimal_odds
 from odds_api.domain.sportsbooks import sportsbook_key
 
@@ -303,6 +304,13 @@ class OddsQueryService:
             )
             and (q.expires_at is None or q.expires_at > now)
         }
+        candidates = [{**row, "quote": vars(row["quote"]), "original": row} for row in rows]
+        rows = [
+            r["original"]
+            for r in select_public_quotes(
+                candidates, now, self.collected_ttl, self.source_ttl, self.propline_collected_ttl
+            )
+        ]
         for row in rows:
             if row["book_key"] == "bet365" and not self.bet365_enabled:
                 continue
@@ -338,20 +346,20 @@ class OddsQueryService:
                 self.source_ttl,
             )
             age = max(0, (now - q.collected_at).total_seconds())
-            cached_prop = (
-                not fresh_only
-                and q.player_id is not None
-                and q.state == Availability.AVAILABLE
-                and availability == Availability.STALE
-                and age <= self.props_cache_ttl
-                and self.props_cache_ttl > 0
-                and (
-                    q.source_updated_at is None
-                    or (now - q.source_updated_at).total_seconds() <= self.source_ttl
+            retained = availability == Availability.STALE and q.state == Availability.AVAILABLE
+            if row["book_key"] == "bet365":
+                retained = (
+                    retained
+                    and not fresh_only
+                    and q.player_id is not None
+                    and 0 < self.props_cache_ttl >= age
+                    and (
+                        q.source_updated_at is None
+                        or (now - q.source_updated_at).total_seconds() <= self.source_ttl
+                    )
+                    and (q.expires_at is None or now < q.expires_at)
                 )
-                and (q.expires_at is None or now < q.expires_at)
-            )
-            if availability != Availability.AVAILABLE and not cached_prop:
+            if availability != Availability.AVAILABLE and (fresh_only or not retained):
                 continue
             book = grouped.setdefault(q.event_id, {}).setdefault(
                 public_key,
@@ -374,10 +382,10 @@ class OddsQueryService:
                 outcome["point"] = float(q.point)
             if q.description:
                 outcome["description"] = q.description
-            if q.player_id is not None:
+            if q.player_id is not None or retained:
                 outcome["freshness"] = {
-                    "status": "stale" if cached_prop else "fresh",
-                    "actionable": not cached_prop,
+                    "status": "stale" if retained else "fresh",
+                    "actionable": not retained,
                     "collected_at": q.collected_at,
                     "source_updated_at": q.source_updated_at,
                     "expires_at": q.expires_at,
@@ -428,5 +436,5 @@ class OddsQueryService:
             else "unavailable",
             "fresh_outcomes": fresh,
             "stale_outcomes": stale,
-            "max_cache_age_seconds": self.props_cache_ttl,
+            "max_cache_age_seconds": None,
         }

@@ -128,12 +128,14 @@ def test_unknown_sport_and_invalid_time_bounds(repo, clock):
         service.events("nba_basketball", start=clock.now(), end=clock.now() - timedelta(days=1))
 
 
-def test_stale_and_terminal_event_quotes_are_excluded(repo, board, clock):
+def test_stale_quotes_are_retained_and_terminal_event_quotes_are_excluded(repo, board, clock):
     snapshot = board()
     repo.save(snapshot)
     service = query(repo, clock)
     clock.value = 91
-    assert service.odds("nba_basketball") == []
+    retained = service.odds("nba_basketball")
+    assert retained[0]["bookmakers"][0]["markets"][0]["outcomes"][0]["freshness"]["status"] == "stale"
+    assert service.odds("nba_basketball", fresh_only=True) == []
     clock.value = 0
     repo.save(replace(snapshot, events=(replace(snapshot.events[0], status="final"),)))
     assert service.events("nba_basketball") == []
@@ -147,7 +149,7 @@ def test_list_endpoint_limits_props_to_event_endpoint(repo, clock):
 
 
 @pytest.mark.parametrize("blocker", ["source_age", "expiry", "suspended", "removed", "final"])
-def test_cached_props_never_override_source_expiry_or_unavailable_states(repo, board, clock, blocker):
+def test_aging_marks_props_stale_but_unavailable_states_stay_hidden(repo, board, clock, blocker):
     snapshot = board("props")
     quotes = []
     for quote in snapshot.quotes:
@@ -163,11 +165,19 @@ def test_cached_props_never_override_source_expiry_or_unavailable_states(repo, b
     repo.save(replace(snapshot, quotes=tuple(quotes), events=events))
     clock.value = 91
     payload = query(repo, clock).props("nba_basketball", snapshot.events[0].id)
-    assert payload["bookmakers"] == []
-    assert payload["freshness"]["status"] == "unavailable"
+    if blocker in {"source_age", "expiry"}:
+        assert payload["bookmakers"]
+        assert payload["freshness"]["status"] == "stale"
+        assert (
+            query(repo, clock).props("nba_basketball", snapshot.events[0].id, fresh_only=True)["bookmakers"]
+            == []
+        )
+    else:
+        assert payload["bookmakers"] == []
+        assert payload["freshness"]["status"] == "unavailable"
 
 
-def test_cached_props_are_bounded_without_mutating_stored_timestamps(repo, board, clock):
+def test_retained_props_keep_original_timestamps_after_legacy_cache_limit(repo, board, clock):
     snapshot = board("props")
     snapshot = replace(snapshot, quotes=tuple(replace(q, source_updated_at=None) for q in snapshot.quotes))
     repo.save(snapshot)
@@ -178,12 +188,14 @@ def test_cached_props_are_bounded_without_mutating_stored_timestamps(repo, board
     assert cached["freshness"]["stale_outcomes"] == 3
     assert all(r["quote"].collected_at == snapshot.collected_at for r in repo.quotes("nba_basketball"))
     clock.value += 0.001
-    assert service.props("nba_basketball", snapshot.events[0].id)["bookmakers"] == []
+    assert service.props("nba_basketball", snapshot.events[0].id)["bookmakers"]
+    assert service.props("nba_basketball", snapshot.events[0].id, fresh_only=True)["bookmakers"] == []
 
 
-def test_cached_props_can_be_disabled_by_configuration(repo, board, clock):
+def test_legacy_cache_setting_does_not_remove_last_known_odds(repo, board, clock):
     snapshot = board("props")
     repo.save(snapshot)
     service = OddsQueryService(repo, clock, 90, 3600, {"player_points"}, props_cache_ttl=0)
     clock.value = 91
-    assert service.props("nba_basketball", snapshot.events[0].id)["bookmakers"] == []
+    assert service.props("nba_basketball", snapshot.events[0].id)["bookmakers"]
+    assert service.props("nba_basketball", snapshot.events[0].id, fresh_only=True)["bookmakers"] == []

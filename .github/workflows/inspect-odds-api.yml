@@ -125,6 +125,7 @@ jobs:
           from datetime import timedelta
           from odds_api.application.prepared_odds import stored_event, stored_rows, time_value
           from odds_api.domain.sportsbooks import sportsbook_key
+          from odds_api.application.quote_merge import select_public_quotes
           from odds_api.infrastructure.redis_repository import decode_document
 
           seconds = int(os.environ.get("VERIFY_SECONDS", "0"))
@@ -134,6 +135,7 @@ jobs:
               previous, checked, updates = {}, 0, 0
               shared_api_checks, filter_checks, observed_providers = 0, 0, set()
               public_keys = set()
+              retained_propline_api_checks = 0
               deadline = time.monotonic() + seconds
               headers = {"X-API-Key": settings.api_keys.get_secret_value().split(",")[0].strip()}
 
@@ -191,10 +193,28 @@ jobs:
                           latest = max(time_value(r["quote"]["collected_at"]) for r in rows.values())
                           candidates.append((latest, eid))
                   for _, candidate in sorted(candidates, reverse=True):
-                      for suffix in ("odds?markets=h2h,spreads", "props"):
+                      chosen = select_public_quotes(
+                          list(dict(stored_rows(selected[candidate])).values()), datetime.now(UTC),
+                          settings.collected_ttl, settings.source_ttl, settings.propline_collected_ttl,
+                      )
+                      for suffix in ("odds?markets=h2h,spreads&oddsFormat=american", "props?oddsFormat=american"):
                           payload = get(f"/v1/events/{candidate}/{suffix}")
                           keys = [b["key"] for b in payload["bookmakers"]]
                           public_keys.update(keys)
+                          visible = {
+                              (b["key"], m["key"], o["name"], o.get("point"), o.get("description"), o["price"])
+                              for b in payload["bookmakers"] for m in b["markets"] for o in m["outcomes"]
+                              if o.get("freshness", {}).get("status") == "stale"
+                          }
+                          for row in chosen:
+                              q = row["quote"]
+                              if row["book_key"].startswith("propline_"):
+                                  signature = (
+                                      sportsbook_key(row["book_key"], row["book_title"]), q["market"], q["name"],
+                                      float(q["point"]) if q["point"] is not None else None,
+                                      q["description"], q["price"],
+                                  )
+                                  retained_propline_api_checks += signature in visible
                           assert len(keys) == len(set(keys)), "Duplicate public sportsbook keys"
                           assert not any(k.startswith(("propline_", "unabated_")) for k in keys)
                           if "draftkings" in keys:
@@ -211,6 +231,7 @@ jobs:
                       "sample_events": len(previous), "retained_selection_checks": checked,
                       "unabated_quote_updates": updates, "shared_book_api_checks": shared_api_checks,
                       "draftkings_filter_checks": filter_checks,
+                      "retained_propline_api_quotes_verified": retained_propline_api_checks,
                       "providers": sorted(observed_providers), "public_book_keys": sorted(public_keys),
                   }}), flush=True)
                   if time.monotonic() >= deadline:
@@ -221,6 +242,7 @@ jobs:
                   assert checked and updates, "No Unabated quote updates observed; preservation is inconclusive"
               assert shared_api_checks, "No shared-book API sample observed"
               assert filter_checks, "No DraftKings filter sample observed"
+              assert retained_propline_api_checks, "No stale last-known PropLine odds verified in the API"
               repository.close()
               label = "live_preservation_verification" if seconds >= 480 else "live_api_verification"
               print(json.dumps({label: "passed"}), flush=True)

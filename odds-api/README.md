@@ -202,7 +202,7 @@ Both odds endpoints accept comma-separated `markets` (default `h2h`) and `bookma
 
 For every supported prop on a game, use `/v1/events/{event_id}/props?oddsFormat=american`. The equivalent event odds query is `?markets=all_props&oddsFormat=american`. The props route defaults to `markets=all_props` and accepts the same bookmaker, market, date, and format filters. To request one or several prop types, use e.g. `?markets=player_points,player_rebounds` for NBA or `?markets=player_pass_yds,player_receptions` for NFL. Game IDs come from the matching sport's `/events` endpoint. All-props means all supported normalized prop keys; unsupported settlement types still appear as collector warnings.
 
-Props can now include recently cached prices during an upstream outage. The default `PROPS_CACHE_TTL=3600` bounds their collection age to one hour; `SOURCE_TTL` and explicit source expiry remain enforced. Each prop outcome includes `freshness.status`, `actionable`, `collected_at`, `source_updated_at`, `expires_at`, and `age_seconds`. Stale cached prices have `actionable:false`. The response's `freshness` object summarizes fresh/stale counts; `X-Odds-Data-Status` repeats its status. These timestamps are never refreshed by reading the API or by a failed collection. Add `freshOnly=true` to either event route for fresh actionable prices only. Set `PROPS_CACHE_TTL=0` to disable cached props globally. Moneylines continue to use the strict collection freshness limit.
+API odds retain the last available price for each sportsbook selection until kickoff or event closure. A missing book, missing market, empty response, or slow provider never removes peers from the response. Quotes past collection/source freshness or explicit freshness expiry remain visible with `freshness.status="stale"` and `actionable:false`; game outcomes include freshness metadata when stale. Add `freshOnly=true` for fresh actionable prices only. `X-Odds-Retention: until-kickoff` describes retention, and `max_cache_age_seconds:null` indicates no age-based removal. `PROPS_CACHE_TTL` and `X-Odds-Props-Cache-TTL` apply only to the legacy direct Bet365 cache. Reading the API never refreshes stored timestamps. Matching selections from both API feeds share one public sportsbook key and return the fresher valid observation; other books, lines, players, periods, and sides stay intact.
 
 Responses use events → bookmakers → markets → outcomes. Player over/under outcomes have `name`, `price`, `point`, and player `description`. American odds are integers; decimal prices are rounded to four places. All serialized times are UTC.
 
@@ -289,8 +289,10 @@ provider. Replacements require a newer collection time, an available valid price
 non-expired freshness, and no regression or loss of a previously known source
 observation time. Retained rows keep their original timestamps and expiration;
 reading or refreshing another feed never makes them fresh again. Market, period,
-player, exact line, side, book, and provider identities remain distinct. Existing
-kickoff pruning and freshness rules still apply.
+player, exact line, side, and book determine the public selection identity. Provider
+storage identities remain distinct. The API picks the fresher valid observation
+for matching selections across feeds and preserves last-known odds until kickoff;
+freshness controls actionable status and the explicit `freshOnly` filter.
 
 Availability has available, suspended, removed, and stale states. Staleness is calculated at read time from:
 - time since collection exceeding `COLLECTED_TTL`;
@@ -311,7 +313,7 @@ Optional snapshot retention is disabled with `SNAPSHOT_RETENTION_DAYS=0`. When e
 
 API workers never start collection or synchronously contact Unabated. A dedicated collector owns a PostgreSQL session advisory lock. A second collector exits instead of creating a schedule. An ownership-connection failure terminates collection. In-flight jobs are cancelled and awaited before releasing ownership and closing the HTTP client/database. Do not share the same provider key across separate databases or unrelated deployments; their rate limiters would not coordinate.
 
-HTTP liveness, database readiness, collector heartbeat, and per-scope provider health are separate. A provider outage does not make healthy persisted reads depend on the provider. Old prices are served only while within the configured freshness policy. Structured collector logs include league, scope, run ID, duration, selection count, and outcome; provider exception messages, response bodies, headers, and signed URLs are not logged.
+HTTP liveness, database readiness, collector heartbeat, and per-scope provider health are separate. A provider outage does not make healthy persisted reads depend on the provider. Last-known API prices remain visible until kickoff and carry stale, non-actionable freshness metadata when outside the freshness policy. Structured collector logs include league, scope, run ID, duration, selection count, and outcome; provider exception messages, response bodies, headers, and signed URLs are not logged.
 
 Unabated response decoding and normalization run in worker threads so large
 props boards do not block ownership renewal. Heartbeat failures log their

@@ -75,7 +75,9 @@ class ResponseFreshness(BaseModel):
     status: Literal["fresh", "stale", "mixed", "unavailable"]
     fresh_outcomes: int
     stale_outcomes: int
-    max_cache_age_seconds: float
+    max_cache_age_seconds: float | None = Field(
+        default=None, description="No age cutoff for last-known API odds; retained until kickoff"
+    )
 
 
 class OutcomeResponse(BaseModel):

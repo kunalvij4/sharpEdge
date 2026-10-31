@@ -151,6 +151,7 @@ def create_app(settings=None, repository=None, clock=None):
     props_filters = make_filters("all_props")
 
     def freshness(response: Response):
+        response.headers["X-Odds-Retention"] = "until-kickoff"
         response.headers["X-Odds-Observed-At"] = clock.now().isoformat()
         response.headers["X-Odds-Collected-TTL"] = str(settings.collected_ttl)
         response.headers["X-Odds-Source-TTL"] = str(settings.source_ttl)

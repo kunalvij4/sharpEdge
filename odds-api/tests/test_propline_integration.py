@@ -144,15 +144,22 @@ def test_spreads_props_and_milestones_round_trip_through_public_api(repo, board,
         assert {o["name"] for o in outcomes} == {"Over", "Under", "30+ Points"}
         assert "point" not in next(o for o in outcomes if o["name"] == "30+ Points")
         assert client.get(f"/v1/events/{eid}/props?markets=spreads", headers=headers).status_code == 422
-        # Quotes remain fresh through the eight-minute polling boundary and expire after ten minutes.
+        # Quotes become stale after ten minutes but remain visible until superseded or kickoff.
         clock.value = 481
         fresh = client.get(f"/v1/events/{eid}/props?bookmakers=draftkings&freshOnly=true", headers=headers)
         assert fresh.json()["freshness"]["status"] == "fresh"
         assert client.get("/v1/sports/nba_basketball/odds?markets=spreads", headers=headers).json()
         clock.value = 601
         expired = client.get(f"/v1/events/{eid}/props?bookmakers=draftkings", headers=headers)
-        assert expired.json()["bookmakers"] == []
-        assert client.get("/v1/sports/nba_basketball/odds?markets=spreads", headers=headers).json() == []
+        assert expired.json()["bookmakers"]
+        assert expired.json()["freshness"]["status"] == "stale"
+        assert client.get("/v1/sports/nba_basketball/odds?markets=spreads", headers=headers).json()
+        assert (
+            client.get(
+                f"/v1/events/{eid}/props?bookmakers=draftkings&freshOnly=true", headers=headers
+            ).json()["bookmakers"]
+            == []
+        )
 
 
 def test_rejects_unmatched_and_ambiguous_fixtures(repo, board, clock):

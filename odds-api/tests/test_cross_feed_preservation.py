@@ -85,19 +85,18 @@ def test_unabated_refresh_preserves_propline_and_other_books(
         dk = next(b for b in books if b["key"] == "draftkings")
         prices = {o["price"] for m in dk["markets"] for o in m["outcomes"]}
         assert 175 in prices
-        assert (150 if refresh != "empty" else original.quotes[0].price) in prices
+        assert (150 if refresh != "empty" else 175) in prices
         filtered = client.get(path + "?bookmakers=draftkings", headers=headers)
         assert filtered.status_code == 200
         assert [b["key"] for b in filtered.json()["bookmakers"]] == ["draftkings"]
 
-        # A shared public key must still use each feed's own freshness policy.
+        # Aging changes freshness, never sportsbook membership or the chosen price.
         clock.value = 150
         aged = client.get(path + "?oddsFormat=american", headers=headers)
         assert aged.status_code == 200
-        assert [b["key"] for b in aged.json()["bookmakers"]] == ["draftkings"]
-        assert {
-            o["price"] for b in aged.json()["bookmakers"] for m in b["markets"] for o in m["outcomes"]
-        } == {175}
+        assert [b["key"] for b in aged.json()["bookmakers"]] == ["draftkings", "fanduel"]
+        aged_dk = next(b for b in aged.json()["bookmakers"] if b["key"] == "draftkings")
+        assert {o["price"] for m in aged_dk["markets"] for o in m["outcomes"]} == prices
         assert {
             r["quote"].selection_id: r["quote"] for r in repository.quotes(original.league.key)
         } == expected
