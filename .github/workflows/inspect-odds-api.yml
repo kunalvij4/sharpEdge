@@ -133,6 +133,7 @@ jobs:
               repository = create_repository(settings)
               previous, checked, updates = {}, 0, 0
               shared_api_checks, filter_checks, observed_providers = 0, 0, set()
+              public_keys = set()
               deadline = time.monotonic() + seconds
               headers = {"X-API-Key": settings.api_keys.get_secret_value().split(",")[0].strip()}
 
@@ -163,7 +164,7 @@ jobs:
                           selected[eid] = decode_document(value)
                       elif previous[eid][0] > now:
                           raise AssertionError("Future sample event disappeared")
-                  candidate = None
+                  candidates = []
                   for eid, document in selected.items():
                       start = time_value(stored_event(document)["start"])
                       if start <= now:
@@ -187,11 +188,13 @@ jobs:
                           key = sportsbook_key(row["book_key"], row["book_title"])
                           by_key.setdefault(key, set()).add(row["book_key"].split("_", 1)[0])
                       if any({"propline", "unabated"} <= sources for sources in by_key.values()):
-                          candidate = eid
-                  if candidate:
+                          latest = max(time_value(r["quote"]["collected_at"]) for r in rows.values())
+                          candidates.append((latest, eid))
+                  for _, candidate in sorted(candidates, reverse=True):
                       for suffix in ("odds?markets=h2h,spreads", "props"):
                           payload = get(f"/v1/events/{candidate}/{suffix}")
                           keys = [b["key"] for b in payload["bookmakers"]]
+                          public_keys.update(keys)
                           assert len(keys) == len(set(keys)), "Duplicate public sportsbook keys"
                           assert not any(k.startswith(("propline_", "unabated_")) for k in keys)
                           if "draftkings" in keys:
@@ -199,6 +202,8 @@ jobs:
                               assert [b["key"] for b in filtered["bookmakers"]] == ["draftkings"]
                               filter_checks += 1
                           shared_api_checks += bool(keys)
+                      if filter_checks:
+                          break
                   heartbeat = json.loads(repository.client.get(repository.key("collector")) or "{}")
                   stamp = time_value(heartbeat.get("heartbeat"))
                   assert stamp and (now - stamp).total_seconds() < 30, "Collector heartbeat is stale"
@@ -206,17 +211,19 @@ jobs:
                       "sample_events": len(previous), "retained_selection_checks": checked,
                       "unabated_quote_updates": updates, "shared_book_api_checks": shared_api_checks,
                       "draftkings_filter_checks": filter_checks,
-                      "providers": sorted(observed_providers),
+                      "providers": sorted(observed_providers), "public_book_keys": sorted(public_keys),
                   }}), flush=True)
                   if time.monotonic() >= deadline:
                       break
                   time.sleep(min(30, max(0, deadline - time.monotonic())))
               assert {"propline", "unabated"} <= observed_providers, "Both feeds were not observed"
-              assert checked and updates, "No Unabated quote updates observed; preservation is inconclusive"
+              if seconds >= 480:
+                  assert checked and updates, "No Unabated quote updates observed; preservation is inconclusive"
               assert shared_api_checks, "No shared-book API sample observed"
               assert filter_checks, "No DraftKings filter sample observed"
               repository.close()
-              print(json.dumps({"live_preservation_verification": "passed"}), flush=True)
+              label = "live_preservation_verification" if seconds >= 480 else "live_api_verification"
+              print(json.dumps({label: "passed"}), flush=True)
           PY
           if ! ssh "${ssh_options[@]}" "$target" "docker exec -e VERIFY_SECONDS='$VERIFY_SECONDS' -i '$container' python -" < "$RUNNER_TEMP/inspect_odds.py"; then
             printf 'Runtime inspection or requested verification failed.\n'
