@@ -393,7 +393,7 @@ async def test_redis_cold_start_joins_propline_after_metadata(board, clock, tmp_
     await collection.collect("unabated")
     assert len(requests) == 1
     assert len(repository.quotes("nba_basketball")) == 7
-    assert repository.bookmakers() == {"propline_draftkings"}
+    assert repository.bookmakers() == {"draftkings"}
     with TestClient(create_app(settings, repository, clock)) as api:
         response = api.get("/v1/sports/nba_basketball/odds", headers={"X-API-Key": "test"})
         assert response.status_code == 200

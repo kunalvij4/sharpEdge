@@ -106,7 +106,7 @@ class OddsResponse(EventResponse):
                 **EventResponse.model_config["json_schema_extra"]["example"],
                 "bookmakers": [
                     {
-                        "key": "unabated_901",
+                        "key": "examplebook",
                         "title": "Example Book",
                         "last_update": None,
                         "markets": [

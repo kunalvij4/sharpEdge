@@ -5,6 +5,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from odds_api.domain.models import Availability, League, Quote
+from odds_api.domain.sportsbooks import sportsbook_key
 from odds_api.infrastructure.clock import SystemClock
 
 
@@ -483,7 +484,10 @@ class SqlRepository:
 
     def bookmakers(self):
         with self.engine.connect() as conn:
-            return set(conn.execute(select(self.t["books"].c.key)).scalars())
+            return {
+                sportsbook_key(row.key, row.title)
+                for row in conn.execute(select(self.t["books"].c.key, self.t["books"].c.title))
+            }
 
     def heartbeat(self, now, metrics):
         with self.engine.begin() as conn:

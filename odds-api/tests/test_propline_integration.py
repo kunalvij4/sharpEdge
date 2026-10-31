@@ -136,9 +136,9 @@ def test_spreads_props_and_milestones_round_trip_through_public_api(repo, board,
         assert response.status_code == 200
         assert response.json()[0]["id"] == eid
         book = response.json()[0]["bookmakers"][0]
-        assert book["key"] == "propline_draftkings"
+        assert book["key"] == "draftkings"
         assert {o["point"] for o in book["markets"][0]["outcomes"]} == {-1.5, 1.5}
-        props = client.get(f"/v1/events/{eid}/props?bookmakers=propline_draftkings", headers=headers)
+        props = client.get(f"/v1/events/{eid}/props?bookmakers=draftkings", headers=headers)
         assert props.status_code == 200
         outcomes = props.json()["bookmakers"][0]["markets"][0]["outcomes"]
         assert {o["name"] for o in outcomes} == {"Over", "Under", "30+ Points"}
@@ -147,12 +147,12 @@ def test_spreads_props_and_milestones_round_trip_through_public_api(repo, board,
         # Quotes remain fresh through the eight-minute polling boundary and expire after ten minutes.
         clock.value = 481
         fresh = client.get(
-            f"/v1/events/{eid}/props?bookmakers=propline_draftkings&freshOnly=true", headers=headers
+            f"/v1/events/{eid}/props?bookmakers=draftkings&freshOnly=true", headers=headers
         )
         assert fresh.json()["freshness"]["status"] == "fresh"
         assert client.get("/v1/sports/nba_basketball/odds?markets=spreads", headers=headers).json()
         clock.value = 601
-        expired = client.get(f"/v1/events/{eid}/props?bookmakers=propline_draftkings", headers=headers)
+        expired = client.get(f"/v1/events/{eid}/props?bookmakers=draftkings", headers=headers)
         assert expired.json()["bookmakers"] == []
         assert client.get("/v1/sports/nba_basketball/odds?markets=spreads", headers=headers).json() == []
 

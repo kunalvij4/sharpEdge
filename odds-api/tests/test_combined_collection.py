@@ -160,11 +160,11 @@ async def test_both_feeds_share_five_league_api_after_cold_start(repo, board, cl
                 )
                 assert response.status_code == 200
                 event = response.json()[0]
-                assert {b["key"] for b in event["bookmakers"]} == {"unabated_901", "propline_draftkings"}
+                assert {b["key"] for b in event["bookmakers"]} == {"fixturebook", "draftkings"}
                 props = api.get(f"/v1/events/{event['id']}/props", headers={"X-API-Key": "offline-product"})
                 assert {b["key"] for b in props.json()["bookmakers"]} == {
-                    "unabated_901",
-                    "propline_draftkings",
+                    "fixturebook",
+                    "draftkings",
                 }
                 rows = [r["quote"] for r in repo.quotes(league) if r["book_key"].startswith("propline_")]
                 assert all(q.collected_at == clock.origin for q in rows)

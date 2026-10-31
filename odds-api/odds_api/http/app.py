@@ -110,7 +110,7 @@ def create_app(settings=None, repository=None, clock=None):
                 ),
             ] = default_markets,
             bookmakers: Annotated[
-                str | None, Query(description="Stable sportsbook keys, e.g. unabated_91 or bet365")
+                str | None, Query(description="Stable sportsbook keys, e.g. draftkings or bet365")
             ] = None,
             oddsFormat: Annotated[
                 Literal["american", "decimal"], Query(description="Output price format")

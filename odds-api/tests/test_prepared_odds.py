@@ -74,8 +74,8 @@ def prepared(repo, board, clock):
     [
         "/props",
         "/props?freshOnly=true",
-        "/props?markets=player_points_alternate,player_points_q1&bookmakers=propline_draftkings",
-        "/odds?markets=h2h,player_points&bookmakers=unabated_901",
+        "/props?markets=player_points_alternate,player_points_q1&bookmakers=draftkings",
+        "/odds?markets=h2h,player_points&bookmakers=fixturebook",
     ],
 )
 def test_prepared_responses_match_existing_contract(prepared, clock, age, odds_format, query):
@@ -139,7 +139,7 @@ def test_latest_source_timestamp_handles_whole_and_fractional_seconds(prepared, 
     with TestClient(create_app(settings, redis, clock)) as api:
         response = api.get(f"/v1/events/{event_id}/props", headers={"X-API-Key": "fixture-key"})
     # Rows are ordered by book, market, then player: row 1 shares a market with row 0.
-    book = next(b for b in response.json()["bookmakers"] if b["key"] == "propline_draftkings")
+    book = next(b for b in response.json()["bookmakers"] if b["key"] == "draftkings")
     assert book["last_update"] == wire_time(newest)
     assert book["markets"][0]["last_update"] == wire_time(newest)
 

@@ -12,6 +12,7 @@ from redis import Redis, WatchError
 
 from odds_api.application.prepared_odds import prepare_document, stored_event, stored_rows, time_value
 from odds_api.domain.models import Availability, League, Quote
+from odds_api.domain.sportsbooks import sportsbook_key
 from odds_api.infrastructure.clock import SystemClock
 from odds_api.infrastructure.repository import SqlRepository
 
@@ -248,9 +249,14 @@ class RedisRepository:
                 if self._event(document)["start"] <= self.clock.now():
                     continue
                 if "quotes" in document:
-                    books.update(row["book_key"] for row in document["quotes"].values())
+                    books.update(
+                        sportsbook_key(row["book_key"], row["book_title"])
+                        for row in document["quotes"].values()
+                    )
                 else:
-                    books.update(book["key"] for book in document["bookmakers"])
+                    books.update(
+                        sportsbook_key(book["key"], book["title"]) for book in document["bookmakers"]
+                    )
         return books
 
     def prune_started(self):

@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from odds_api.domain.models import Availability, decimal_odds
+from odds_api.domain.sportsbooks import sportsbook_key
 
 QUOTE_METADATA_FIELDS = (
     "period",
@@ -173,11 +174,15 @@ def project_response(
         or (end and commence > end)
     ):
         return payload
+    # Storage stays provider-scoped. Merge only the public hierarchy so a later
+    # collection cannot reinterpret another feed's quote as its own.
+    public_books = {}
     for stored_book in document["bookmakers"]:
-        if bookmakers and stored_book["key"] not in bookmakers:
+        public_key = sportsbook_key(stored_book["key"], stored_book["title"])
+        if bookmakers and public_key not in bookmakers:
             continue
-        book = {"key": stored_book["key"], "title": stored_book["title"], "last_update": None, "markets": []}
-        ttl = propline_collected_ttl if book["key"].startswith("propline_") else collected_ttl
+        book = {"key": public_key, "title": stored_book["title"], "last_update": None, "markets": []}
+        ttl = propline_collected_ttl if stored_book["key"].startswith("propline_") else collected_ttl
         for stored_market in stored_book["markets"]:
             if markets and stored_market["key"] not in markets:
                 continue
@@ -227,5 +232,24 @@ def project_response(
                 book["markets"].append(market)
         if book["markets"]:
             book["last_update"] = wire_time(book["last_update"])
-            payload["bookmakers"].append(book)
+            existing = public_books.setdefault(public_key, book)
+            if existing is not book:
+                updates = [time_value(b["last_update"]) for b in (existing, book) if b["last_update"]]
+                existing["last_update"] = wire_time(max(updates)) if updates else None
+                by_market = {m["key"]: m for m in existing["markets"]}
+                for market in book["markets"]:
+                    prior = by_market.get(market["key"])
+                    if prior is None:
+                        existing["markets"].append(market)
+                        continue
+                    updates = [time_value(m["last_update"]) for m in (prior, market) if m["last_update"]]
+                    prior["last_update"] = wire_time(max(updates)) if updates else None
+                    for outcome in market["outcomes"]:
+                        if outcome not in prior["outcomes"]:
+                            prior["outcomes"].append(outcome)
+    payload["bookmakers"] = [public_books[key] for key in sorted(public_books)]
+    for book in payload["bookmakers"]:
+        book["markets"].sort(key=lambda m: m["key"])
+        for market in book["markets"]:
+            market["outcomes"].sort(key=lambda o: (o.get("description", ""), o.get("point", 0), o["name"]))
     return payload

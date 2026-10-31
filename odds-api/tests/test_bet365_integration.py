@@ -82,7 +82,7 @@ def test_disabled_bet365_is_hidden_even_when_old_rows_exist(repo, clock, report)
     with TestClient(create_app(settings, repo, clock)) as client:
         headers = {"X-API-Key": "test-key"}
         games = client.get("/v1/sports/nba_basketball/odds", headers=headers).json()
-        assert {b["key"] for e in games for b in e["bookmakers"]} == {"unabated_901"}
+        assert {b["key"] for e in games for b in e["bookmakers"]} == {"fixturebook"}
         event_id = games[0]["id"]
         props = client.get(f"/v1/events/{event_id}/props?bookmakers=bet365", headers=headers).json()
         assert props["bookmakers"] == []
@@ -115,7 +115,7 @@ def test_merge_uses_existing_ids_and_exact_api_schema(repo, board, clock, report
         money = client.get("/v1/sports/nba_basketball/odds", headers=headers)
         assert money.status_code == 200
         books = money.json()[0]["bookmakers"]
-        assert {b["key"] for b in books} == {"unabated_901", "bet365"}
+        assert {b["key"] for b in books} == {"fixturebook", "bet365"}
         assert next(b for b in books if b["key"] == "bet365")["title"] == "Bet365"
         props = client.get(f"/v1/events/{canonical.event_id}/props?bookmakers=bet365", headers=headers)
         assert props.status_code == 200
@@ -210,5 +210,5 @@ def test_bet365_failure_expiry_and_support_filter_do_not_hide_other_books(repo, 
         money = board()
         repo.save(money)
         response = client.get("/v1/sports/nba_basketball/odds", headers={"X-API-Key": "test-key"})
-        assert {b["key"] for b in response.json()[0]["bookmakers"]} == {"unabated_901"}
+        assert {b["key"] for b in response.json()[0]["bookmakers"]} == {"fixturebook"}
         assert BOOK.key == "bet365"

@@ -95,7 +95,7 @@ def test_queries_convert_and_filter(repo, board, clock):
         "nba_basketball",
         event_id=event_id,
         markets="player_points",
-        bookmakers="unabated_901",
+        bookmakers="fixturebook",
         odds_format="american",
     )
     assert response["bookmakers"][0]["markets"][0]["outcomes"][0]["description"] == "Sample Player"

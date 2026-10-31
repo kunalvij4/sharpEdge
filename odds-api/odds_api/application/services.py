@@ -7,6 +7,7 @@ from odds_api.application.async_work import blocking_work
 from odds_api.application.ports import Clock, Provider, Repository
 from odds_api.application.prepared_odds import project_response, time_value, wire_time
 from odds_api.domain.models import Availability, decimal_odds
+from odds_api.domain.sportsbooks import sportsbook_key
 
 log = logging.getLogger(__name__)
 
@@ -324,7 +325,8 @@ class OddsQueryService:
                 continue
             if (start and event["start"] < start) or (end and event["start"] > end):
                 continue
-            if (market_set and q.market not in market_set) or (book_set and row["book_key"] not in book_set):
+            public_key = sportsbook_key(row["book_key"], row["book_title"])
+            if (market_set and q.market not in market_set) or (book_set and public_key not in book_set):
                 continue
             availability = q.availability(
                 now,
@@ -352,8 +354,8 @@ class OddsQueryService:
             if availability != Availability.AVAILABLE and not cached_prop:
                 continue
             book = grouped.setdefault(q.event_id, {}).setdefault(
-                row["book_key"],
-                {"key": row["book_key"], "title": row["book_title"], "last_update": None, "markets": {}},
+                public_key,
+                {"key": public_key, "title": row["book_title"], "last_update": None, "markets": {}},
             )
             market = book["markets"].setdefault(
                 q.market, {"key": q.market, "last_update": None, "outcomes": []}
