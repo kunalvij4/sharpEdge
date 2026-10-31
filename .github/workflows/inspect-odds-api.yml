@@ -2,6 +2,11 @@ name: Inspect odds API collector
 
 on:
   workflow_dispatch:
+    inputs:
+      verify_seconds:
+        description: "Observe live quote preservation for 0 to 600 seconds (0 skips)"
+        default: "0"
+        type: string
 
 permissions:
   contents: read
@@ -9,7 +14,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     environment: production
     env:
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST || '45.76.8.244' }}
@@ -22,6 +27,7 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           SSH_PASSWORD: ${{ secrets.DEPLOY_SSH_PASSWORD }}
           SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          VERIFY_SECONDS: ${{ inputs.verify_seconds || '0' }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -29,6 +35,7 @@ jobs:
           [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
           [[ "$DEPLOY_PORT" =~ ^[0-9]{1,5}$ ]]
           [[ "$DEPLOY_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]]
+          [[ "$VERIFY_SECONDS" =~ ^[0-9]{1,3}$ ]] && (( 10#$VERIFY_SECONDS <= 600 ))
           umask 077
           mkdir -p "$RUNNER_TEMP/odds-inspect"
           trap 'rm -f -- "$RUNNER_TEMP/odds-inspect/key" "$RUNNER_TEMP/odds-inspect/known_hosts" "$RUNNER_TEMP/odds-inspect/askpass"' EXIT
@@ -111,7 +118,104 @@ jobs:
           }
           repository.close()
           print(json.dumps(result, indent=2))
+          # Optional read-only observation across a scheduled collection cycle.
+          import os
+          import time
+          import urllib.request
+          from datetime import timedelta
+          from odds_api.application.prepared_odds import stored_event, stored_rows, time_value
+          from odds_api.domain.sportsbooks import sportsbook_key
+          from odds_api.infrastructure.redis_repository import decode_document
+
+          seconds = int(os.environ.get("VERIFY_SECONDS", "0"))
+          if seconds:
+              assert settings.storage_backend == "redis", "Live preservation check requires Redis"
+              repository = create_repository(settings)
+              previous, checked, updates = {}, 0, 0
+              shared_api_checks, observed_providers = 0, set()
+              deadline = time.monotonic() + seconds
+              headers = {"X-API-Key": settings.api_keys.get_secret_value().split(",")[0].strip()}
+
+              def get(path):
+                  request = urllib.request.Request("http://localhost:8000" + path, headers=headers)
+                  with urllib.request.urlopen(request, timeout=60) as response:
+                      return json.load(response)
+
+              while True:
+                  now = datetime.now(UTC)
+                  selected = {}
+                  for league in settings.leagues:
+                      ids = repository.client.zrangebyscore(
+                          repository.key("events:" + league), (now + timedelta(minutes=20)).timestamp(), "+inf",
+                          start=0, num=5,
+                      )
+                      if not ids:
+                          continue
+                      values = repository.client.mget([repository.key("event:" + eid) for eid in ids])
+                      for eid, value in zip(ids, values):
+                          if value:
+                              selected[eid] = decode_document(value)
+                  # Keep observing already selected fixtures until kickoff, even
+                  # if a newer event changes the first-five index window.
+                  for eid in previous.keys() - selected.keys():
+                      value = repository.client.get(repository.key("event:" + eid))
+                      if value:
+                          selected[eid] = decode_document(value)
+                      elif previous[eid][0] > now:
+                          raise AssertionError("Future sample event disappeared")
+                  candidate = None
+                  for eid, document in selected.items():
+                      start = time_value(stored_event(document)["start"])
+                      if start <= now:
+                          continue
+                      rows = dict(stored_rows(document))
+                      providers = {r["book_key"].split("_", 1)[0] for r in rows.values()}
+                      observed_providers.update(providers)
+                      prior = previous.get(eid)
+                      if prior:
+                          assert not prior[1].keys() - rows.keys(), "Stored selections disappeared"
+                          for sid, row in prior[1].items():
+                              current = rows[sid]
+                              assert current["book_key"] == row["book_key"], "Quote changed provider/book"
+                              assert current["quote"]["book_id"] == row["quote"]["book_id"], "Quote book identity changed"
+                              if row["book_key"].startswith("unabated_") and current["quote"] != row["quote"]:
+                                  updates += 1
+                          checked += len(prior[1])
+                      previous[eid] = (start, rows)
+                      by_key = {}
+                      for row in rows.values():
+                          key = sportsbook_key(row["book_key"], row["book_title"])
+                          by_key.setdefault(key, set()).add(row["book_key"].split("_", 1)[0])
+                      if any({"propline", "unabated"} <= sources for sources in by_key.values()):
+                          candidate = eid
+                  if candidate:
+                      for suffix in ("odds?markets=h2h,spreads", "props"):
+                          payload = get(f"/v1/events/{candidate}/{suffix}")
+                          keys = [b["key"] for b in payload["bookmakers"]]
+                          assert len(keys) == len(set(keys)), "Duplicate public sportsbook keys"
+                          assert not any(k.startswith(("propline_", "unabated_")) for k in keys)
+                          if "draftkings" in keys:
+                              filtered = get(f"/v1/events/{candidate}/{suffix}" + ("&" if "?" in suffix else "?") + "bookmakers=draftkings")
+                              assert [b["key"] for b in filtered["bookmakers"]] == ["draftkings"]
+                          shared_api_checks += 1
+                  heartbeat = json.loads(repository.client.get(repository.key("collector")) or "{}")
+                  stamp = time_value(heartbeat.get("heartbeat"))
+                  assert stamp and (now - stamp).total_seconds() < 30, "Collector heartbeat is stale"
+                  print(json.dumps({"verification_progress": {
+                      "sample_events": len(previous), "retained_selection_checks": checked,
+                      "unabated_quote_updates": updates, "shared_book_api_checks": shared_api_checks,
+                      "providers": sorted(observed_providers),
+                  }}), flush=True)
+                  if time.monotonic() >= deadline:
+                      break
+                  time.sleep(min(30, max(0, deadline - time.monotonic())))
+              assert {"propline", "unabated"} <= observed_providers, "Both feeds were not observed"
+              assert checked and updates, "No Unabated quote updates observed; preservation is inconclusive"
+              assert shared_api_checks, "No shared-book API sample observed"
+              repository.close()
+              print(json.dumps({"live_preservation_verification": "passed"}), flush=True)
           PY
-          if ! ssh "${ssh_options[@]}" "$target" "docker exec -i '$container' python -" < "$RUNNER_TEMP/inspect_odds.py"; then
-            printf 'Runtime inspection unavailable; container state and startup logs are shown above.\n'
+          if ! ssh "${ssh_options[@]}" "$target" "docker exec -e VERIFY_SECONDS='$VERIFY_SECONDS' -i '$container' python -" < "$RUNNER_TEMP/inspect_odds.py"; then
+            printf 'Runtime inspection or requested verification failed.\n'
+            exit 1
           fi
