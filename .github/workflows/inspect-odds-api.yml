@@ -132,7 +132,7 @@ jobs:
               assert settings.storage_backend == "redis", "Live preservation check requires Redis"
               repository = create_repository(settings)
               previous, checked, updates = {}, 0, 0
-              shared_api_checks, observed_providers = 0, set()
+              shared_api_checks, filter_checks, observed_providers = 0, 0, set()
               deadline = time.monotonic() + seconds
               headers = {"X-API-Key": settings.api_keys.get_secret_value().split(",")[0].strip()}
 
@@ -197,13 +197,15 @@ jobs:
                           if "draftkings" in keys:
                               filtered = get(f"/v1/events/{candidate}/{suffix}" + ("&" if "?" in suffix else "?") + "bookmakers=draftkings")
                               assert [b["key"] for b in filtered["bookmakers"]] == ["draftkings"]
-                          shared_api_checks += 1
+                              filter_checks += 1
+                          shared_api_checks += bool(keys)
                   heartbeat = json.loads(repository.client.get(repository.key("collector")) or "{}")
                   stamp = time_value(heartbeat.get("heartbeat"))
                   assert stamp and (now - stamp).total_seconds() < 30, "Collector heartbeat is stale"
                   print(json.dumps({"verification_progress": {
                       "sample_events": len(previous), "retained_selection_checks": checked,
                       "unabated_quote_updates": updates, "shared_book_api_checks": shared_api_checks,
+                      "draftkings_filter_checks": filter_checks,
                       "providers": sorted(observed_providers),
                   }}), flush=True)
                   if time.monotonic() >= deadline:
@@ -212,6 +214,7 @@ jobs:
               assert {"propline", "unabated"} <= observed_providers, "Both feeds were not observed"
               assert checked and updates, "No Unabated quote updates observed; preservation is inconclusive"
               assert shared_api_checks, "No shared-book API sample observed"
+              assert filter_checks, "No DraftKings filter sample observed"
               repository.close()
               print(json.dumps({"live_preservation_verification": "passed"}), flush=True)
           PY
