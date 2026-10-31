@@ -146,9 +146,7 @@ def test_spreads_props_and_milestones_round_trip_through_public_api(repo, board,
         assert client.get(f"/v1/events/{eid}/props?markets=spreads", headers=headers).status_code == 422
         # Quotes remain fresh through the eight-minute polling boundary and expire after ten minutes.
         clock.value = 481
-        fresh = client.get(
-            f"/v1/events/{eid}/props?bookmakers=draftkings&freshOnly=true", headers=headers
-        )
+        fresh = client.get(f"/v1/events/{eid}/props?bookmakers=draftkings&freshOnly=true", headers=headers)
         assert fresh.json()["freshness"]["status"] == "fresh"
         assert client.get("/v1/sports/nba_basketball/odds?markets=spreads", headers=headers).json()
         clock.value = 601
