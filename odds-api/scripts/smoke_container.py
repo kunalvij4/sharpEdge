@@ -111,7 +111,7 @@ def get(path, auth=True):
     request = urllib.request.Request(base+path, headers={"X-API-Key": "smoke-product-key"} if auth else {})
     with urllib.request.urlopen(request, timeout=5) as response:
         return json.load(response)
-assert len(get("/v1/sports")) == 5
+assert len(get("/v1/sports")) == 6
 odds = get("/v1/sports/nba_basketball/odds?oddsFormat=american")
 assert len(odds) == 1 and len(odds[0]["bookmakers"][0]["markets"][0]["outcomes"]) == 2
 eid = odds[0]["id"]

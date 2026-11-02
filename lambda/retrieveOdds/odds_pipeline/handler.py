@@ -7,7 +7,7 @@ import os
 from odds_pipeline.archive import ClosingOddsStore
 from odds_pipeline.collect import fetch_and_attach_player_props
 from odds_pipeline.engine import calculate
-from odds_pipeline.leagues import LEAGUE_SPORT_KEYS
+from odds_pipeline.leagues import ACTIVE_LEAGUE_SPORT_KEYS
 from odds_pipeline.results import ResultsPublisher
 from .provider import OddsAPI
 
@@ -36,7 +36,7 @@ def lambda_handler(event, context):
             logger.warning("Closing-price write failed for %s (%s)", game["event_id"], type(error).__name__)
             summary["archive_failed_events"].append(game["event_id"])
 
-    for league, sport_key in LEAGUE_SPORT_KEYS.items():
+    for league, sport_key in ACTIVE_LEAGUE_SPORT_KEYS.items():
         try:
             raw = api.get_odds(sport_key, markets="h2h,spreads")
             observed_at = utc_now()

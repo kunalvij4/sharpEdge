@@ -9,7 +9,7 @@ import requests
 
 
 NOW = datetime(2026, 10, 26, 17, 55, tzinfo=timezone.utc)
-LEAGUES = ("NBA", "NFL", "NHL", "MLB", "NCAAF")
+LEAGUES = ("NBA", "NFL", "NHL", "NCAAF", "NCAAB")
 
 
 def raw_event(league, label="near", minutes=5):
@@ -53,7 +53,7 @@ def runtime(monkeypatch, closing_store):
     api = app.OddsAPI("test-key", "https://odds.example.com")
 
     def get_odds(sport, **kwargs):
-        league = next(league for league, key in app.LEAGUE_SPORT_KEYS.items() if key == sport)
+        league = next(league for league, key in app.ACTIVE_LEAGUE_SPORT_KEYS.items() if key == sport)
         return [raw_event(league), raw_event(league, "far", 60), raw_event(league, "started", -5)]
 
     def get_event_odds(sport, event_id, markets):
@@ -90,6 +90,9 @@ def test_one_run_fetches_all_leagues_archives_only_near_start_and_publishes_resu
     assert summary["status"] == "complete"
     assert summary["events_fetched"] == 15
     assert api.get_odds.call_count == 5
+    assert {call.args[0] for call in api.get_odds.call_args_list} == {
+        "basketball_nba", "americanfootball_nfl", "icehockey_nhl", "americanfootball_ncaaf", "basketball_ncaab"
+    }
     assert api.get_events.call_count == 5
     assert api.get_event_odds.call_count == 15
     assert summary["closing_prices_written"] > 0
@@ -123,7 +126,7 @@ def test_props_only_events_are_processed_and_archived_for_all_leagues(runtime):
     api.get_odds.side_effect = lambda *args, **kwargs: []
 
     def events(sport):
-        league = next(league for league, key in app.LEAGUE_SPORT_KEYS.items() if key == sport)
+        league = next(league for league, key in app.ACTIVE_LEAGUE_SPORT_KEYS.items() if key == sport)
         event = raw_event(league)
         event.pop("bookmakers")
         return [event]
@@ -291,7 +294,7 @@ def test_partial_props_failure_preserves_complete_props_results(runtime):
 
 def test_props_response_after_start_cannot_retimestamp_or_archive_game_lines(runtime, monkeypatch):
     app, api, _, _, _, store = runtime
-    monkeypatch.setattr(app, "LEAGUE_SPORT_KEYS", {"NBA": "basketball_nba"})
+    monkeypatch.setattr(app, "ACTIVE_LEAGUE_SPORT_KEYS", {"NBA": "basketball_nba"})
     start = NOW + timedelta(minutes=5)
     times = iter([start - timedelta(seconds=1), start + timedelta(seconds=1)])
     monkeypatch.setattr(app, "utc_now", lambda: next(times))

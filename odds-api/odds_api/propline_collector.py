@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 
 async def collect_cycle(client, repository, settings, state, *, lease=None, snapshots=None):
     for league in SPORT_KEYS:
-        if league not in settings.leagues:
+        if league not in settings.collection_leagues:
             continue
         if lease:
             lease.ping()
@@ -98,7 +98,8 @@ async def run():
                     "leagues": state,
                     "requests_made": client.requests,
                     "budget": request_budget(
-                        settings.propline_poll_interval, len(set(settings.leagues) & SPORT_KEYS.keys())
+                        settings.propline_poll_interval,
+                        len(set(settings.collection_leagues) & SPORT_KEYS.keys()),
                     ),
                 }
                 temporary = directory / "status.tmp"

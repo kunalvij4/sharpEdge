@@ -16,6 +16,7 @@ class OddsAPI:
         "icehockey_nhl": "nhl_hockey",
         "baseball_mlb": "mlb_baseball",
         "americanfootball_ncaaf": "ncaaf_football",
+        "basketball_ncaab": "ncaab_basketball",
     }
 
     def __init__(self, api_key, base_url):

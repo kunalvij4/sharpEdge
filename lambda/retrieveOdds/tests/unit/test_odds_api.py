@@ -15,6 +15,7 @@ def api_class():
     ("icehockey_nhl", "nhl_hockey"),
     ("baseball_mlb", "mlb_baseball"),
     ("americanfootball_ncaaf", "ncaaf_football"),
+    ("basketball_ncaab", "ncaab_basketball"),
 ])
 def test_get_odds_calls_in_house_endpoint_with_header_auth(api_class, sport, public_key):
     api = api_class(api_key="product-key", base_url="https://odds.example.com/")

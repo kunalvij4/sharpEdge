@@ -137,7 +137,7 @@ async def test_bulk_probe_filters_requested_books_with_one_call_per_league(tmp_p
     )
     report = await probe(settings(), tmp_path, list(SPORT_KEYS), http=http, clock=clock)
     assert requested == list(SPORT_KEYS.values())
-    assert report["retrieval_verified"] and report["requests_made"] == 5
+    assert report["retrieval_verified"] and report["requests_made"] == len(SPORT_KEYS)
     assert request_budget()["requests_per_utc_day"] == 900
     assert json.loads((tmp_path / "nba_basketball.json").read_text()) == propline_raw
     assert "offline-propline-key" not in (tmp_path / "summary.json").read_text()

@@ -178,7 +178,7 @@ async def run():
     tasks = [
         asyncio.create_task(collect_job(name, module, options))
         for name, (module, options, league) in JOBS.items()
-        if league is None or league in settings.leagues
+        if league is None or league in settings.collection_leagues
     ]
 
     try:

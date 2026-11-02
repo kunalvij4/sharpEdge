@@ -80,6 +80,8 @@ jobs:
               "redis_repository_sha256": hashlib.sha256(Path(inspect.getfile(RedisRepository)).read_bytes()).hexdigest(),
               "batched_event_writes": "pipe.watch(*keys)" in inspect.getsource(RedisRepository.save),
               "unabated_odds_enabled": settings.unabated_odds_enabled,
+              "configured_leagues": list(settings.leagues),
+              "collection_leagues": list(getattr(settings, "collection_leagues", settings.leagues)),
           }
           if settings.storage_backend == "redis":
               result["collector"] = json.loads(repository.client.get(repository.key("collector")) or "{}")

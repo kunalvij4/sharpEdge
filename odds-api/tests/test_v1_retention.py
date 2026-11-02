@@ -98,6 +98,7 @@ def test_migration_round_trip_preserves_ids_quotes_and_scope_history(repo, board
         ("basketball_nba", "nba_basketball"),
         ("americanfootball_nfl", "nfl_football"),
         ("baseball_mlb", "mlb_baseball"),
+        ("basketball_ncaab", "ncaab_basketball"),
     ],
 )
 def test_league_keys_preserve_opaque_event_identity(clock, old, new):

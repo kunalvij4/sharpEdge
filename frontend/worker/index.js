@@ -2,6 +2,7 @@
 import { AuthError, firebaseConfig, sessionCookie, sameOrigin, authenticate, membershipFor, publicAccount, authorizeFeed, PAID_PLANS } from './auth.js';
 import { createCheckout, createPortal, checkoutStatus, stripeWebhook } from './billing.js';
 const assets = __ASSETS__;
+const inactiveLeagues = new Set(['MLB']);
 const headers = { 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' };
 const states = JSON.parse(assets['data/state-platform-filter-2026-10-26.json'].text).states;
 const stateNames = Object.fromEntries(states.map(s => [s.state, s.state_name]));
@@ -152,8 +153,8 @@ async function readKey(env, key) {
 }
 async function loadFeed(env) {
   const [evRows, arbRows] = await Promise.all([readKey(env, 'EV'), readKey(env, 'arbitrage')]);
-  const ev = evRows.map(normalizeEv).filter(d => d.odds !== '—').sort((a, b) => (b.kellyFull ?? -1) - (a.kellyFull ?? -1) || b.ev - a.ev);
-  const arbs = arbRows.map(normalizeArb).filter(Boolean).sort((a, b) => (b.kellyFull ?? -1) - (a.kellyFull ?? -1) || b.ev - a.ev);
+  const ev = evRows.map(normalizeEv).filter(d => !inactiveLeagues.has(d.league) && d.odds !== '—').sort((a, b) => (b.kellyFull ?? -1) - (a.kellyFull ?? -1) || b.ev - a.ev);
+  const arbs = arbRows.map(normalizeArb).filter(d => d && !inactiveLeagues.has(d.league)).sort((a, b) => (b.kellyFull ?? -1) - (a.kellyFull ?? -1) || b.ev - a.ev);
   return { ev, arbs, fetchedAt: new Date().toISOString(), status:'ok' };
 }
 function eventTime(value, timezone = 'UTC') {

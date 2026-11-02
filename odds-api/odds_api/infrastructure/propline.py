@@ -20,6 +20,7 @@ SPORT_KEYS = {
     "nfl_football": "football_nfl",
     "nba_basketball": "basketball_nba",
     "ncaaf_football": "football_ncaaf",
+    "ncaab_basketball": "basketball_ncaab",
 }
 # Provider keys from https://prop-line.com/llms-full.txt#bookmaker-keys.
 # Caesars and separate TheScore US/CA keys are not listed in that reference.
@@ -148,6 +149,7 @@ PROP_MARKETS = {
     ),
 }
 PROP_MARKETS["ncaaf_football"] = PROP_MARKETS["nfl_football"]
+PROP_MARKETS["ncaab_basketball"] = PROP_MARKETS["nba_basketball"]
 QUOTA_HEADERS = (
     "x-daily-limit",
     "x-daily-used",

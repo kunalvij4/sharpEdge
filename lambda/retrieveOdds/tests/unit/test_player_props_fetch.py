@@ -7,7 +7,7 @@ class PlayerPropsFetchTests(unittest.TestCase):
     def test_all_leagues_preserve_multiple_lines_and_prices(self):
         collect = importlib.import_module("odds_pipeline.collect")
         leagues = importlib.import_module("odds_pipeline.leagues")
-        markets = {"NBA": "player_points", "NFL": "player_pass_yds", "NHL": "player_shots_on_goal", "MLB": "pitcher_strikeouts", "NCAAF": "player_rush_yds"}
+        markets = {"NBA": "player_points", "NFL": "player_pass_yds", "NHL": "player_shots_on_goal", "MLB": "pitcher_strikeouts", "NCAAF": "player_rush_yds", "NCAAB": "player_points"}
         for league, market in markets.items():
             with self.subTest(league=league):
                 api = Mock()

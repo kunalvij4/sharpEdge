@@ -103,7 +103,12 @@ and Alembic migrations. The older deployment sections below describe that setup.
 
 # In-House Odds API — Phase 1
 
-The API combines Unabated and PropLine for **NHL, NBA, NFL, MLB, and NCAAF**.
+The API supports **NHL, NBA, NFL, MLB, NCAAF, and NCAAB**. Current collection runs
+for NHL, NBA, NFL, NCAAF, and NCAAB; MLB collection is paused for the offseason.
+MLB sport, event, and odds routes remain available. `COLLECTION_EXCLUDED_LEAGUES`
+controls collection independently of `LEAGUES_JSON`; set it to `[]` to resume all
+configured leagues. Older full five-league configurations automatically gain
+NCAAB, while intentionally restricted league configurations stay restricted.
 One supervised collector runs PropLine at minute 0, Unabated at minute 4, then
 PropLine at minute 8. Each provider repeats every eight minutes. Moneylines,
 spreads, and supported player props share the same event catalog and API.
@@ -187,7 +192,7 @@ Set `TEST_DATABASE_URL` to an **empty disposable PostgreSQL database** to run re
 
 | Endpoint | Behavior |
 |---|---|
-| `GET /v1/sports` | Configured leagues, NHL, NBA, NFL, MLB, and NCAAF by default |
+| `GET /v1/sports` | Configured leagues, NHL, NBA, NFL, MLB, NCAAF, and NCAAB by default |
 | `GET /v1/sports/{sport}/events` | Events with a future commence time |
 | `GET /v1/sports/{sport}/odds` | Last-known moneylines and spreads across events; `freshOnly=true` filters stale prices |
 | `GET /v1/events/{event_id}/odds` | Moneylines and selected props; prop queries include an event-level freshness summary |

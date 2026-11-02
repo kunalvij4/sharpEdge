@@ -26,7 +26,7 @@ def test_health_and_authentication(client):
     assert client.get("/v1/sports").status_code == 401
     assert client.get("/v1/status").status_code == 401
     assert client.get("/v1/sports", headers={"X-API-Key": "consumer-fixture-key"}).status_code == 200
-    assert len(client.get("/v1/sports?apiKey=consumer-fixture-key").json()) == 5
+    assert len(client.get("/v1/sports?apiKey=consumer-fixture-key").json()) == 6
 
 
 def test_moneyline_compatibility_fixture(client, board):
@@ -182,6 +182,7 @@ def test_v1_league_keys_and_removed_routes(client):
         "mlb_baseball",
         "nhl_hockey",
         "ncaaf_football",
+        "ncaab_basketball",
     }
     assert {league["group"] for league in leagues} == {"Basketball", "Football", "Baseball", "Hockey"}
     for old in ("/v4/sports", "/v1/sports/basketball_nba/events", "/status"):

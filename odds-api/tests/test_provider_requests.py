@@ -60,8 +60,8 @@ async def test_real_client_builds_documented_requests(raw, clock, monkeypatch, s
     }
     if kind == "props":
         discovery[f"/player/{route}"] = raw["people"]
-        if route == "cfb":
-            discovery["/event/cfb/upcoming"] = raw["events"]
+        if route in {"cfb", "cbb"}:
+            discovery[f"/event/{route}/upcoming"] = raw["events"]
     requested = []
 
     def handler(request):

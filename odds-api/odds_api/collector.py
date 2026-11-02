@@ -56,7 +56,7 @@ class CombinedCollection:
         else:
             if not self.settings.unabated_enabled:
                 return
-            for league in self.settings.leagues:
+            for league in self.settings.collection_leagues:
                 kinds = ("moneyline", "props") if self.settings.unabated_odds_enabled else ("moneyline",)
                 for kind in kinds:
                     self.lease.ping()

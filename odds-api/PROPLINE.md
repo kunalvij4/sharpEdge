@@ -1,7 +1,10 @@
 # Combined odds collection
 
-The main application imports NHL, NBA, NFL, MLB, and NCAAF from PropLine and
+The main application currently imports NHL, NBA, NFL, NCAAF, and NCAAB from PropLine and
 Unabated into one SQL database and the existing `/v1` API.
+
+MLB routes remain supported, but `COLLECTION_EXCLUDED_LEAGUES=["mlb_baseball"]`
+pauses all scheduled MLB provider requests. Set that list to `[]` to resume it.
 
 ## Schedule
 
@@ -33,15 +36,18 @@ PropLine retries; quota headers and Retry-After govern cooldowns.
 Unabated sends one straight-board request (moneyline and spread IDs discovered
 from `/bettype`) and one props-board request per league. Metadata is cached and
 shared between the two scopes. Odds requests cover whole leagues, never one call
-per game. Normal operation is ten odds calls per cycle, plus metadata refreshes. NCAAF props also use one bulk `/event/cfb/upcoming`
-catalog, cached hourly, to supply fixtures missing from inline prop context.
+per game. Normal operation is ten odds calls per cycle, plus metadata refreshes.
+NCAAF and NCAAB props also use bulk `/event/cfb/upcoming` and `/event/cbb/upcoming`
+catalogs, cached hourly, to supply fixtures missing from inline prop context.
 Catalog failure preserves usable odds. School names come from the same
 provider's team catalog rather than event abbreviations.
 
 ## Shared API and identities
 
 Canonical sport keys are `nhl_hockey`, `nba_basketball`, `nfl_football`,
-`mlb_baseball`, and `ncaaf_football`. Unabated uses `cfb` for NCAAF; PropLine uses `football_ncaaf`. Provider route keys are mapped internally.
+`mlb_baseball`, `ncaaf_football`, and `ncaab_basketball`. Unabated uses `cfb` for NCAAF
+and `cbb` for NCAAB; PropLine uses `football_ncaaf` and `basketball_ncaab`.
+Provider route keys are mapped internally. MLB remains in the API catalog during its collection pause.
 Books retain provenance: `unabated_<source-id>` and `propline_<book-key>`.
 API refreshes never remove missing selections from either feed, even on a
 complete empty response. An existing selection changes only when the incoming
@@ -75,7 +81,7 @@ excludes them. A successful rejoin never makes an old snapshot fresh again.
 
 ## Run and inspect
 
-Set the credentials in `.env`, use the five-league `LEAGUES_JSON` in `.env.example`,
+Set the credentials in `.env`, use the six-league `LEAGUES_JSON` in `.env.example`,
 and run `docker compose up --build -d`. Both poll interval settings must be 480;
 collection TTLs must cover that interval. `PROPLINE_ENABLED=true` is the default.
 The API image has no browser. `collection-artifacts` stores scheduler/status files;

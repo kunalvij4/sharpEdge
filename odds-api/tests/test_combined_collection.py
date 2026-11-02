@@ -94,7 +94,7 @@ async def test_late_restart_keeps_four_minutes_between_provider_starts(clock, tm
     assert calls[-1] == ("propline", 640)
 
 
-async def test_both_feeds_share_five_league_api_after_cold_start(repo, board, clock, tmp_path):
+async def test_both_feeds_collect_active_leagues_and_keep_mlb_route(repo, board, clock, tmp_path):
     settings = Settings(
         _env_file=None,
         api_keys="offline-product",
@@ -110,7 +110,9 @@ async def test_both_feeds_share_five_league_api_after_cold_start(repo, board, cl
         "nfl_football": "player_pass_yds",
         "mlb_baseball": "batter_hits",
         "ncaaf_football": "player_pass_yds",
+        "ncaab_basketball": "player_points",
     }
+    unabated_calls = []
 
     def handler(request):
         sport = request.url.path.split("/")[3]
@@ -123,6 +125,7 @@ async def test_both_feeds_share_five_league_api_after_cold_start(repo, board, cl
 
     class Unabated:
         async def fetch(self, sport, kind):
+            unabated_calls.append((sport, kind))
             source = board(kind)
             league = League(sport, DEFAULT_LEAGUES[sport]["title"], DEFAULT_LEAGUES[sport]["route"], sport)
             event = replace(source.events[0], league_key=sport)
@@ -148,12 +151,31 @@ async def test_both_feeds_share_five_league_api_after_cold_start(repo, board, cl
     try:
         await collection.collect("propline")
         assert len(calls) == 5
+        assert set(calls) == {
+            "hockey_nhl",
+            "basketball_nba",
+            "football_nfl",
+            "football_ncaaf",
+            "basketball_ncaab",
+        }
         assert not repo.events("nba_basketball")
         clock.value = 240
         await collection.collect("unabated")
+        assert set(unabated_calls) == {
+            (league, kind) for league in settings.collection_leagues for kind in ("moneyline", "props")
+        }
+        assert not any(league == "mlb_baseball" for league, _ in unabated_calls)
         assert len(calls) == 5  # Catalog rejoin never calls the provider again.
         with TestClient(create_app(settings, repo, clock)) as api:
-            for league in DEFAULT_LEAGUES:
+            mlb = api.get("/v1/sports/mlb_baseball/odds", headers={"X-API-Key": "offline-product"})
+            assert mlb.status_code == 200 and mlb.json() == []
+            assert (
+                api.get(
+                    "/v1/sports/mlb_baseball/events", headers={"X-API-Key": "offline-product"}
+                ).status_code
+                == 200
+            )
+            for league in settings.collection_leagues:
                 response = api.get(
                     f"/v1/sports/{league}/odds?markets=h2h,spreads&oddsFormat=american",
                     headers={"X-API-Key": "offline-product"},

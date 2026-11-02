@@ -97,11 +97,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
     parser.add_argument("--output-dir", type=Path)
-    parser.add_argument("--leagues", nargs="+", choices=SPORT_KEYS, default=list(SPORT_KEYS))
+    parser.add_argument("--leagues", nargs="+", choices=SPORT_KEYS)
     args = parser.parse_args()
+    settings = Settings(_env_file=args.env_file)
+    args.leagues = args.leagues or [key for key in SPORT_KEYS if key in settings.collection_leagues]
     if len(set(args.leagues)) != len(args.leagues):
         parser.error("Each league may appear only once")
-    settings = Settings(_env_file=args.env_file)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     output = args.output_dir or ROOT / "artifacts" / "propline" / stamp
     logging.getLogger("httpx").setLevel(logging.WARNING)

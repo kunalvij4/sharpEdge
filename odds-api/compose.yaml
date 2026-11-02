@@ -4,6 +4,7 @@ x-database: &database
   REDIS_URL: ${REDIS_URL:?Set REDIS_URL}
   REDIS_PREFIX: ${REDIS_PREFIX:-sharpedge:odds:v1}
   LEAGUES_JSON: ${LEAGUES_JSON:?Set LEAGUES_JSON}
+  COLLECTION_EXCLUDED_LEAGUES: '${COLLECTION_EXCLUDED_LEAGUES:-["mlb_baseball"]}'
 
 services:
   api:

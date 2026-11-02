@@ -11,6 +11,7 @@ DEFAULT_LEAGUES = {
     "nfl_football": {"title": "NFL", "route": "nfl"},
     "mlb_baseball": {"title": "MLB", "route": "mlb"},
     "ncaaf_football": {"title": "NCAAF", "route": "cfb"},
+    "ncaab_basketball": {"title": "NCAAB", "route": "cbb"},
 }
 
 
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
     unabated_api_base_url: str = "https://data.unabated.com"
     unabated_partner_code: str = ""
     leagues_json: str = json.dumps(DEFAULT_LEAGUES)
+    collection_excluded_leagues: set[str] = {"mlb_baseball"}
     poll_interval: float = Field(default=480, gt=0)
     collection_state_path: str = "artifacts/collection/schedule.json"
     request_timeout: float = Field(default=15, gt=0)
@@ -68,6 +70,7 @@ class Settings(BaseSettings):
             "hockey_nhl": "nhl_hockey",
             "football_ncaaf": "ncaaf_football",
             "americanfootball_ncaaf": "ncaaf_football",
+            "basketball_ncaab": "ncaab_basketball",
         }
         result = {}
         for key, value in json.loads(self.leagues_json).items():
@@ -76,8 +79,20 @@ class Settings(BaseSettings):
                 raise ValueError("Duplicate canonical league key in LEAGUES_JSON")
             if key == "ncaaf_football" and value["route"] == "ncaaf":
                 value = {**value, "route": "cfb"}
+            if key == "ncaab_basketball" and value["route"] == "ncaab":
+                value = {**value, "route": "cbb"}
             result[key] = value
+        # Upgrade older full-catalog .env files; intentional league subsets stay scoped.
+        if DEFAULT_LEAGUES.keys() - {"ncaab_basketball"} <= result.keys():
+            result.setdefault("ncaab_basketball", DEFAULT_LEAGUES["ncaab_basketball"])
         return result
+
+    @cached_property
+    def collection_leagues(self) -> dict:
+        """Pause seasonal collection without removing a league's API routes."""
+        return {
+            key: value for key, value in self.leagues.items() if key not in self.collection_excluded_leagues
+        }
 
     @model_validator(mode="after")
     def valid(self):

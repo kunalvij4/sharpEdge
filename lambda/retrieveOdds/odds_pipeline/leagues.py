@@ -1,4 +1,4 @@
-"""The five leagues and reference player-prop keys for pipeline verification."""
+"""The supported leagues, seasonal collection list, and reference player-prop keys."""
 
 LEAGUE_SPORT_KEYS = {
     "NBA": "basketball_nba",
@@ -6,8 +6,10 @@ LEAGUE_SPORT_KEYS = {
     "NHL": "icehockey_nhl",
     "MLB": "baseball_mlb",
     "NCAAF": "americanfootball_ncaaf",
+    "NCAAB": "basketball_ncaab",
 }
-LEAGUES = tuple(LEAGUE_SPORT_KEYS)
+ACTIVE_LEAGUE_SPORT_KEYS = {league: key for league, key in LEAGUE_SPORT_KEYS.items() if league != "MLB"}
+LEAGUES = tuple(ACTIVE_LEAGUE_SPORT_KEYS)
 
 # Reference two-sided markets used by the regression fixtures. Collection uses
 # the in-house all_props selector, so these lists do not restrict new markets.
@@ -42,6 +44,7 @@ PROP_MARKETS_BY_LEAGUE = {
     ),
     "NCAAF": FOOTBALL_PROP_MARKETS,
 }
+PROP_MARKETS_BY_LEAGUE["NCAAB"] = PROP_MARKETS_BY_LEAGUE["NBA"]
 PROP_MARKETS_BY_SPORT = {
     LEAGUE_SPORT_KEYS[league]: markets
     for league, markets in PROP_MARKETS_BY_LEAGUE.items()

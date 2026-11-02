@@ -72,6 +72,7 @@ class Event:
             "nba_basketball": "basketball_nba",
             "nfl_football": "americanfootball_nfl",
             "mlb_baseball": "baseball_mlb",
+            "ncaab_basketball": "basketball_ncaab",
         }.get(self.league_key, self.league_key)
         return identity("event", namespace, self.source_id)
 

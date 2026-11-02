@@ -278,7 +278,10 @@ async def test_collection_cycle_uses_one_bulk_call_per_configured_league(repo, b
     try:
         await collect_cycle(client, repo, settings, state)
         assert len(requested) == 5
-        assert set(state) == set(SPORT_KEYS)
+        assert set(state) == set(settings.collection_leagues) & set(SPORT_KEYS)
+        assert "ncaab_basketball" in state and "mlb_baseball" not in state
+        assert "/v1/sports/basketball_ncaab/odds" in requested
+        assert "/v1/sports/baseball_mlb/odds" not in requested
         assert all(row["outcome"] == "success" for row in state.values())
     finally:
         await client.close()

@@ -1,8 +1,13 @@
 # Five-minute odds pipeline
 
-One scheduled Lambda fetches NBA, NFL, NHL, MLB, and NCAAF every **five minutes**
+One scheduled Lambda fetches NBA, NFL, NHL, NCAAF, and NCAAB every **five minutes**
 from the in-house Odds API, including moneyline, spreads, and all supported
 two-sided player props. The league list is in `odds_pipeline/leagues.py`.
+MLB remains a supported sport mapping, but is excluded from
+`ACTIVE_LEAGUE_SPORT_KEYS` during the offseason. The run does not request MLB
+odds, events, or props. NCAAB uses `basketball_ncaab`, mapped to the in-house
+`ncaab_basketball` routes. The website hides retained MLB opportunity snapshots.
+
 The parser and result schema also support totals, but the current in-house API
 does not expose game totals, so those result arrays remain empty.
 

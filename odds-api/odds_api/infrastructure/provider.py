@@ -195,11 +195,11 @@ class UnabatedClient:
         if kind == "props":
             people = await self.metadata("/player/" + route, self.settings.scope_metadata_ttl)
         events = []
-        if route == "cfb" and kind == "props":
+        if route in {"cfb", "cbb"} and kind == "props":
             # College props omit fixture context for many games. One cached bulk
             # catalog supplies those identities, including games without props yet.
             try:
-                events = await self.metadata("/event/cfb/upcoming", self.settings.metadata_ttl)
+                events = await self.metadata("/event/" + route + "/upcoming", self.settings.metadata_ttl)
             except ProviderError:
                 # A catalog outage must not discard usable prices from this board.
                 self.metrics["event_catalog_failures"] += 1

@@ -109,6 +109,7 @@ class OddsQueryService:
                     "mlb": "Baseball",
                     "nhl": "Hockey",
                     "cfb": "Football",
+                    "cbb": "Basketball",
                 }.get(league.route, league.title),
                 "title": league.title,
                 "description": league.title,
