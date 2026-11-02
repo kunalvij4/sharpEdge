@@ -192,11 +192,11 @@ class Normalizer:
             team_sides = {}
             for team in values(raw.get("eventTeams")):
                 catalog_name = team_map.get(str(team.get("teamId")))
-                # CFB's bulk event list uses abbreviations (e.g. MFL). Use the
+                # College bulk event lists use abbreviations (e.g. MFL). Use the
                 # same provider's team catalog for the confirmed school name.
                 name = (
                     (catalog_name or team.get("name"))
-                    if league.route == "cfb"
+                    if league.route in {"cfb", "cbb"}
                     else (team.get("name") or catalog_name)
                 )
                 if name:

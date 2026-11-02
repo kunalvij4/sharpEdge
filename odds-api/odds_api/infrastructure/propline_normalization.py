@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from odds_api.domain.models import Availability, Board, Event, Quote, Sportsbook, identity
 from odds_api.infrastructure.bet365 import normalized, same_team
+from odds_api.infrastructure.college_teams import COLLEGE_SPORTS, school_key
 from odds_api.infrastructure.normalization import link_with_partner, resolve_duplicates
 from odds_api.infrastructure.propline import COLLECTED_DFS_BOOKS, DFS_BOOKS, GAME_MARKETS, PROP_MARKETS
 
@@ -42,7 +43,9 @@ def public_markets():
     }
 
 
-def teams_match(left, right):
+def teams_match(left, right, sport_key=None):
+    if sport_key in COLLEGE_SPORTS:
+        return school_key(left) == school_key(right)
     # Either feed can use the abbreviated city (e.g. LA Clippers).
     return same_team(left, right) or same_team(right, left)
 
@@ -57,8 +60,14 @@ def match_event(source, events):
         if event["status"] == "pregame"
         and abs((event["start"] - source.commence_time).total_seconds()) <= tolerance
         and (
-            (teams_match(source.home_team, event["home"]) and teams_match(source.away_team, event["away"]))
-            or (teams_match(source.home_team, event["away"]) and teams_match(source.away_team, event["home"]))
+            (
+                teams_match(source.home_team, event["home"], source.sport_key)
+                and teams_match(source.away_team, event["away"], source.sport_key)
+            )
+            or (
+                teams_match(source.home_team, event["away"], source.sport_key)
+                and teams_match(source.away_team, event["home"], source.sport_key)
+            )
         )
     ]
     return matches[0] if len(matches) == 1 else None
@@ -145,7 +154,9 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
                     if is_game:
                         side = outcome.model_extra.get("side")
                         team = {"home": source.home_team, "away": source.away_team}.get(side, name)
-                        sides = [s for s in ("home", "away") if teams_match(team, event[s])]
+                        sides = [
+                            s for s in ("home", "away") if teams_match(team, event[s], source.sport_key)
+                        ]
                         if market.key == "h2h" and (side == "draw" or name.casefold() == "draw"):
                             name = "Draw"
                         elif len(sides) != 1:
@@ -166,7 +177,9 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
                         if len(known) > 1:
                             counts["ambiguous_players"] += 1
                             continue
-                        named_player_fallback = book.key in NAMED_PLAYER_BOOKS
+                        named_player_fallback = (
+                            book.key in NAMED_PLAYER_BOOKS or source.sport_key in COLLEGE_SPORTS
+                        )
                         if not known and not outcome.player_id and not named_player_fallback:
                             counts["props_without_confirmed_player_id"] += 1
                             continue
