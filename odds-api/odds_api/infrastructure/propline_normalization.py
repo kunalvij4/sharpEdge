@@ -154,9 +154,7 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
                     if is_game:
                         side = outcome.model_extra.get("side")
                         team = {"home": source.home_team, "away": source.away_team}.get(side, name)
-                        sides = [
-                            s for s in ("home", "away") if teams_match(team, event[s], source.sport_key)
-                        ]
+                        sides = [s for s in ("home", "away") if teams_match(team, event[s], source.sport_key)]
                         if market.key == "h2h" and (side == "draw" or name.casefold() == "draw"):
                             name = "Draw"
                         elif len(sides) != 1:

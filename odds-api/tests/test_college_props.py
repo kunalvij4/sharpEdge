@@ -66,9 +66,7 @@ def test_college_alias_match_still_requires_unique_fixture_and_kickoff():
             "bookmakers": [],
         }
     )
-    canonical = {
-        "status": "pregame", "start": source.commence_time, "home": "Army", "away": "Duke"
-    }
+    canonical = {"status": "pregame", "start": source.commence_time, "home": "Army", "away": "Duke"}
     assert match_event(source, [canonical]) is canonical
     assert match_event(source, [canonical, dict(canonical)]) is None
     assert match_event(source, [{**canonical, "start": canonical["start"] + timedelta(minutes=6)}]) is None
@@ -79,21 +77,29 @@ def test_college_alias_match_still_requires_unique_fixture_and_kickoff():
 def test_college_sportsbooks_with_named_players_but_no_ids_reach_fresh_api(
     repo, board, clock, backend, sport
 ):
-    repository = repo if backend == "sql" else RedisRepository(
-        "", DEFAULT_LEAGUES, clock=clock, client=fakeredis.FakeRedis(decode_responses=True)
+    repository = (
+        repo
+        if backend == "sql"
+        else RedisRepository(
+            "", DEFAULT_LEAGUES, clock=clock, client=fakeredis.FakeRedis(decode_responses=True)
+        )
     )
     raw = snapshot(board, clock)
     source = future_board(board, clock)
     config = DEFAULT_LEAGUES[sport]
     event = replace(source.events[0], league_key=sport, home="Duke", away="Army")
     source = replace(
-        source, league=League(sport, config["title"], config["route"], "42"),
-        events=(event,), quotes=(),
+        source,
+        league=League(sport, config["title"], config["route"], "42"),
+        events=(event,),
+        quotes=(),
     )
     repository.save(source)
     raw[0].update(
-        sport_key=SPORT_KEYS[sport], commence_time=event.start.isoformat(),
-        home_team="(2) Duke Blue Devils", away_team="Army Black Knights",
+        sport_key=SPORT_KEYS[sport],
+        commence_time=event.start.isoformat(),
+        home_team="(2) Duke Blue Devils",
+        away_team="Army Black Knights",
     )
     template = raw[0]["bookmakers"][0]
     template["markets"] = template["markets"][2:]
@@ -123,9 +129,7 @@ def test_college_sportsbooks_with_named_players_but_no_ids_reach_fresh_api(
     for collected in output:
         repository.save(collected)
     with TestClient(create_app(Settings(_env_file=None, api_keys="test"), repository, clock)) as api:
-        response = api.get(
-            f"/v1/events/{event.id}/props?freshOnly=true", headers={"X-API-Key": "test"}
-        )
+        response = api.get(f"/v1/events/{event.id}/props?freshOnly=true", headers={"X-API-Key": "test"})
         assert response.status_code == 200
         payload = response.json()
         assert {b["key"] for b in payload["bookmakers"]} == {"draftkings", "fanduel", "courtside"}
@@ -144,8 +148,16 @@ def test_college_event_names_use_confirmed_team_catalog(raw, league, clock, rout
         for team in values(group["eventTeams"]):
             team["name"] = "HOM" if team["sideIndex"] == 1 else "AWA"
     result = Normalizer().parse(
-        replace(league, route=route), "props", raw["props"]["data"], raw["sources"],
-        raw["bets"], raw["periods"], raw["events"], raw["people"], raw["teams"], clock.now(),
+        replace(league, route=route),
+        "props",
+        raw["props"]["data"],
+        raw["sources"],
+        raw["bets"],
+        raw["periods"],
+        raw["events"],
+        raw["people"],
+        raw["teams"],
+        clock.now(),
     )
     assert result.events[0].home == "Home Team"
     assert result.events[0].away == "Away Team"
@@ -160,8 +172,10 @@ def test_missing_player_id_keeps_professional_guard_and_rejects_ambiguous_colleg
     config = DEFAULT_LEAGUES[sport]
     event = replace(source.events[0], league_key=sport)
     source = replace(
-        source, league=League(sport, config["title"], config["route"], "42"),
-        events=(event,), quotes=tuple(replace(q, event_id=event.id) for q in source.quotes),
+        source,
+        league=League(sport, config["title"], config["route"], "42"),
+        events=(event,),
+        quotes=tuple(replace(q, event_id=event.id) for q in source.quotes),
     )
     raw = snapshot(board, clock)
     raw[0]["sport_key"] = SPORT_KEYS[sport]
