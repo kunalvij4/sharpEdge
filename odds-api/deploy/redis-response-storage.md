@@ -2,7 +2,7 @@
 
 The collector stores compressed event JSON in the public API hierarchy:
 event fields → bookmakers → markets → outcomes. Decimal prices, ordering,
-descriptions, and freshness fields are prepared during collection. Props and
+and descriptions are prepared during collection. Props and
 game lines share the event document and the same atomic refresh.
 
 Keys use `<REDIS_PREFIX>:event:<event-id>`. Values use the `zlib:1:` compression
@@ -14,7 +14,9 @@ schema **2**.
 Public fields match an event odds response: `id`, `sport_key`, `sport_title`,
 `commence_time`, `home_team`, `away_team`, and `bookmakers`. Bookmakers contain
 market arrays, and markets contain outcome arrays. Each prop outcome includes
-`name`, decimal `price`, `point`, `description`, and `freshness`.
+`name`, decimal `price`, `point`, and `description`. Game outcomes contain
+`name`, decimal `price`, and an optional `point`. All providers use these same
+outcome fields, regardless of quote age; outcomes have no public `freshness` object.
 
 Small `_storage` sections retain data needed for future merges:
 
@@ -22,10 +24,9 @@ Small `_storage` sections retain data needed for future merges:
 | --- | --- |
 | Event | Schema version and canonical event identity/lifecycle metadata |
 | Bookmaker | Canonical book ID |
-| Outcome | Selection ID, player/period/alternate identity, exact decimal line, original American price, availability, source IDs, and deep link |
-| Game outcome | Collection/source/expiry timestamps, since game outcomes have no public freshness object |
+| Outcome | Selection ID, player/period/alternate identity, exact decimal line, original American price, availability, source IDs, deep link, and collection/source/expiry timestamps |
 
-Prop timestamps live in their public freshness object. Canonical quotes can be
+All quote timestamps live in private outcome metadata. Canonical quotes can be
 restored for collectors and diagnostics without storing another full copy of
 each quote. Private sections are removed from HTTP responses.
 
@@ -37,8 +38,8 @@ serializes the response. It avoids domain quote reconstruction, regrouping,
 decimal conversion, and Pydantic response-object construction. American requests
 select the exact retained American price.
 
-Freshness and filtering still run on reads. `age_seconds`, `observed_at`, cached
-price eligibility, source expiry, `freshOnly`, and kickoff eligibility depend on
+Freshness and filtering still run on reads. Event-level `observed_at`, fresh/stale
+outcome counts, source expiry, `freshOnly`, and kickoff eligibility depend on
 the current time. Book/market filters and commence-time bounds apply to prepared
 arrays. Group `last_update` reflects returned outcomes. An explicit bookmaker
 filter also validates against the stored bookmaker catalog.
@@ -50,8 +51,10 @@ event merges from concurrent writers; Redis expiry remains the exact kickoff.
 
 ## Rollout and rollback
 
-The reader accepts uncompressed and compressed legacy flat records. The next
-collector write upgrades each touched event atomically. Existing data can also
+The reader accepts uncompressed and compressed legacy flat records, plus earlier
+schema 2 documents with public prop freshness blocks. Reads hide those blocks
+immediately. The next collector write moves timestamps into private metadata
+and removes public freshness blocks from each touched event atomically. Existing data can also
 be converted explicitly using the new image's runtime environment:
 
 ```sh

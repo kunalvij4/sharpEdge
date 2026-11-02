@@ -132,9 +132,10 @@ def test_stale_quotes_are_retained_and_terminal_event_quotes_are_excluded(repo, 
     snapshot = board()
     repo.save(snapshot)
     service = query(repo, clock)
+    original = service.odds("nba_basketball")
     clock.value = 91
     retained = service.odds("nba_basketball")
-    assert retained[0]["bookmakers"][0]["markets"][0]["outcomes"][0]["freshness"]["status"] == "stale"
+    assert retained == original
     assert service.odds("nba_basketball", fresh_only=True) == []
     clock.value = 0
     repo.save(replace(snapshot, events=(replace(snapshot.events[0], status="final"),)))

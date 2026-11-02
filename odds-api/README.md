@@ -189,8 +189,8 @@ Set `TEST_DATABASE_URL` to an **empty disposable PostgreSQL database** to run re
 |---|---|
 | `GET /v1/sports` | Configured leagues, NHL, NBA, NFL, MLB, and NCAAF by default |
 | `GET /v1/sports/{sport}/events` | Events with a future commence time |
-| `GET /v1/sports/{sport}/odds` | Actionable moneylines and spreads across events |
-| `GET /v1/events/{event_id}/odds` | Moneylines and selected props; cached props carry explicit freshness labels |
+| `GET /v1/sports/{sport}/odds` | Last-known moneylines and spreads across events; `freshOnly=true` filters stale prices |
+| `GET /v1/events/{event_id}/odds` | Moneylines and selected props; prop queries include an event-level freshness summary |
 | `GET /v1/events/{event_id}/props` | All supported player props, including alternates and periods, from every stored book |
 | `GET /v1/status` | Collection success/failure, lag, misses, warnings, counts, rate limits, freshness |
 | `GET /health/live` | Process liveness |
@@ -202,9 +202,13 @@ Both odds endpoints accept comma-separated `markets` (default `h2h`) and `bookma
 
 For every supported prop on a game, use `/v1/events/{event_id}/props?oddsFormat=american`. The equivalent event odds query is `?markets=all_props&oddsFormat=american`. The props route defaults to `markets=all_props` and accepts the same bookmaker, market, date, and format filters. To request one or several prop types, use e.g. `?markets=player_points,player_rebounds` for NBA or `?markets=player_pass_yds,player_receptions` for NFL. Game IDs come from the matching sport's `/events` endpoint. All-props means all supported normalized prop keys; unsupported settlement types still appear as collector warnings.
 
-API odds retain the last available price for each sportsbook selection until kickoff or event closure. A missing book, missing market, empty response, or slow provider never removes peers from the response. Quotes past collection/source freshness or explicit freshness expiry remain visible with `freshness.status="stale"` and `actionable:false`; game outcomes include freshness metadata when stale. Add `freshOnly=true` for fresh actionable prices only. `X-Odds-Retention: until-kickoff` describes retention, and `max_cache_age_seconds:null` indicates no age-based removal. `PROPS_CACHE_TTL` and `X-Odds-Props-Cache-TTL` apply only to the legacy direct Bet365 cache. Reading the API never refreshes stored timestamps. Matching selections from both API feeds share one public sportsbook key and return the fresher valid observation; other books, lines, players, periods, and sides stay intact.
+API odds retain the last available price for each sportsbook selection until kickoff or event closure. A missing book, missing market, empty response, or slow provider never removes peers from the response. Quotes past collection/source freshness or explicit freshness expiry remain visible. Outcomes have the same fields for all providers and ages: `name`, `price`, and optional `point`/`description`; no outcome-level `freshness` object is stored or returned. Collection/source/expiry timestamps remain private for merging and filtering. Add `freshOnly=true` for fresh prices only. Prop queries retain the event-level `freshness` summary and `X-Odds-Data-Status` header. `X-Odds-Retention: until-kickoff` describes retention, and `max_cache_age_seconds:null` indicates no age-based removal. `PROPS_CACHE_TTL` and `X-Odds-Props-Cache-TTL` apply only to the legacy direct Bet365 cache. Reading the API never refreshes stored timestamps. Matching selections from both API feeds share one public sportsbook key and return the fresher valid observation; other books, lines, players, periods, and sides stay intact.
 
 Responses use events → bookmakers → markets → outcomes. Player over/under outcomes have `name`, `price`, `point`, and player `description`. American odds are integers; decimal prices are rounded to four places. All serialized times are UTC.
+
+`ProphetX` and `Prophet Exchange` share the public bookmaker key `prophetxchange`
+and title `ProphetXchange`. Matching selections merge under that one book; each
+feed retains its private storage identity. Use `bookmakers=prophetxchange` to filter it.
 
 ### Compatibility differences
 
@@ -222,7 +226,7 @@ Duplicate selections use the newest source timestamp when it establishes an unam
 - Public bookmaker keys use normalized sportsbook names, such as `draftkings`, `fanduel`, and `bet365`, consistently across Unabated and PropLine. Bookmaker filters use these same keys. Storage identities remain provider-specific, so each feed updates only its own quotes; missing books or lines never delete the other feed’s odds. Every discovered account-authorized Unabated source is considered. Existing stored documents are projected using these public keys without a data migration.
 - `last_update` is null when individual source timestamps are absent. It is never synthesized from collection time. When grouped, it is the newest known source timestamp among included outcomes; it does not imply every outcome changed then.
 - Region filters, scores, futures, historical endpoints, dateFormat, quota/billing headers, and event/market discovery endpoints beyond the required subset are not implemented. Unsupported query parameters are rejected.
-- Suspended, removed, explicitly expired, source-expired, and final/cancelled/unknown-event quotes are excluded. Stale props within the bounded cache policy are returned with explicit non-actionable labels unless `freshOnly=true`; stale moneylines remain excluded. Known events with no eligible prices return `bookmakers: []`.
+- Suspended, removed, and final/cancelled/unknown-event quotes are excluded. Last-known API prices remain visible after collection/source/explicit expiry unless `freshOnly=true`. Known events with no eligible prices return `bookmakers: []`.
 - Freshness is reported separately in `/v1/status` and `X-Odds-Observed-At`, `X-Odds-Collected-TTL`, and `X-Odds-Source-TTL` headers. The observed-at header is the API observation time, not an upstream update time.
 - Periods and alternate lines have distinct public market keys as described below. Outcome arrays may contain multiple points for a player.
 - Fixtures in `tests/fixtures` are synthetic examples based on the documented hierarchy. No actual existing consumer payload or account response was supplied; replace/add sanitized real fixtures during acceptance validation.
@@ -292,7 +296,7 @@ reading or refreshing another feed never makes them fresh again. Market, period,
 player, exact line, side, and book determine the public selection identity. Provider
 storage identities remain distinct. The API picks the fresher valid observation
 for matching selections across feeds and preserves last-known odds until kickoff;
-freshness controls actionable status and the explicit `freshOnly` filter.
+freshness controls the event-level summary and the explicit `freshOnly` filter.
 
 Availability has available, suspended, removed, and stale states. Staleness is calculated at read time from:
 - time since collection exceeding `COLLECTED_TTL`;
@@ -313,7 +317,7 @@ Optional snapshot retention is disabled with `SNAPSHOT_RETENTION_DAYS=0`. When e
 
 API workers never start collection or synchronously contact Unabated. A dedicated collector owns a PostgreSQL session advisory lock. A second collector exits instead of creating a schedule. An ownership-connection failure terminates collection. In-flight jobs are cancelled and awaited before releasing ownership and closing the HTTP client/database. Do not share the same provider key across separate databases or unrelated deployments; their rate limiters would not coordinate.
 
-HTTP liveness, database readiness, collector heartbeat, and per-scope provider health are separate. A provider outage does not make healthy persisted reads depend on the provider. Last-known API prices remain visible until kickoff and carry stale, non-actionable freshness metadata when outside the freshness policy. Structured collector logs include league, scope, run ID, duration, selection count, and outcome; provider exception messages, response bodies, headers, and signed URLs are not logged.
+HTTP liveness, database readiness, collector heartbeat, and per-scope provider health are separate. A provider outage does not make healthy persisted reads depend on the provider. Last-known API prices remain visible until kickoff; prop queries summarize fresh and stale outcome counts at the event level. Structured collector logs include league, scope, run ID, duration, selection count, and outcome; provider exception messages, response bodies, headers, and signed URLs are not logged.
 
 Unabated response decoding and normalization run in worker threads so large
 props boards do not block ownership renewal. Heartbeat failures log their

@@ -61,15 +61,6 @@ class EventResponse(BaseModel):
     away_team: str
 
 
-class QuoteFreshness(BaseModel):
-    status: Literal["fresh", "stale"]
-    actionable: bool
-    collected_at: datetime
-    source_updated_at: datetime | None
-    expires_at: datetime | None
-    age_seconds: float
-
-
 class ResponseFreshness(BaseModel):
     observed_at: datetime
     status: Literal["fresh", "stale", "mixed", "unavailable"]
@@ -85,7 +76,6 @@ class OutcomeResponse(BaseModel):
     price: int | float
     point: float | None = None
     description: str | None = None
-    freshness: QuoteFreshness | None = None
 
 
 class MarketResponse(BaseModel):

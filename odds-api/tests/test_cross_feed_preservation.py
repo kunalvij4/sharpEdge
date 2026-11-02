@@ -18,12 +18,35 @@ def test_sportsbook_keys_do_not_depend_on_feed(title):
     assert sportsbook_key("unabated_91", title) == "draftkings"
 
 
+@pytest.mark.parametrize("title", ["ProphetX", "Prophet Exchange", "ProphetXchange", "PROPHET EXCHANGE"])
+def test_prophet_aliases_share_one_public_key(title):
+    assert sportsbook_key("unabated_91", title) == "prophetxchange"
+    assert sportsbook_key("propline_prophetx", title) == "prophetxchange"
+
+
+@pytest.mark.parametrize(
+    "unabated_title,propline_title,propline_key,public_key",
+    [
+        ("Draft Kings", "DraftKings", "draftkings", "draftkings"),
+        ("Prophet Exchange", "ProphetX", "prophetx", "prophetxchange"),
+    ],
+)
 @pytest.mark.parametrize("propline_first", [False, True])
 @pytest.mark.parametrize("backend", ["sql", "redis"])
 @pytest.mark.parametrize("kind", ["moneyline", "props"])
 @pytest.mark.parametrize("refresh", ["complete", "partial", "empty"])
 def test_unabated_refresh_preserves_propline_and_other_books(
-    repo, board, clock, backend, kind, refresh, propline_first
+    repo,
+    board,
+    clock,
+    backend,
+    kind,
+    refresh,
+    propline_first,
+    unabated_title,
+    propline_title,
+    propline_key,
+    public_key,
 ):
     repository = (
         repo
@@ -33,13 +56,13 @@ def test_unabated_refresh_preserves_propline_and_other_books(
         )
     )
     original = future_board(lambda: board(kind), clock)
-    draftkings = Sportsbook("91", "Draft Kings")
+    primary_book = Sportsbook("91", unabated_title)
     fanduel = Sportsbook("92", "FanDuel")
-    propline_book = Sportsbook("draftkings", "DraftKings", "propline")
+    propline_book = Sportsbook(propline_key, propline_title, "propline")
     unabated = replace(
         original,
-        books=(draftkings, fanduel),
-        quotes=tuple(replace(q, book_id=b.id) for b in (draftkings, fanduel) for q in original.quotes),
+        books=(primary_book, fanduel),
+        quotes=tuple(replace(q, book_id=b.id) for b in (primary_book, fanduel) for q in original.quotes),
     )
     propline = replace(
         original,
@@ -61,7 +84,7 @@ def test_unabated_refresh_preserves_propline_and_other_books(
         repository.save(
             replace(
                 unabated,
-                books=(draftkings,),
+                books=(primary_book,),
                 quotes=incoming,
                 complete=refresh != "partial",
                 collected_at=clock.now(),
@@ -80,23 +103,25 @@ def test_unabated_refresh_preserves_propline_and_other_books(
         response = client.get(path + "?oddsFormat=american", headers=headers)
         assert response.status_code == 200
         books = response.json()["bookmakers"]
-        assert {b["key"] for b in books} == {"draftkings", "fanduel"}
+        assert {b["key"] for b in books} == {public_key, "fanduel"}
         assert len(books) == 2
-        dk = next(b for b in books if b["key"] == "draftkings")
-        prices = {o["price"] for m in dk["markets"] for o in m["outcomes"]}
+        primary = next(b for b in books if b["key"] == public_key)
+        if public_key == "prophetxchange":
+            assert primary["title"] == "ProphetXchange"
+        prices = {o["price"] for m in primary["markets"] for o in m["outcomes"]}
         assert 175 in prices
         assert (150 if refresh != "empty" else 175) in prices
-        filtered = client.get(path + "?bookmakers=draftkings", headers=headers)
+        filtered = client.get(path + f"?bookmakers={public_key}", headers=headers)
         assert filtered.status_code == 200
-        assert [b["key"] for b in filtered.json()["bookmakers"]] == ["draftkings"]
+        assert [b["key"] for b in filtered.json()["bookmakers"]] == [public_key]
 
         # Aging changes freshness, never sportsbook membership or the chosen price.
         clock.value = 150
         aged = client.get(path + "?oddsFormat=american", headers=headers)
         assert aged.status_code == 200
-        assert [b["key"] for b in aged.json()["bookmakers"]] == ["draftkings", "fanduel"]
-        aged_dk = next(b for b in aged.json()["bookmakers"] if b["key"] == "draftkings")
-        assert {o["price"] for m in aged_dk["markets"] for o in m["outcomes"]} == prices
+        assert [b["key"] for b in aged.json()["bookmakers"]] == sorted([public_key, "fanduel"])
+        aged_primary = next(b for b in aged.json()["bookmakers"] if b["key"] == public_key)
+        assert {o["price"] for m in aged_primary["markets"] for o in m["outcomes"]} == prices
         assert {
             r["quote"].selection_id: r["quote"] for r in repository.quotes(original.league.key)
         } == expected

@@ -81,8 +81,14 @@ def test_delayed_unabated_pull_only_changes_exact_fresher_sportsbook_selection(
         outcomes = [o for m in books["draftkings"]["markets"] for o in m["outcomes"]]
         assert len(outcomes) == 2
         assert sorted(o["price"] for o in outcomes) == ([150, 175] if incoming == "fresher" else [175, 175])
-        retained = [o for o in outcomes if o["price"] == 175]
-        assert all(o["freshness"]["status"] == "stale" and not o["freshness"]["actionable"] for o in retained)
+        expected_fields = {"name", "price", "point", "description"} if kind == "props" else {"name", "price"}
+        for book in books.values():
+            for market in book["markets"]:
+                for outcome in market["outcomes"]:
+                    assert set(outcome) == expected_fields | ({"point"} if "point" in outcome else set())
+        if kind == "props":
+            assert after.json()["freshness"]["status"] == ("mixed" if incoming == "fresher" else "stale")
+            assert after.json()["freshness"]["stale_outcomes"] == (2 if incoming == "fresher" else 3)
         clock.value = 7200
         aged = client.get(path, headers=headers)
         assert {b["key"] for b in aged.json()["bookmakers"]} == {"draftkings", "fanduel"}

@@ -1,6 +1,6 @@
 import copy
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import fakeredis
 import pytest
@@ -96,6 +96,94 @@ def test_prepared_responses_match_existing_contract(prepared, clock, age, odds_f
         assert "_storage" not in response.text
 
 
+@pytest.mark.parametrize("backend", ["sql", "redis"])
+@pytest.mark.parametrize("odds_format", ["american", "decimal"])
+@pytest.mark.parametrize("age", [0, 91, 601])
+def test_every_provider_uses_same_outcome_fields_when_fresh_or_stale(
+    prepared, clock, backend, odds_format, age
+):
+    redis, sql, settings, event_id = prepared
+    repository = sql if backend == "sql" else redis
+    clock.value = age
+    headers = {"X-API-Key": "fixture-key"}
+    path = f"/v1/events/{event_id}/odds?markets=h2h,player_points&oddsFormat={odds_format}"
+    with TestClient(create_app(settings, repository, clock)) as api:
+        response = api.get(path, headers=headers)
+        assert response.status_code == 200
+        payload = response.json()
+        assert {b["key"] for b in payload["bookmakers"]} == {"fixturebook", "draftkings"}
+        for book in payload["bookmakers"]:
+            assert set(book) == {"key", "title", "last_update", "markets"}
+            for market in book["markets"]:
+                assert set(market) == {"key", "last_update", "outcomes"}
+                for outcome in market["outcomes"]:
+                    assert set(outcome) == (
+                        {"name", "price"}
+                        if market["key"] == "h2h"
+                        else {"name", "price", "point", "description"}
+                    )
+        expected_fresh = {0: 6, 91: 2, 601: 0}[age]
+        assert payload["freshness"]["fresh_outcomes"] == expected_fresh
+        assert payload["freshness"]["stale_outcomes"] == 6 - expected_fresh
+        filtered = api.get(path + "&freshOnly=true", headers=headers).json()
+        assert filtered["freshness"]["fresh_outcomes"] == expected_fresh
+        assert filtered["freshness"]["stale_outcomes"] == 0
+
+
+@pytest.mark.parametrize("upgrade", ["rewrite", "collection"])
+def test_old_prepared_freshness_is_hidden_and_removed_losslessly(prepared, board, clock, upgrade):
+    redis, sql, settings, event_id = prepared
+    key = redis.key("event:" + event_id)
+    document = decode_document(redis.client.get(key))
+    original_quotes = redis.quotes("nba_basketball")
+    expiry = redis.client.pexpiretime(key)
+    # Earlier v2 documents kept prop timestamps in public freshness blocks.
+    for book in document["bookmakers"]:
+        for market in book["markets"]:
+            for outcome in market["outcomes"]:
+                if outcome["_storage"]["player_id"] is not None:
+                    outcome["freshness"] = {
+                        "status": "fresh",
+                        "actionable": True,
+                        "age_seconds": 0,
+                        **{
+                            field: outcome["_storage"].pop(field)
+                            for field in ("collected_at", "source_updated_at", "expires_at")
+                        },
+                    }
+    old_value = encode(document)
+    redis.client.set(key, old_value, keepttl=True)
+    clock.value = 91
+    path = f"/v1/events/{event_id}/odds?markets=h2h,player_points&oddsFormat=american"
+    headers = {"X-API-Key": "fixture-key"}
+    with (
+        TestClient(create_app(settings, sql, clock)) as expected_api,
+        TestClient(create_app(settings, redis, clock)) as api,
+    ):
+        expected = expected_api.get(path, headers=headers).json()
+        assert api.get(path, headers=headers).json() == expected
+        assert redis.client.get(key) == old_value
+        if upgrade == "rewrite":
+            assert redis.rewrite_event_documents("response")["candidate_events"] == 1
+            assert redis.client.get(key) == old_value
+            assert redis.rewrite_event_documents("response", dry_run=False)["rewritten_events"] == 1
+            assert redis.rewrite_event_documents("response")["candidate_events"] == 0
+        else:
+            source = board("props")
+            event = replace(source.events[0], start=datetime.fromisoformat(stored_event(document)["start"]))
+            redis.save(replace(source, events=(event,), quotes=(), complete=False))
+        assert api.get(path, headers=headers).json() == expected
+    upgraded = decode_document(redis.client.get(key))
+    assert all(
+        "freshness" not in outcome
+        for book in upgraded["bookmakers"]
+        for market in book["markets"]
+        for outcome in market["outcomes"]
+    )
+    assert redis.quotes("nba_basketball") == original_quotes
+    assert redis.client.pexpiretime(key) == expiry
+
+
 @pytest.mark.parametrize(
     "path",
     [
@@ -134,7 +222,7 @@ def test_latest_source_timestamp_handles_whole_and_fractional_seconds(prepared, 
     newest = whole + timedelta(microseconds=100000)
     for index, row in enumerate(rows.values()):
         row["quote"]["source_updated_at"] = newest if index == 1 else whole
-    document = prepare_document(stored_event(document), rows, clock.now(), 600, 3600, 600)
+    document = prepare_document(stored_event(document), rows)
     redis.client.set(key, encode(document), keepttl=True)
     with TestClient(create_app(settings, redis, clock)) as api:
         response = api.get(f"/v1/events/{event_id}/props", headers={"X-API-Key": "fixture-key"})
@@ -198,7 +286,12 @@ def test_collector_stores_compressed_public_hierarchy_and_single_event_read_skip
     assert document["id"] == event_id
     assert {book["key"] for book in document["bookmakers"]} == {"unabated_901", "propline_draftkings"}
     outcome = document["bookmakers"][0]["markets"][0]["outcomes"][0]
-    assert {"name", "price", "point", "description", "freshness"} <= outcome.keys()
+    assert set(outcome) == {"name", "price", "point", "description", "_storage"}
+    for book in document["bookmakers"]:
+        for market in book["markets"]:
+            for stored in market["outcomes"]:
+                assert "freshness" not in stored
+                assert {"collected_at", "source_updated_at", "expires_at"} <= stored["_storage"].keys()
     calls = []
     original_get = redis.client.get
 

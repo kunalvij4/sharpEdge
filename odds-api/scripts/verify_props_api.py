@@ -1,4 +1,4 @@
-"""Verify live event props and cache labels through our API, without provider calls."""
+"""Verify live event props and freshness summaries through our API, without provider calls."""
 
 import json
 import urllib.request
@@ -22,10 +22,11 @@ def main():
     def summarize(path):
         payload, header = get(path)
         outcomes = [o for b in payload["bookmakers"] for m in b["markets"] for o in m["outcomes"]]
-        assert all("freshness" in outcome for outcome in outcomes)
-        assert all(
-            o["freshness"]["actionable"] is False for o in outcomes if o["freshness"]["status"] == "stale"
-        )
+        assert all(set(outcome) == {"name", "price", "point", "description"} for outcome in outcomes)
+        summary = payload["freshness"]
+        assert summary["fresh_outcomes"] + summary["stale_outcomes"] == len(outcomes)
+        if "freshOnly=true" in path:
+            assert summary["stale_outcomes"] == 0
         report = {
             "path": path,
             "event": payload["away_team"] + " at " + payload["home_team"],

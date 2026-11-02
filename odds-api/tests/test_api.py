@@ -70,8 +70,7 @@ def test_player_points_expire_during_failed_refresh_without_erasing_stored_quote
     assert cached.json()["freshness"]["status"] == "stale"
     assert cached.json()["freshness"]["stale_outcomes"] == 2
     for outcome in cached.json()["bookmakers"][0]["markets"][0]["outcomes"]:
-        assert outcome["freshness"]["actionable"] is False
-        assert outcome["freshness"]["age_seconds"] == 91
+        assert set(outcome) == {"name", "price", "point", "description"}
     expired = client.get(url + "&freshOnly=true", headers=headers)
     assert expired.status_code == 200 and expired.json()["bookmakers"] == []
     assert expired.headers["X-Odds-Collected-TTL"] == "90.0"
@@ -102,7 +101,7 @@ def test_all_props_route_includes_alternates_and_rejects_moneylines(client, boar
 @pytest.mark.parametrize(
     "sport,base", [("nba_basketball", "player_points"), ("nfl_football", "player_pass_yds")]
 )
-def test_all_props_for_nba_and_nfl_include_distinct_periods_and_cached_flags(
+def test_all_props_for_nba_and_nfl_include_distinct_periods_and_freshness_summary(
     client, repo, board, clock, sport, base
 ):
     snapshot = board("props")
@@ -129,7 +128,7 @@ def test_all_props_for_nba_and_nfl_include_distinct_periods_and_cached_flags(
     assert payload["freshness"]["stale_outcomes"] == 4
     assert response.headers["X-Odds-Data-Status"] == "stale"
     assert all(
-        o["freshness"]["actionable"] is False
+        set(o) == {"name", "price", "point", "description"}
         for b in payload["bookmakers"]
         for m in b["markets"]
         for o in m["outcomes"]
@@ -158,6 +157,12 @@ def test_docs_and_openapi_do_not_contain_provider_credentials(client):
     assert response.status_code == 200
     spec = response.json()
     assert "OddsResponse" in spec["components"]["schemas"]
+    assert set(spec["components"]["schemas"]["OutcomeResponse"]["properties"]) == {
+        "name",
+        "price",
+        "point",
+        "description",
+    }
     assert spec["paths"]["/v1/sports/{sport}/odds"]["get"]["security"]
     assert "provider-secret" not in response.text
     assert client.get("/docs").status_code == 200

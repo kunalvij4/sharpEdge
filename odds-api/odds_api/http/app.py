@@ -122,7 +122,10 @@ def create_app(settings=None, repository=None, clock=None):
                 datetime | None, Query(description="Inclusive ISO 8601 time with UTC offset")
             ] = None,
             freshOnly: Annotated[
-                bool, Query(description="Exclude cached props older than the collection freshness limit")
+                bool,
+                Query(
+                    description="Return only quotes within collection, source, and expiry freshness limits"
+                ),
             ] = False,
         ):
             allowed = {
@@ -261,7 +264,7 @@ def create_app(settings=None, repository=None, clock=None):
         dependencies=[Depends(authenticate)],
         responses=ERRORS,
         tags=["Odds"],
-        summary="Retrieve actionable moneylines and spreads across events",
+        summary="Retrieve last-known moneylines and spreads across events",
     )
     def odds(sport: str, response: Response, options=Depends(filters), service=Depends(queries)):
         freshness(response)
@@ -275,8 +278,9 @@ def create_app(settings=None, repository=None, clock=None):
         responses=ERRORS,
         tags=["Odds"],
         summary="Retrieve event moneylines and player props",
-        description="Player props can include bounded cached prices with freshness.status=stale and "
-        "actionable=false. Use freshOnly=true to exclude cached prices; markets=all_props selects all supported props.",
+        description="Last-known prices are retained until kickoff. Outcomes use the same fields for every provider. "
+        "Use freshOnly=true for fresh prices; markets=all_props selects all supported props. "
+        "Prop queries include an event-level freshness summary.",
     )
     def event_odds(event_id: str, response: Response, options=Depends(filters), service=Depends(queries)):
         freshness(response)
@@ -293,8 +297,8 @@ def create_app(settings=None, repository=None, clock=None):
         responses=ERRORS,
         tags=["Odds"],
         summary="Retrieve all supported player props, alternates, and periods for an event",
-        description="Returns stored props from every book. Cached prices are bounded and labeled stale, "
-        "with actionable=false and original timestamps. Use freshOnly=true for actionable prices only.",
+        description="Returns stored props from every book with an event-level freshness summary. "
+        "Outcomes contain name, price, and optional point/description. Use freshOnly=true for fresh prices only.",
     )
     def event_props(
         event_id: str,

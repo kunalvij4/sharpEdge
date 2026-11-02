@@ -145,14 +145,7 @@ class RedisRepository:
                                     "book_key": book.key,
                                     "book_title": book.title,
                                 }
-                            document = prepare_document(
-                                event_data,
-                                rows,
-                                now,
-                                self.collected_ttl,
-                                self.source_ttl,
-                                self.propline_collected_ttl,
-                            )
+                            document = prepare_document(event_data, rows)
                             documents.append(compress_document(encode(document)))
                         pipe.multi()
                         for key, event, document in zip(keys, batch, documents):
@@ -205,14 +198,7 @@ class RedisRepository:
                 continue
             if "quotes" in document:
                 # Read old deployments immediately; the next collection persists v2.
-                document = prepare_document(
-                    event,
-                    dict(stored_rows(document)),
-                    self.clock.now(),
-                    self.collected_ttl,
-                    self.source_ttl,
-                    self.propline_collected_ttl,
-                )
+                document = prepare_document(event, dict(stored_rows(document)))
             result.append(document)
         return result
 
@@ -306,20 +292,21 @@ class RedisRepository:
                     continue
                 document = decode_document(value)
                 legacy = "quotes" in document
-                if legacy == (target_format == "legacy"):
+                if target_format == "legacy":
+                    if legacy:
+                        continue
+                elif not legacy and not any(
+                    "freshness" in outcome
+                    for book in document["bookmakers"]
+                    for market in book["markets"]
+                    for outcome in market["outcomes"]
+                ):
                     continue
                 event, rows = stored_event(document), dict(stored_rows(document))
                 rewritten = (
                     {"event": event, "quotes": rows}
                     if target_format == "legacy"
-                    else prepare_document(
-                        event,
-                        rows,
-                        self.clock.now(),
-                        self.collected_ttl,
-                        self.source_ttl,
-                        self.propline_collected_ttl,
-                    )
+                    else prepare_document(event, rows)
                 )
                 packed = compress_document(encode(rewritten))
                 counts["candidate_events"] += 1

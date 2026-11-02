@@ -120,7 +120,7 @@ assert props["bookmakers"][0]["markets"][0]["outcomes"][0]["description"] == "Sa
 all_props = get("/v1/events/"+eid+"/props")
 assert {m["key"] for b in all_props["bookmakers"] for m in b["markets"]} == {"player_points", "player_points_alternate"}
 assert all_props["freshness"]["status"] == "fresh"
-assert all(o["freshness"]["actionable"] for b in all_props["bookmakers"] for m in b["markets"] for o in m["outcomes"])
+assert all(set(o) == {"name", "price", "point", "description"} for b in all_props["bookmakers"] for m in b["markets"] for o in m["outcomes"])
 assert get("/health/live", auth=False)["status"] == "ok"
 assert "openapi" in get("/openapi.json", auth=False)
 try:

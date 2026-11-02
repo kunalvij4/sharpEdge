@@ -5,10 +5,10 @@ from decimal import Decimal
 
 from odds_api.application.async_work import blocking_work
 from odds_api.application.ports import Clock, Provider, Repository
-from odds_api.application.prepared_odds import project_response, time_value, wire_time
+from odds_api.application.prepared_odds import project_response, response_freshness, time_value
 from odds_api.application.quote_merge import select_public_quotes
 from odds_api.domain.models import Availability, decimal_odds
-from odds_api.domain.sportsbooks import sportsbook_key
+from odds_api.domain.sportsbooks import sportsbook_key, sportsbook_title
 
 log = logging.getLogger(__name__)
 
@@ -243,11 +243,10 @@ class OddsQueryService:
                 source_ttl=self.source_ttl,
                 props_cache_ttl=self.props_cache_ttl,
                 propline_collected_ttl=self.propline_collected_ttl,
+                include_freshness=prop_query,
             )
             if time_value(document["commence_time"]) <= self.clock.now():
                 continue
-            if prop_query:
-                payload["freshness"] = {**self.freshness(payload, now), "observed_at": wire_time(now)}
             if event_id or payload["bookmakers"]:
                 result.append(payload)
         if event_id:
@@ -289,6 +288,7 @@ class OddsQueryService:
         if event_id is not None and event_id not in events:
             raise QueryError("Unknown event", 404)
         now, grouped = self.clock.now(), {}
+        stale_counts = {}
         rows = self.repository.quotes(sport, event_id=event_id, now=now)
         # Enforce the intersection at read time as well: filters must never turn
         # a Bet365-only prop into a supported one, including during an outage.
@@ -367,7 +367,12 @@ class OddsQueryService:
                 continue
             book = grouped.setdefault(q.event_id, {}).setdefault(
                 public_key,
-                {"key": public_key, "title": row["book_title"], "last_update": None, "markets": {}},
+                {
+                    "key": public_key,
+                    "title": sportsbook_title(public_key, row["book_title"]),
+                    "last_update": None,
+                    "markets": {},
+                },
             )
             market = book["markets"].setdefault(
                 q.market, {"key": q.market, "last_update": None, "outcomes": []}
@@ -386,17 +391,10 @@ class OddsQueryService:
                 outcome["point"] = float(q.point)
             if q.description:
                 outcome["description"] = q.description
-            if q.player_id is not None or retained:
-                outcome["freshness"] = {
-                    "status": "stale" if retained else "fresh",
-                    "actionable": not retained,
-                    "collected_at": q.collected_at,
-                    "source_updated_at": q.source_updated_at,
-                    "expires_at": q.expires_at,
-                    "age_seconds": round(age, 3),
-                }
             if outcome not in market["outcomes"]:
                 market["outcomes"].append(outcome)
+                if retained:
+                    stale_counts[q.event_id] = stale_counts.get(q.event_id, 0) + 1
         result = []
         for eid in sorted(grouped, key=lambda k: (events[k]["start"], k)):
             if events[eid]["start"] <= self.clock.now():
@@ -412,7 +410,7 @@ class OddsQueryService:
                     )
                 payload["bookmakers"].append(book)
             if prop_query:
-                payload["freshness"] = self.freshness(payload, now)
+                payload["freshness"] = self.freshness(payload, now, stale_counts.get(eid, 0))
             result.append(payload)
         if event_id:
             if events[event_id]["start"] <= self.clock.now():
@@ -425,20 +423,6 @@ class OddsQueryService:
             return payload
         return result
 
-    def freshness(self, payload, now):
+    def freshness(self, payload, now, stale=0):
         outcomes = [o for b in payload["bookmakers"] for m in b["markets"] for o in m["outcomes"]]
-        stale = sum(o.get("freshness", {}).get("status") == "stale" for o in outcomes)
-        fresh = len(outcomes) - stale
-        return {
-            "observed_at": now,
-            "status": "mixed"
-            if fresh and stale
-            else "stale"
-            if stale
-            else "fresh"
-            if fresh
-            else "unavailable",
-            "fresh_outcomes": fresh,
-            "stale_outcomes": stale,
-            "max_cache_age_seconds": None,
-        }
+        return response_freshness(now, len(outcomes) - stale, stale)

@@ -52,7 +52,11 @@ def test_get_event_odds_uses_in_house_event_route(api_class):
     response.raise_for_status.assert_called_once_with()
 
 
-def test_parse_in_house_odds_response(api_class):
+@pytest.mark.parametrize("title, model_name", [
+    ("Sharp Book", "Sharp Book"),
+    ("ProphetXchange", "ProphetX"),
+])
+def test_parse_in_house_odds_response(api_class, title, model_name):
     api = api_class(api_key="product-key", base_url="https://odds.example.com")
 
     games = api.parse_all_markets_odds(
@@ -66,7 +70,7 @@ def test_parse_in_house_odds_response(api_class):
                 "bookmakers": [
                     {
                         "key": "unabated_1",
-                        "title": "Sharp Book",
+                        "title": title,
                         "markets": [
                             {
                                 "key": "h2h",
@@ -84,7 +88,7 @@ def test_parse_in_house_odds_response(api_class):
 
     game = games["event-123"]
     assert game["event_id"] == "event-123"
-    assert game["markets"]["moneyline"]["odds_data"]["Sharp Book"] == {
+    assert game["markets"]["moneyline"]["odds_data"][model_name] == {
         "home_odds": 1.9,
         "away_odds": 2.0,
     }

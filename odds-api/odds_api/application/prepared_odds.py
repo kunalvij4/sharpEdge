@@ -4,8 +4,8 @@ from datetime import datetime
 from decimal import Decimal
 
 from odds_api.application.quote_merge import select_public_quotes
-from odds_api.domain.models import Availability, decimal_odds
-from odds_api.domain.sportsbooks import sportsbook_key
+from odds_api.domain.models import decimal_odds
+from odds_api.domain.sportsbooks import sportsbook_key, sportsbook_title
 
 QUOTE_METADATA_FIELDS = (
     "period",
@@ -19,6 +19,7 @@ QUOTE_METADATA_FIELDS = (
     "deep_link",
 )
 QUOTE_TIMES = ("collected_at", "source_updated_at", "expires_at")
+PUBLIC_OUTCOME_FIELDS = ("name", "price", "point", "description")
 
 
 def time_value(value):
@@ -62,19 +63,27 @@ def stored_rows(document):
                 )
 
 
-def quote_freshness(quote, now, collected_ttl, source_ttl):
+def quote_is_fresh(quote, now, collected_ttl, source_ttl):
     collected = time_value(quote["collected_at"])
     source = time_value(quote["source_updated_at"])
     expiry = time_value(quote["expires_at"])
-    age = max(0, (now - collected).total_seconds())
     source_valid = (source is None or (now - source).total_seconds() <= source_ttl) and (
         expiry is None or expiry > now
     )
-    fresh = (now - collected).total_seconds() <= collected_ttl and source_valid
-    return age, source_valid, fresh
+    return (now - collected).total_seconds() <= collected_ttl and source_valid
 
 
-def prepare_document(event, rows, now, collected_ttl, source_ttl, propline_collected_ttl):
+def response_freshness(now, fresh, stale):
+    return {
+        "observed_at": now,
+        "status": "mixed" if fresh and stale else "stale" if stale else "fresh" if fresh else "unavailable",
+        "fresh_outcomes": fresh,
+        "stale_outcomes": stale,
+        "max_cache_age_seconds": None,
+    }
+
+
+def prepare_document(event, rows):
     """Store the public hierarchy once; private metadata preserves exact quote identities."""
     document = {
         "id": event["id"],
@@ -103,8 +112,7 @@ def prepare_document(event, rows, now, collected_ttl, source_ttl, propline_colle
             quote["market"], {"key": quote["market"], "last_update": None, "outcomes": []}
         )
         source_time = time_value(quote["source_updated_at"])
-        source = wire_time(source_time)
-        if source is not None:
+        if source_time is not None:
             for item in (book, market):
                 item["last_update"] = max(filter(None, (item["last_update"], source_time)))
         outcome = {
@@ -117,23 +125,11 @@ def prepare_document(event, rows, now, collected_ttl, source_ttl, propline_colle
             outcome["point"] = float(quote["point"])
         if quote["description"]:
             outcome["description"] = quote["description"]
-        if quote["player_id"] is not None:
-            ttl = propline_collected_ttl if row["book_key"].startswith("propline_") else collected_ttl
-            age, _, fresh = quote_freshness(quote, now, ttl, source_ttl)
-            outcome["freshness"] = {
-                "status": "fresh" if fresh else "stale",
-                "actionable": fresh and quote["state"] == Availability.AVAILABLE,
-                "collected_at": wire_time(quote["collected_at"]),
-                "source_updated_at": source,
-                "expires_at": wire_time(quote["expires_at"]),
-                "age_seconds": round(age, 3),
-            }
         # Keep only fields absent from (or rounded in) the public outcome. The
         # canonical quote can be restored without storing a second full copy.
         metadata = {key: quote[key] for key in QUOTE_METADATA_FIELDS}
         metadata["selection_id"] = selection_id
-        if "freshness" not in outcome:
-            metadata.update({key: quote[key] for key in QUOTE_TIMES})
+        metadata.update({key: quote[key] for key in QUOTE_TIMES})
         if quote["description"] is not None and "description" not in outcome:
             metadata["description"] = quote["description"]
         outcome["_storage"] = metadata
@@ -163,10 +159,14 @@ def project_response(
     source_ttl,
     props_cache_ttl,
     propline_collected_ttl,
+    include_freshness=False,
 ):
     """Filter prepared JSON without rebuilding domain quotes or grouping prices."""
     payload = {key: value for key, value in document.items() if key not in {"_storage", "bookmakers"}}
     payload["bookmakers"] = []
+    fresh_outcomes = stale_outcomes = 0
+    if include_freshness:
+        payload["freshness"] = response_freshness(wire_time(now), 0, 0)
     event = stored_event(document)
     commence = time_value(event["start"])
     if (
@@ -203,14 +203,14 @@ def project_response(
         if (bookmakers and public_key not in bookmakers) or (markets and quote["market"] not in markets):
             continue
         ttl = propline_collected_ttl if row["book_key"].startswith("propline_") else collected_ttl
-        age, _, fresh = quote_freshness(quote, now, ttl, source_ttl)
+        fresh = quote_is_fresh(quote, now, ttl, source_ttl)
         if fresh_only and not fresh:
             continue
         book = books.setdefault(
             public_key,
             {
                 "key": public_key,
-                "title": row["book_title"],
+                "title": sportsbook_title(public_key, row["book_title"]),
                 "last_update": None,
                 "markets": {},
             },
@@ -223,19 +223,14 @@ def project_response(
                 "outcomes": [],
             },
         )
-        outcome = {key: value for key, value in row["outcome"].items() if key != "_storage"}
+        outcome = {key: row["outcome"][key] for key in PUBLIC_OUTCOME_FIELDS if key in row["outcome"]}
         if odds_format == "american":
             outcome["price"] = quote["price"]
-        if quote["player_id"] is not None or not fresh:
-            outcome["freshness"] = {
-                "status": "fresh" if fresh else "stale",
-                "actionable": fresh,
-                "collected_at": wire_time(quote["collected_at"]),
-                "source_updated_at": wire_time(quote["source_updated_at"]),
-                "expires_at": wire_time(quote["expires_at"]),
-                "age_seconds": round(age, 3),
-            }
         market["outcomes"].append(outcome)
+        if fresh:
+            fresh_outcomes += 1
+        else:
+            stale_outcomes += 1
         source = time_value(quote["source_updated_at"])
         if source is not None:
             for item in (book, market):
@@ -248,4 +243,6 @@ def project_response(
             market["last_update"] = wire_time(market["last_update"])
             market["outcomes"].sort(key=lambda o: (o.get("description", ""), o.get("point", 0), o["name"]))
         payload["bookmakers"].append(book)
+    if include_freshness:
+        payload["freshness"] = response_freshness(wire_time(now), fresh_outcomes, stale_outcomes)
     return payload
