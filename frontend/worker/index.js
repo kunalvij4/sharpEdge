@@ -1,5 +1,6 @@
 // Generated asset map is inserted by scripts/build.mjs. Credentials exist only in env.
 import { AuthError, firebaseConfig, sessionCookie, sameOrigin, authenticate, membershipFor, publicAccount, authorizeFeed, PAID_PLANS } from './auth.js';
+import { createCheckout, createPortal, checkoutStatus, stripeWebhook } from './billing.js';
 const assets = __ASSETS__;
 const headers = { 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' };
 const states = JSON.parse(assets['data/state-platform-filter-2026-10-26.json'].text).states;
@@ -189,6 +190,22 @@ export default {
     const json = (body, status = 200, extra = {}) => Response.json(body, { status, headers:{...headers, ...extra} });
     const page = (route, feed, account) => new Response(pageHtml(route, feed, '', 'UTC', account), {headers:{...headers, 'content-type':'text/html; charset=utf-8'}});
     try {
+      if (path === 'api/billing/webhook') {
+        if (request.method !== 'POST') return json({error:'Method not allowed'}, 405, {allow:'POST'});
+        return json(await stripeWebhook(request, env));
+      }
+      if (path === 'api/billing/checkout' || path === 'api/billing/portal') {
+        const methods = path.endsWith('/checkout') ? ['GET', 'POST'] : ['POST'];
+        if (!methods.includes(request.method)) return json({error:'Method not allowed'}, 405, {allow:methods.join(', ')});
+        if (request.method === 'POST') sameOrigin(request);
+        const user = await authenticate(request, env);
+        if (request.method === 'GET') return json(await checkoutStatus(env, user, url.searchParams.get('session_id')));
+        if (path.endsWith('/portal')) return json(await createPortal(request, env, user));
+        let body;
+        try { body = await request.json(); }
+        catch { throw new AuthError(400, 'Choose an available monthly plan.', 'BILLING_INVALID_REQUEST'); }
+        return json(await createCheckout(request, env, user, body?.plan));
+      }
       if (path === 'api/auth/config') {
         if (request.method !== 'GET') return json({error:'Method not allowed'}, 405, {allow:'GET'});
         return json(firebaseConfig(env));

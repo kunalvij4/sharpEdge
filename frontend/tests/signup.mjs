@@ -29,10 +29,15 @@ function setup(initial = {}) {
     setDoc:async(path,fields)=>{events.push(['set',path]);docs.set(path,{...docs.get(path),...plain(fields)})}
   };
   const context = vm.createContext({
-    window:{}, location:{pathname:'/signin',hash:'',search:'?next=%2Fanalysis',replace:path=>redirects.push(path)},
-    URLSearchParams, Headers, AbortSignal, user, fakeSDK:sdk, fakeAuth:{currentUser:user},
+    window:{}, location:{pathname:'/signin',hash:'',search:'?next=%2Fanalysis',replace:path=>redirects.push(path),assign:path=>redirects.push(path)},
+    URL, URLSearchParams, Headers, AbortSignal, user, fakeSDK:sdk, fakeAuth:{currentUser:user},
     console:{error:(...args)=>diagnostics.push(args)},
     fetch:async(path,options)=>{
+      if (path === '/api/billing/checkout') {
+        assert.equal(options.headers.get('authorization'),'Bearer test-id-token');
+        events.push(['checkout',JSON.parse(options.body).plan]);
+        return Response.json({url:'https://checkout.stripe.com/c/pay/cs_test_signup'});
+      }
       assert.equal(path,'/api/session');
       assert.equal(options.headers.authorization,'Bearer test-id-token');
       events.push(['session']);
@@ -65,7 +70,9 @@ assert.deepEqual(fresh.redirects,['/#pricing'],'A first profile goes to pricing 
 assert.equal(vm.runInContext('authState.ready && authState.account.plan',fresh.context),'guest');
 
 await vm.runInContext("authState.selectPlan('gold')",fresh.context);
-assert.equal(fresh.docs.get('users/new-user').requestedPlan,'gold');
+assert.ok(fresh.events.some(event=>event[0]==='checkout' && event[1]==='gold'));
+assert.equal(fresh.redirects.at(-1),'https://checkout.stripe.com/c/pay/cs_test_signup');
+assert.equal(fresh.docs.get('users/new-user').requestedPlan,undefined,'Checkout does not require a browser-written plan preference');
 assert.equal(fresh.docs.get('users/new-user').plan,'guest','Choosing a plan does not grant paid access');
 assert.equal(fresh.docs.get('users/new-user').expiresAt,null);
 await assert.rejects(vm.runInContext("authState.selectPlan('admin')",fresh.context));
@@ -114,4 +121,4 @@ retry.allowSession();
 await retry.load();
 assert.equal(retry.docs.get('users/new-user').signupDate,originalDate);
 assert.equal(retry.redirects.at(-1),'/#pricing','A retry after a failed session still onboards a Guest to pricing');
-console.log('Sign-up tests passed: Guest creation before sessions, pricing redirect, plan requests, user-document history, repeat sign-in, migration and setup failure recovery.');
+console.log('Sign-up tests passed: Guest creation before sessions, pricing redirect, authenticated Checkout, user-document history, repeat sign-in, migration and setup failure recovery.');

@@ -1,5 +1,9 @@
 let loadedAccountSnapshot;
 let membershipTimer;
+let billingBusy = false;
+let billingError = '';
+let billingNotice = '';
+let billingReturnHandled = false;
 const escapeAccountText = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[ch]));
 function signInPage() {
   const state = window.sharpAuth;
@@ -12,7 +16,7 @@ function showAccount() {
     return;
   }
   const d = $('#modal');
-  d.innerHTML = `<div class="eyebrow">SHARPEDGE / YOUR ACCOUNT</div><h2>${escapeAccountText(currentAccount.displayName || 'Your account')}</h2><p>${escapeAccountText(currentAccount.email)}</p><div class="account-membership"><span>Membership</span><strong>${currentAccount.plan==='guest'?'Guest':escapeAccountText(names[currentAccount.plan] || 'Guest')}</strong></div>${membershipExpiration()}<p>Your bankroll, bet journal and saved entry are stored privately in your account.</p>${savedEntryPanel()}${window.sharpAuth?.dataError?`<p class="auth-error" role="alert">${escapeAccountText(window.sharpAuth.dataError)}</p>`:''}<div class="actions"><button onclick="$('#modal').close()">Close</button><button onclick="signOutOfAccount(this)">Sign out</button></div>`;
+  d.innerHTML = `<div class="eyebrow">SHARPEDGE / YOUR ACCOUNT</div><h2>${escapeAccountText(currentAccount.displayName || 'Your account')}</h2><p>${escapeAccountText(currentAccount.email)}</p><div class="account-membership"><span>Membership</span><strong>${currentAccount.plan==='guest'?'Guest':escapeAccountText(names[currentAccount.plan] || 'Guest')}</strong></div>${membershipExpiration()}<p>Your bankroll, bet journal and saved entry are stored privately in your account.</p>${savedEntryPanel()}${window.sharpAuth?.dataError?`<p class="auth-error" role="alert">${escapeAccountText(window.sharpAuth.dataError)}</p>`:''}<div class="actions"><button onclick="$('#modal').close()">Close</button><button onclick="manageBilling(this)">Manage billing</button><button onclick="signOutOfAccount(this)">Sign out</button></div>`;
   if (!d.open) d.showModal();
 }
 async function signOutOfAccount(button) {
@@ -21,12 +25,62 @@ async function signOutOfAccount(button) {
   catch { button.disabled = false; notify('Unable to sign out. Check your connection and try again.'); }
 }
 async function requestMembership(p) {
-  if (!currentAccount) return showAccount();
+  if (billingBusy || authLoading) return;
+  if (!['gold', 'plus', 'fantasy', 'fantasyplus', 'platinum'].includes(p)) return;
+  if (!currentAccount) {
+    location.href = '/signin?next=' + encodeURIComponent('/?plan=' + p + '#pricing');
+    return;
+  }
   if (currentAccount.plan === p) return notify('This is your current membership.');
+  const uid = currentAccount.uid;
+  billingBusy = true; billingError = ''; billingNotice = '';
+  render();
   try {
     await window.sharpAuth.selectPlan(p);
-    notify(`${names[p]} selected. Payment and activation are not available yet; no charge was made.`);
-  } catch { notify('Your plan choice could not be saved. Please try again.'); }
+  } catch (error) {
+    if (currentAccount?.uid !== uid) return;
+    billingError = error.message || 'The payment page could not be opened. Please try again.';
+    notify(billingError);
+  } finally { if (currentAccount?.uid === uid) { billingBusy = false; render(); } }
+}
+async function manageBilling(button) {
+  if (billingBusy) return;
+  billingBusy = true;
+  if (button) button.disabled = true;
+  try { await window.sharpAuth.manageBilling(); }
+  catch (error) { notify(error.message || 'Billing is temporarily unavailable. Please try again.'); }
+  finally { billingBusy = false; if (button) button.disabled = false; }
+}
+async function handleBillingReturn() {
+  if (billingReturnHandled || !currentAccount || authLoading) return;
+  const params = new URLSearchParams(location.search);
+  const checkout = params.get('checkout'), selectedPlan = params.get('plan');
+  if (!checkout && !selectedPlan) return;
+  billingReturnHandled = true;
+  if (checkout === 'cancelled') {
+    billingNotice = 'Checkout was cancelled. You can choose a plan whenever you are ready.';
+    render();
+  } else if (checkout === 'success') {
+    billingNotice = 'Checking your payment…'; render();
+    try {
+      const result = await window.sharpAuth.confirmCheckout(params.get('session_id') || '');
+      if (!result) return;
+      billingNotice = result.status === 'paid' && result.account.plan !== 'guest'
+        ? `${names[result.account.plan]} is active. Your tools are ready.`
+        : 'Your payment is still processing. Refresh your account shortly to check your membership.';
+    } catch (error) {
+      billingNotice = ''; billingError = error.message || 'Your payment could not be checked. Refresh your account to try again.';
+    }
+    render();
+  } else if (['gold', 'plus', 'fantasy', 'fantasyplus', 'platinum'].includes(selectedPlan)) {
+    // Returning from sign-in retains the chosen plan and continues to Checkout.
+    await requestMembership(selectedPlan);
+  }
+  if (checkout !== 'success' || !billingError) {
+    params.delete('checkout'); params.delete('session_id'); params.delete('plan');
+    const query = params.toString();
+    window.history?.replaceState(null, '', location.pathname + (query ? '?' + query : '') + location.hash);
+  }
 }
 function membershipExpiration() {
   const expiry = new Date(currentAccount?.membershipExpiresAt ?? '');
@@ -71,6 +125,7 @@ function authChanged(state) {
   plan = currentAccount?.plan || 'guest';
   if (!currentAccount || currentAccount.uid !== previousUID) {
     tracked = []; bankroll = 1000;
+    billingBusy = false; billingError = ''; billingNotice = '';
   }
   if (!currentAccount || currentAccount.uid !== previousUID || plan !== previousPlan) {
     legs = []; payoutOverride = null; legProbOverrides = {};
@@ -85,6 +140,7 @@ function authChanged(state) {
   }
   render();
   scheduleMembershipExpiration();
+  handleBillingReturn();
   if (state.dataError) notify(state.dataError);
   if (currentAccount && !authLoading && (currentAccount.uid !== previousUID || plan !== previousPlan) && ['ev','arbitrage','parlay'].includes(route())) refreshAccountFeed();
 }

@@ -31,6 +31,8 @@ assert.equal(vm.runInContext('tracked.length',context),1);
 assert.doesNotMatch(vm.runInContext('tracked[0].name',context), /[<>"']/);
 assert.equal(vm.runInContext("can('ev')",context),true);
 assert.equal(vm.runInContext("can('arbitrage')",context),false);
+assert.match(vm.runInContext('pricing()',context), /onclick="choose\('fantasyplus'\)"/, 'The Fantasy+ upgrade opens plan checkout');
+assert.doesNotMatch(vm.runInContext('pricing()',context), /Contact sales/);
 vm.runInContext("choose('platinum')",context);
 assert.equal(vm.runInContext('plan',context),'gold', 'The pricing selector cannot grant a membership');
 vm.runInContext('explore()',context);

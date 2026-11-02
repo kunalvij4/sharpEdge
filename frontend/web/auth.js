@@ -51,6 +51,7 @@ async function sessionFor(user) {
 }
 function safeNext(account = authState.account, isNewProfile = false) {
   const next = new URLSearchParams(location.search).get('next');
+  if (/^\/\?plan=(gold|plus|fantasy|fantasyplus|platinum)#pricing$/.test(next || '')) return next;
   if (isNewProfile || (account?.plan === 'guest' && next !== '/analysis')) return '/#pricing';
   return ['/ev', '/arbitrage', '/parlay', '/analysis', '/#pricing'].includes(next) ? next : '/ev';
 }
@@ -191,14 +192,38 @@ authState.saveState = patch => {
     throw error;
   });
 };
-authState.selectPlan = async plan => {
-  if (!['gold', 'plus', 'fantasy', 'fantasyplus', 'platinum'].includes(plan)) throw new Error('Choose an available plan.');
+async function billingRequest(path, options = {}) {
+  const response = await authState.fetch(path, {...options, signal:AbortSignal.timeout(45000)});
+  let result;
+  try { result = await response.json(); }
+  catch { throw new Error('Payments are temporarily unavailable. Please try again.'); }
+  if (!response.ok) throw new Error(result.error || 'Payments are temporarily unavailable. Please try again.');
+  return result;
+}
+async function openBilling(path, body) {
   const user = authState.user, current = revision;
   if (!user || !authState.account || !authState.ready || authState.signingOut) throw new Error('Sign in before choosing a plan.');
-  await sdk.setDoc(sdk.doc(db, 'users', user.uid), {requestedPlan:plan, planRequestedAt:sdk.serverTimestamp()}, {merge:true});
-  if (current !== revision) return;
-  authState.profile = {...authState.profile, requestedPlan:plan};
+  const result = await billingRequest(path, {method:'POST', headers:{'content-type':'application/json'}, ...(body ? {body:JSON.stringify(body)} : {})});
+  if (current !== revision || authState.signingOut || authState.account?.uid !== user.uid) throw new Error('Your account changed. Choose your plan again.');
+  let destination;
+  try { destination = new URL(result.url); } catch { throw new Error('The payment page could not be opened. Please try again.'); }
+  if (destination.protocol !== 'https:' || !['checkout.stripe.com', 'billing.stripe.com'].includes(destination.hostname)) throw new Error('The payment page could not be opened. Please try again.');
+  location.assign(destination.href);
+}
+authState.selectPlan = async plan => {
+  if (!['gold', 'plus', 'fantasy', 'fantasyplus', 'platinum'].includes(plan)) throw new Error('Choose an available plan.');
+  return openBilling('/api/billing/checkout', {plan});
+};
+authState.manageBilling = () => openBilling('/api/billing/portal');
+authState.confirmCheckout = async sessionID => {
+  const user = authState.user, current = revision;
+  if (!user || !authState.ready || authState.signingOut) throw new Error('Sign in to check your payment.');
+  const result = await billingRequest('/api/billing/checkout?session_id=' + encodeURIComponent(sessionID));
+  if (current !== revision || authState.signingOut || authState.account?.uid !== user.uid) return;
+  if (result.account?.uid !== user.uid) throw new Error('Your payment could not be verified. Please refresh your account.');
+  authState.account = result.account;
   update();
+  return result;
 };
 async function initialize() {
   try {

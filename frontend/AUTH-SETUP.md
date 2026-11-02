@@ -20,7 +20,7 @@ Keep Firebase and Layerbase configuration in your ignored local `.env`. Tracked 
    | `FIREBASE_PROJECT_ID` | `projectId` |
    | `FIREBASE_APP_ID` | `appId` |
 
-   Set `FIREBASE_DATABASE_ID=(default)` as well. It selects the same Cloud Firestore database for the browser SDK and Worker membership lookups, and can be changed to a restored database ID. The configuration endpoint exposes these public identifiers and the database ID. Keep Layerbase credentials server-side. No service-account private key or separate Google OAuth client secret is needed in this application.
+   Set `FIREBASE_DATABASE_ID=(default)` as well. It selects the same Cloud Firestore database for the browser SDK and Worker membership lookups, and can be changed to a restored database ID. The configuration endpoint exposes these public identifiers and the database ID. Keep Layerbase credentials server-side. Sign-in does not require a service-account key; the trusted Stripe billing integration does. Follow [STRIPE-SETUP.md](STRIPE-SETUP.md) for billing credentials.
 
    The API key must allow the Identity Toolkit API and the Worker request to `accounts:lookup`. A browser-referrer-only key restriction will block server verification; use API restrictions compatible with both the Firebase browser SDK and Worker. Keep Firebase Security Rules enabled: the web API key is not a database access boundary.
 
@@ -49,7 +49,7 @@ After Google authenticates the user, the app creates `users/<Firebase UID>` in a
 
 Once the profile is saved and the verified session is established, new users are sent to `/#pricing`. A Google account created during an earlier failed attempt is still treated as new if its Firestore profile is missing. Returning members keep their plan, expiration, signup date and journal, and can return to the tool they requested. Returning Guests normally go to pricing; a direct journal return path remains available.
 
-Choosing a plan stores `requestedPlan` and `planRequestedAt` on the same user document and confirms the selection. This is a preference until billing/administrative activation is connected: it does not change `plan`, grant paid access or charge a card.
+Choosing a monthly plan opens an authenticated Stripe Checkout session. Signed-out users return to their chosen plan after Google sign-in. Only a server-verified paid subscription activates `plan` and `expiresAt`; selecting a plan cannot grant access. Existing subscribers use Stripe's billing portal to change plans. Follow [STRIPE-SETUP.md](STRIPE-SETUP.md) to configure prices, secrets, portal settings and webhooks.
 
 **Publish the updated `firestore.rules` before testing this flow.** The earlier profile rules do not allow these new fields and will reject profile creation. Restart the development server after source changes because it builds its assets at startup. If Google succeeds but profile storage fails, the app reports that step specifically, and the browser console records the stage and Firebase error code without logging tokens or profile data. `permission-denied` usually requires checking the deployed rules and selected database; a session-stage error instead concerns the application's server request.
 
@@ -96,7 +96,7 @@ Firestore backups cover Firestore records. Firebase Authentication users and OAu
 
 ## Memberships
 
-Google sign-in creates a Guest profile automatically. Guests have a journal and account settings; market tools keep their membership restrictions. The pricing selector records a preference and cannot grant access or charge a card.
+Google sign-in creates a Guest profile automatically. Guests have a journal and account settings; market tools keep their membership restrictions. The pricing selector opens Stripe Checkout, and the server verifies payment before activating membership. My account → Manage billing opens Stripe's portal.
 
 After the first Google sign-in, locate `users/<UID>` in Firestore and update its membership fields through the console or a trusted billing backend:
 
@@ -111,7 +111,7 @@ Supported plans are `gold`, `plus`, `fantasy`, `fantasyplus`, and `platinum`. Th
 
 `expiresAt` is required. Access is granted only while it is strictly later than the server's current time. Missing, malformed, incorrectly typed and expired timestamps receive no market data. There is no `active` flag. Renew a membership by moving its expiration forward; revoke it immediately by setting the timestamp to now or an earlier instant. Existing records must be given an expiration date; an old `active: true` value alone grants no access and can be removed.
 
-Only the console or a trusted billing backend may change `plan` and `expiresAt`; browser clients can update their own profile details, journal and plan preference. The server reads membership fields from `users/<UID>` and rechecks expiration on each protected request. The account panel displays the local expiration date and time, and the browser clears market data when the membership expires. Expiration does not sign the user out or delete their journal/settings. Refresh after an administrative renewal to update the account display.
+Only the console or the trusted billing backend may change `plan` and `expiresAt`; browser clients can update their own profile details and journal. Stripe webhook processing uses a server service account and preserves the other user fields. The server reads membership fields from `users/<UID>` and rechecks expiration on each protected request. The account panel displays the local expiration date and time, and the browser clears market data when the membership expires. Expiration does not sign the user out or delete their journal/settings. Refresh after an administrative renewal to update the account display.
 
 The Worker filters data by membership before returning it. Gold receives pre-match sportsbook EV; Gold Plus also receives arbitrage; Fantasy receives fantasy pre-match EV; Fantasy+ receives all pre-match EV for its all-app builder; Platinum receives every feed including live EV. The client cannot unlock omitted records by editing browser storage.
 
@@ -141,7 +141,7 @@ The Node test suite checks Guest profile creation before the session request, pr
 After configuring the project, verify with two real Google accounts:
 
 1. A signed-out protected page redirects to sign-in, and `/api/feeds` returns 401.
-2. Google sign-in creates `users/<UID>` with a signup timestamp, Guest plan, null paid expiration and empty bet history, then sends the user to pricing. Choosing a plan stores the request while keeping Guest access. The account can save its bankroll and journal; a Guest cannot retrieve market data.
+2. Google sign-in creates `users/<UID>` with a signup timestamp, Guest plan, null paid expiration and empty bet history, then sends the user to pricing (or their previously chosen plan's Checkout). Opening Checkout keeps Guest access until payment is verified. The account can save its bankroll and journal; a Guest cannot retrieve market data.
 3. Grant a membership with a future Firestore Timestamp and confirm the matching tools load; editing a browser plan value does not change access. Set its expiration to now and verify market data is denied while the journal stays available. Renew with a future timestamp and refresh to restore access.
 4. Sign out, then sign in as the second account. The first account's profile, bankroll, journal and saved entry must be inaccessible, including direct Firestore reads and writes.
 5. Confirm users can create only a Guest profile, cannot upgrade `plan`, cannot change `expiresAt` or `signupDate`, and cannot add role fields. A plan preference must not activate market access.
