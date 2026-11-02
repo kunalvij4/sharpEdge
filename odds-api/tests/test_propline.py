@@ -111,9 +111,12 @@ async def test_bulk_probe_filters_requested_books_with_one_call_per_league(tmp_p
             "polymarket",
             "polymarket_us",
             "prophetx",
+            "prizepicks",
             "rebet",
+            "sportzino",
             "thescorebet",
             "thrillzz",
+            "underdog",
         }
         assert "max_age" not in request.url.params
         assert request.url.params["period"] == "all"

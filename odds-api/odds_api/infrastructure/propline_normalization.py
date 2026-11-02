@@ -7,9 +7,10 @@ from decimal import Decimal
 from odds_api.domain.models import Availability, Board, Event, Quote, Sportsbook, identity
 from odds_api.infrastructure.bet365 import normalized, same_team
 from odds_api.infrastructure.normalization import link_with_partner, resolve_duplicates
-from odds_api.infrastructure.propline import DFS_BOOKS, GAME_MARKETS, PROP_MARKETS
+from odds_api.infrastructure.propline import COLLECTED_DFS_BOOKS, DFS_BOOKS, GAME_MARKETS, PROP_MARKETS
 
 MARKET_ALIASES = {"batter_runs": "batter_runs_scored"}
+NAMED_PLAYER_BOOKS = COLLECTED_DFS_BOOKS | {"sportzino"}
 PERIODS = {
     None: "full",
     "q1": "q1",
@@ -103,7 +104,7 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
             event["source_id"], league_key, event["start"], event["home"], event["away"], event["status"]
         )
         for book in source.bookmakers:
-            if book.key in DFS_BOOKS or book.pregame_only:
+            if (book.key in DFS_BOOKS - COLLECTED_DFS_BOOKS) or book.pregame_only:
                 counts["excluded_dfs_or_frozen_book_blocks"] += 1
                 continue
             canonical_book = Sportsbook(book.key, book.title, "propline")
@@ -130,6 +131,11 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
                     market.model_extra.get("description", ""),
                 )
                 for outcome in market.outcomes:
+                    # PrizePicks goblin/demon payouts differ from its standard
+                    # entry schedule. Keep standard projections in this API.
+                    if book.key == "prizepicks" and outcome.model_extra.get("dfs_odds_type") != "standard":
+                        counts["excluded_nonstandard_prizepicks_outcomes"] += 1
+                        continue
                     if outcome.last_seen_at and outcome.last_seen_at < market.last_update:
                         counts["withdrawn_outcomes"] += 1
                         continue
@@ -160,14 +166,20 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
                         if len(known) > 1:
                             counts["ambiguous_players"] += 1
                             continue
-                        if not known and not outcome.player_id:
+                        named_player_fallback = book.key in NAMED_PLAYER_BOOKS
+                        if not known and not outcome.player_id and not named_player_fallback:
                             counts["props_without_confirmed_player_id"] += 1
                             continue
-                        player = (
-                            next(iter(known))
-                            if known
-                            else identity("propline_player", league_key, outcome.player_id)
-                        )
+                        if known:
+                            player = next(iter(known))
+                        elif outcome.player_id:
+                            player = identity("propline_player", league_key, outcome.player_id)
+                        else:
+                            # Some college boards provide names but no player ID.
+                            # Scope the private identity to the matched fixture.
+                            player = identity(
+                                "propline_player_name", league_key, eid, normalized(description)
+                            )
                     line_type = outcome.model_extra.get("line_type") or market.model_extra.get("line_type")
                     alternate = line_type == "alternate"
                     public = base + ("_alternate" if alternate else "")
@@ -227,4 +239,8 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
         )
     counts["matched_events"] = len(matched)
     counts["stored_outcomes"] = sum(len(board.quotes) for board in output)
+    for board in output:
+        for quote in board.quotes:
+            if quote.state == Availability.AVAILABLE:
+                counts["stored_outcomes:" + books[quote.book_id].source_id] += 1
     return output, dict(counts)

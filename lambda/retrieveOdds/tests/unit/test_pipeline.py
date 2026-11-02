@@ -182,6 +182,27 @@ def test_props_arbitrage_is_independent_of_ev_eligibility(runtime):
     assert arb["props"][0]["event_id"] == "NFL-near"
 
 
+@pytest.mark.parametrize("fantasy_book", ["PrizePicks", "Underdog"])
+def test_fantasy_targets_are_available_without_creating_sportsbook_arbitrage(runtime, fantasy_book):
+    _, api, *_ = runtime
+    engine = importlib.import_module("odds_pipeline.engine")
+    markets = importlib.import_module("odds_pipeline.markets")
+    game = next(iter(api.parse_all_markets_odds([raw_event("NBA")]).values()))
+    books = {
+        "FanDuel": {"over_odds":1.8, "under_odds":2.0},
+        "DraftKings": {"over_odds":1.8, "under_odds":2.0},
+    }
+    game["markets"] = {"props":{"player_points":{"Player":{"20.5":books}}}}
+    baseline, _ = engine._fair_probability("props", list(markets.iter_quotes("NBA", game)), ("over", "under"))
+    books[fantasy_book] = {"over_odds":2.5, "under_odds":2.5}
+    ev, arb = engine.calculate("NBA", {game["event_id"]:game})
+    assert arb["props"] == []
+    assert any(row["book"] == fantasy_book for row in ev["props"])
+    if fantasy_book == "PrizePicks":
+        with_synthetic, _ = engine._fair_probability("props", list(markets.iter_quotes("NBA", game)), ("over", "under"))
+        assert with_synthetic == baseline
+
+
 def test_different_players_and_prop_lines_cannot_create_false_arbitrage(runtime):
     _, api, *_ = runtime
     game = next(iter(api.parse_all_markets_odds([raw_event("NBA")]).values()))

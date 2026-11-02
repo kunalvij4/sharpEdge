@@ -69,9 +69,20 @@ listed by PropLine will wait for canonical discovery; this is visible in the
 unmatched-event counts.
 
 Player IDs are reused only for unique full-name matches on the same fixture.
-Otherwise confirmed provider IDs are namespaced. O/U lines, milestone names,
-and yes-only props retain their original semantics. DFS, frozen/suspended lines,
-withdrawn outcomes, and ambiguous selections are excluded or suspended.
+Otherwise confirmed provider IDs are namespaced. PrizePicks, Underdog, and
+Sportzino also accept a named-player identity scoped to the matched fixture when
+the provider omits player IDs, including college props. Ambiguous player matches
+remain excluded. O/U lines, milestone names, and yes-only props retain their
+original semantics. Frozen/suspended lines and withdrawn outcomes remain excluded.
+
+The bookmaker filter includes `prizepicks`, `underdog`, and `sportzino`.
+PrizePicks standard projections are included; goblin/demon and unclassified
+projections are excluded. Its synthetic +100 prices are retained as supplied.
+Underdog's real two-way American prices already include payout multipliers and
+are never multiplied again. Other DFS platforms remain excluded. The Lambda
+keeps fantasy entries out of sportsbook arbitrage and PrizePicks synthetic
+prices out of the fair-price consensus. Per-book `stored_outcomes:<book>` counters
+show successfully normalized selections in collection status.
 
 Freshness defaults are 600 seconds since collection for both feeds; PropLine
 also expires 900 seconds after the upstream market observation, or at kickoff.

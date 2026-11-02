@@ -26,7 +26,7 @@ normalization. The configured PropLine keys are:
 ```text
 onexbet,bet25,bet99,betfair_ex,betmgm,betrivers,betus,bookmaker_eu,bovada,
 courtside,draftkings,fanatics,fanduel,fliff,hardrock,kalshi,novig,pinnacle,
-polymarket,polymarket_us,prophetx,rebet,thescorebet,thrillzz
+polymarket,polymarket_us,prophetx,prizepicks,rebet,sportzino,thescorebet,thrillzz,underdog
 ```
 
 These are the documented keys for the requested bookmakers. PropLine's
@@ -36,6 +36,14 @@ Caesars bookmaker key. Those entries need confirmed provider support before
 they can be requested. Book/market availability varies by league. This filter
 applies to PropLine collection; existing stored quotes retain their original
 timestamps and expiry, and Unabated collection keeps its existing behavior.
+
+PrizePicks standard projections, Underdog prices, and Sportzino game lines and
+props are included in the same bulk requests. PrizePicks goblin/demon lines are
+excluded because their entry payouts differ; its retained +100 prices are the
+provider's synthetic projection prices. Underdog prices already include its
+payout multipliers and are retained exactly. Public book keys are `prizepicks`,
+`underdog`, and `sportzino`. Collection status includes `stored_outcomes:<book>`
+counts so coverage can be checked after each provider cycle.
 
 Redis holds compressed event JSON in the API's bookmaker/market/outcome shape.
 The collector prepares prices and grouping; API reads apply filters and current

@@ -46,9 +46,12 @@ BOOKMAKERS = (
     "polymarket",
     "polymarket_us",
     "prophetx",
+    "prizepicks",
     "rebet",
+    "sportzino",
     "thescorebet",
     "thrillzz",
+    "underdog",
 )
 GAME_MARKETS = ("h2h", "spreads")
 PROP_MARKETS = {
@@ -165,6 +168,7 @@ QUOTA_HEADERS = (
 )
 # Retain these books in raw captures, but identify them separately for integration.
 DFS_BOOKS = {"prizepicks", "underdog", "sleeper", "dabble", "parlayplay", "pick6", "draftkings_pick6"}
+COLLECTED_DFS_BOOKS = {"prizepicks", "underdog"}
 
 
 class ProplineError(RuntimeError):

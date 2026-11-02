@@ -32,6 +32,12 @@ with props but no game-line quotes. Props use `/v1/events/{event_id}/odds` with
 `markets=all_props&freshOnly=true`; stale cached prices are excluded. Each
 over/under market retains its player, line, and period-specific market key.
 
+PrizePicks standard projections and Underdog props flow through the same event
+requests as sportsbook props; Sportzino game lines and props are included too.
+PrizePicks uses provider-supplied synthetic prices and does not contribute to
+fair-price consensus. Fantasy entries are evaluated as targets but are excluded
+from sportsbook arbitrage. Underdog names normalize to `Underdog` consistently.
+
 ## Last-known prices in DynamoDB
 
 By default, SAM creates `${AWS::StackName}-ClosingOdds` with:

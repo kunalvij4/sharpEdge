@@ -56,6 +56,10 @@ def test_get_event_odds_uses_in_house_event_route(api_class):
 @pytest.mark.parametrize("title, model_name", [
     ("Sharp Book", "Sharp Book"),
     ("ProphetXchange", "ProphetX"),
+    ("Underdog Fantasy", "Underdog"),
+    ("Underdog Pick'em", "Underdog"),
+    ("PrizePicks", "PrizePicks"),
+    ("Sportzino", "Sportzino"),
 ])
 def test_parse_in_house_odds_response(api_class, title, model_name):
     api = api_class(api_key="product-key", base_url="https://odds.example.com")

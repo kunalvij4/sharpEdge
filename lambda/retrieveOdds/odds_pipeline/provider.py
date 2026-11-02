@@ -6,6 +6,7 @@ import requests
 BOOK_NAMES = {
     "Caesars Sportsbook": "Caesars", "BetOnline.ag": "BetOnline", "MyBookie.ag": "MyBookie",
     "Novig": "NoVig", "Prophet Exchange": "ProphetX", "ProphetXchange": "ProphetX",
+    "Underdog Fantasy": "Underdog", "Underdog Pick'em": "Underdog",
 }
 
 

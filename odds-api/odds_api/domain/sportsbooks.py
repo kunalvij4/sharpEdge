@@ -12,9 +12,16 @@ ALIASES = {
     "betriverssportsbook": "betrivers",
     "prophetx": "prophetxchange",
     "prophetexchange": "prophetxchange",
+    "underdogfantasy": "underdog",
+    "underdogpickem": "underdog",
 }
 
-TITLES = {"prophetxchange": "ProphetXchange"}
+TITLES = {
+    "prophetxchange": "ProphetXchange",
+    "prizepicks": "PrizePicks",
+    "underdog": "Underdog",
+    "sportzino": "Sportzino",
+}
 
 
 def sportsbook_key(key: str, title: str) -> str:

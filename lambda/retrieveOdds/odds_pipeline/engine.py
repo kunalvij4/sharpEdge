@@ -10,6 +10,9 @@ from .models.sharpedge_model import SharpEdge
 
 from .markets import CATEGORIES, bet_key, group_key, iter_quotes
 
+FANTASY_BOOKS = {"PrizePicks", "Underdog"}
+SYNTHETIC_PRICE_BOOKS = {"PrizePicks"}
+
 
 def kelly(probability, odds):
     return max((odds * probability - 1) / (odds - 1), 0)
@@ -27,6 +30,8 @@ def display(quote):
 def _fair_probability(category, quotes, sides):
     by_book = defaultdict(dict)
     for quote in quotes:
+        if quote["book"] in SYNTHETIC_PRICE_BOOKS:
+            continue
         by_book[quote["book"]][quote["side"]] = quote
     pairs = {
         book: (prices[sides[0]]["odds"], prices[sides[1]]["odds"])
@@ -74,10 +79,12 @@ def calculate(league, games):
         if not all(by_side.values()):
             continue
 
-        # Arbitrage is calculated from raw quotes, independently of EV filters.
-        best = [max(by_side[side], key=lambda quote: quote["odds"]) for side in sides]
+        # Fantasy entries require a multi-pick payout; their individual legs
+        # cannot be used as separately takeable sportsbook arbitrage bets.
+        arb_sides = {side: [q for q in by_side[side] if q["book"] not in FANTASY_BOOKS] for side in sides}
+        best = [max(arb_sides[side], key=lambda quote: quote["odds"]) for side in sides] if all(arb_sides.values()) else []
         inverse_total = sum(1 / quote["odds"] for quote in best)
-        if inverse_total < 1:
+        if best and inverse_total < 1:
             first, second = best
             arbitrage[category].append({
                 **_base(first),
