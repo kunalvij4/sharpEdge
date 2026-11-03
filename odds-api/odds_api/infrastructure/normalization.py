@@ -5,6 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from odds_api.domain.college import school_key, school_label
 from odds_api.domain.models import Availability, Board, Event, League, Quote, Sportsbook, utc
 from odds_api.infrastructure.provider_schema import Line, Source
 
@@ -182,6 +183,9 @@ class Normalizer:
             for p in values(people)
         }
         team_map = {str(t["id"]): t.get("name") or t.get("fullName") for t in values(teams)}
+        player_schools = {
+            str(person["id"]): team_map.get(str(person.get("teamId"))) for person in values(people)
+        }
         source_map = {}
         for raw in values(sources):
             source = Source.model_validate(raw)
@@ -274,6 +278,13 @@ class Normalizer:
                                 if not description:
                                     warnings.add("unresolved_player:" + player)
                                     continue
+                                if league.route in {"cfb", "cbb"}:
+                                    school = player_schools.get(player)
+                                    if school and school_key(school) in {
+                                        school_key(event.home),
+                                        school_key(event.away),
+                                    }:
+                                        description += f" ({school_label(school)})"
                             if not name:
                                 warnings.add("unsupported_side:bet=" + bet_id)
                                 continue

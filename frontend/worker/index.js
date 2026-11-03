@@ -21,7 +21,7 @@ const safe = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp
 // untrusted provider strings out of HTML and JavaScript syntax until that UI is
 // migrated to DOM-bound event listeners.
 const clean = value => String(value ?? '').replace(/[<>&"'`]/g, '').slice(0, 300);
-const canonicalBook = value => { const name = clean(value); return name === 'NoVig' ? 'Novig' : name === 'Underdog Fantasy' ? 'Underdog' : name; };
+const canonicalBook = value => { const name = clean(value); if (['DK Pick6', 'DraftKings Pick6', 'Pick6', 'Pick 6'].includes(name)) return 'DraftKings Pick6'; return name === 'NoVig' ? 'Novig' : name === 'Underdog Fantasy' ? 'Underdog' : name; };
 const marketLabels = {
   moneyline:'Moneyline', spreads:'Spread', player_points:'points', player_assists:'assists', player_rebounds:'rebounds',
   player_threes:'three-pointers', player_goals:'goals', player_shots_on_goal:'shots on goal', player_blocked_shots:'blocked shots',
@@ -154,7 +154,7 @@ async function readKey(env, key) {
 async function loadFeed(env) {
   const [evRows, arbRows] = await Promise.all([readKey(env, 'EV'), readKey(env, 'arbitrage')]);
   const ev = evRows.map(normalizeEv).filter(d => !inactiveLeagues.has(d.league) && d.odds !== '—').sort((a, b) => (b.kellyFull ?? -1) - (a.kellyFull ?? -1) || b.ev - a.ev);
-  const arbs = arbRows.map(normalizeArb).filter(d => d && !inactiveLeagues.has(d.league)).sort((a, b) => (b.kellyFull ?? -1) - (a.kellyFull ?? -1) || b.ev - a.ev);
+  const arbs = arbRows.map(normalizeArb).filter(d => d && !fantasyBooks.has(d.left) && !fantasyBooks.has(d.right) && !inactiveLeagues.has(d.league)).sort((a, b) => (b.kellyFull ?? -1) - (a.kellyFull ?? -1) || b.ev - a.ev);
   return { ev, arbs, fetchedAt: new Date().toISOString(), status:'ok' };
 }
 function eventTime(value, timezone = 'UTC') {
@@ -166,7 +166,7 @@ function eventTime(value, timezone = 'UTC') {
     return `${part('hour')}:${part('minute')} ${part('dayPeriod')} ${part('timeZoneName')}`.trim();
   } catch { return eventTime(value, 'UTC'); }
 }
-const fantasyBooks = new Set(['PrizePicks', 'Underdog']);
+const fantasyBooks = new Set(['PrizePicks', 'Underdog', 'DraftKings Pick6']);
 function renderServerPage(route, feed, state, timezone, fantasyView = false) {
   const rows = route !== 'arbitrage' ? feed.ev.filter(d => permitted(d.book, state) && (route !== 'parlay' || !d.live) && (route !== 'ev' || fantasyBooks.has(d.book) === fantasyView)) : feed.arbs.filter(d => permitted(d.left, state) && permitted(d.right, state));
   const label = route === 'parlay' ? 'Parlay Builder' : route === 'ev' ? 'Positive EV bets' : 'Arbitrage';

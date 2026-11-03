@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from odds_api.application.quote_merge import select_public_quotes
+from odds_api.domain.college import consolidate_rows
 from odds_api.domain.models import decimal_odds
 from odds_api.domain.sportsbooks import sportsbook_key, sportsbook_title
 
@@ -197,6 +198,7 @@ def project_response(
                     }
                 )
     books = {}
+    candidates = consolidate_rows(candidates, {document["id"]: event})
     for row in select_public_quotes(candidates, now, collected_ttl, source_ttl, propline_collected_ttl):
         quote = row["quote"]
         public_key = sportsbook_key(row["book_key"], row["book_title"])

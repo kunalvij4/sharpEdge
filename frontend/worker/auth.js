@@ -79,7 +79,7 @@ function publicAccount(user, membership) {
     plan:membership.plan, membershipExpiresAt:membership.expiresAt };
 }
 function authorizeFeed(feed, plan) {
-  const fantasy = book => ['PrizePicks', 'Underdog'].includes(book);
+  const fantasy = book => ['PrizePicks', 'Underdog', 'DraftKings Pick6'].includes(book);
   return { ...feed,
     ev:feed.ev.filter(row => plan === 'platinum' || (!row.live && (plan === 'fantasyplus' || (['gold', 'plus'].includes(plan) && !fantasy(row.book)) || (plan === 'fantasy' && fantasy(row.book))))),
     arbs:['plus', 'platinum'].includes(plan) ? feed.arbs : []

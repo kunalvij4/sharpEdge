@@ -3,7 +3,7 @@ const stateNames={AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'Califo
 // Product identity matters: a brand's sportsbook, fantasy and prediction markets
 // are separate entries in the user-provided state/platform matrix.
 const catalogProducts={
- DraftKings:'DraftKings Sportsbook',FanDuel:'FanDuel Sportsbook',BetMGM:'BetMGM Sportsbook',
+ 'DraftKings Pick6':'DraftKings Pick6','DK Pick6':'DraftKings Pick6',DraftKings:'DraftKings Sportsbook',FanDuel:'FanDuel Sportsbook',BetMGM:'BetMGM Sportsbook',
  'Hard Rock':'Hard Rock Bet','Hard Rock Bet':'Hard Rock Bet',Fanatics:'Fanatics Sportsbook',
  BetRivers:'BetRivers Sportsbook',Bet365:'bet365 Sportsbook',Caesars:'Caesars Sportsbook',
  'theScore Bet':'theScore Bet','TheScore US':'theScore Bet',PrizePicks:'PrizePicks Player Picks',
@@ -14,7 +14,8 @@ const visibleStatuses=new Set(['Y','U','C','L']);
 const nationwidePredictionMarkets=new Set(['Kalshi','Polymarket US']);
 function availability(name,code=region){const product=catalogProducts[name];const row=product&&platformFilter.states[code]?.[product];return row?{product,status:row[0],category:row[1],description:row[2],requiresPremises:!!row[3],unverified:!!row[4],legalDispute:!!row[5]}:null}
 let region=stateNames[localStorage.getItem('se-region')]?localStorage.getItem('se-region'):'';
-function bookCategory(name){return nationwidePredictionMarkets.has(name)?'Prediction/exchange':availability(name)?.category||(['PrizePicks','Underdog'].includes(name)?'Fantasy player picks':'Sportsbook')}
+const fantasyBookNames=new Set(['PrizePicks','Underdog','Underdog Fantasy',"Underdog Pick'em",'DraftKings Pick6','DK Pick6','Pick6','Pick 6']);
+function bookCategory(name){return fantasyBookNames.has(name)?'Fantasy player picks':nationwidePredictionMarkets.has(name)?'Prediction/exchange':availability(name)?.category||'Sportsbook'}
 function bookAllowed(name){if(!region||nationwidePredictionMarkets.has(name))return true;const entry=availability(name);return !!entry&&visibleStatuses.has(entry.status)}
 function offerAllowed(d){if(!region)return !(d.book==='PrizePicks'&&['NCAAF','NCAAB'].includes(d.league));const entry=availability(d.book);return !!entry&&visibleStatuses.has(entry.status)&&!entry.requiresPremises&&!(d.book==='PrizePicks'&&['NCAAF','NCAAB'].includes(d.league))}
 function regionEmpty(){if(window.__SHARPEDGE_SERVER__){const unavailable=window.__SHARPEDGE_FEED__?.status!=='ok';return '<div class="empty"><div class="symbol">⌖</div><h2>'+(unavailable?'Feed temporarily unavailable.':'No opportunities right now.')+'</h2><p>'+(unavailable?'The live feed could not be loaded. Try refreshing shortly.':'Nothing matches this view'+(region?' for '+stateNames[region]:'')+' at the moment. Check back later or adjust your filters.')+'</p><button onclick="refreshOdds(this)">Refresh odds ↻</button></div>'}return '<div class="empty"><div class="symbol">⌖</div><h2>No offers in this view right now.</h2><p>No matching sample opportunities are available'+(region?' for '+stateNames[region]:'')+'. Try a different view or check back later.</p><button onclick="book=\'All books\';league=\'All leagues\';render()">Reset filters →</button></div>'}

@@ -1,0 +1,6206 @@
+{
+  "sources": [
+    "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams",
+    "https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams",
+    "https://data.unabated.com/team/{league}"
+  ],
+  "verified_at": "2026-11-03",
+  "ambiguous_aliases": [
+    "Miami",
+    "MSU",
+    "OSU",
+    "UT",
+    "SU"
+  ],
+  "schools": [
+    {
+      "name": "Abilene Christian",
+      "aliases": [
+        "ACU",
+        "Abilene Christian",
+        "Abilene Christian Wildcats",
+        "Abilene Chrstn"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Adrian College Bulldogs",
+      "aliases": [
+        "Adrian College Bulldogs"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Air Force",
+      "aliases": [
+        "AF",
+        "Air Force",
+        "Air Force Falcons"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Akron",
+      "aliases": [
+        "AKR",
+        "Akron",
+        "Akron Zips"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Alabama",
+      "aliases": [
+        "ALA",
+        "Alabama",
+        "Alabama Crimson Tide",
+        "BAMA"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Alabama A&M",
+      "aliases": [
+        "AAM",
+        "AAMU",
+        "Alabama A&M",
+        "Alabama A&M Bulldogs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Alabama State",
+      "aliases": [
+        "ALAST",
+        "ALST",
+        "Alabama St",
+        "Alabama State",
+        "Alabama State Hornets"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Albany NY",
+      "aliases": [
+        "ALBY",
+        "Albany NY"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Alcorn State",
+      "aliases": [
+        "ALCN",
+        "ALCST",
+        "Alcorn St",
+        "Alcorn State",
+        "Alcorn State Braves"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Alice Lloyd College Eagles",
+      "aliases": [
+        "Alice Lloyd College Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "American University",
+      "aliases": [
+        "AMER",
+        "American",
+        "American University",
+        "American University Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "App State",
+      "aliases": [
+        "APP",
+        "App State",
+        "App State Mountaineers",
+        "Appalachian State"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Arizona",
+      "aliases": [
+        "ARI",
+        "ARIZ",
+        "Arizona",
+        "Arizona Wildcats"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Arizona State",
+      "aliases": [
+        "ASU",
+        "Arizona St",
+        "Arizona State",
+        "Arizona State Sun Devils"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Arkansas",
+      "aliases": [
+        "ARK",
+        "Arkansas",
+        "Arkansas Razorbacks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Arkansas State",
+      "aliases": [
+        "ARKS",
+        "ARST",
+        "Arkansas St",
+        "Arkansas State",
+        "Arkansas State Red Wolves"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Arkansas-Pine Bluff",
+      "aliases": [
+        "APB",
+        "AR-Pine Bluff",
+        "Ark Pine Bluff",
+        "Arkansas-Pine Bluff",
+        "Arkansas-Pine Bluff Golden Lions",
+        "UAPB"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Arlington Baptist Patriots",
+      "aliases": [
+        "Arlington Baptist Patriots"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Army",
+      "aliases": [
+        "ARM",
+        "ARMY",
+        "Army",
+        "Army Black Knights"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Auburn",
+      "aliases": [
+        "AUB",
+        "Auburn",
+        "Auburn Tigers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Austin Peay",
+      "aliases": [
+        "APSU",
+        "APY",
+        "Austin Peay",
+        "Austin Peay Governors"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "BYU",
+      "aliases": [
+        "BYU",
+        "BYU Cougars"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Bacone Warriors",
+      "aliases": [
+        "Bacone Warriors"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Ball State",
+      "aliases": [
+        "BALL",
+        "Ball State",
+        "Ball State Cardinals"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Baylor",
+      "aliases": [
+        "BAY",
+        "Baylor",
+        "Baylor Bears"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Belhaven Blazers",
+      "aliases": [
+        "Belhaven Blazers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Bellarmine",
+      "aliases": [
+        "BELL",
+        "Bellarmine",
+        "Bellarmine Knights"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Belmont",
+      "aliases": [
+        "BEL",
+        "Belmont",
+        "Belmont Bruins"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Benedict Ravens",
+      "aliases": [
+        "Benedict Ravens"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Benedictine AZ Redhawks",
+      "aliases": [
+        "Benedictine AZ Redhawks"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Bethel TN Wildcats",
+      "aliases": [
+        "Bethel TN Wildcats"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Bethesda Flames",
+      "aliases": [
+        "Bethesda Flames"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Bethune-Cookman",
+      "aliases": [
+        "BCU",
+        "Bethune",
+        "Bethune Cookman",
+        "Bethune-Cookman",
+        "Bethune-Cookman Wildcats"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Binghamton",
+      "aliases": [
+        "BING",
+        "Binghamton",
+        "Binghamton Bearcats"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Bluefield Ramblin' Rams",
+      "aliases": [
+        "Bluefield Ramblin' Rams"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Boise State",
+      "aliases": [
+        "BOIS",
+        "BOISE",
+        "Boise St",
+        "Boise State",
+        "Boise State Broncos"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Boston College",
+      "aliases": [
+        "BC",
+        "Boston College",
+        "Boston College Eagles"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Boston University",
+      "aliases": [
+        "BU",
+        "Boston U",
+        "Boston University",
+        "Boston University Terriers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Bowling Green",
+      "aliases": [
+        "BGN",
+        "BGSU",
+        "Bowling Green",
+        "Bowling Green Falcons"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Boyce Bulldogs",
+      "aliases": [
+        "Boyce Bulldogs"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Bradley",
+      "aliases": [
+        "BRAD",
+        "Bradley",
+        "Bradley Braves"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Brown",
+      "aliases": [
+        "BRN",
+        "BRWN",
+        "Brown",
+        "Brown Bears"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Bruins Bob Jones ",
+      "aliases": [
+        "BOBJ",
+        "Bruins Bob Jones "
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Bryant",
+      "aliases": [
+        "BRY",
+        "Bryant",
+        "Bryant Bulldogs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Bucknell",
+      "aliases": [
+        "BUC",
+        "BUCK",
+        "Bucknell",
+        "Bucknell Bison"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Buffalo",
+      "aliases": [
+        "BUF",
+        "Buffalo",
+        "Buffalo Bulls"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Butler",
+      "aliases": [
+        "BTLR",
+        "BUT",
+        "Butler",
+        "Butler Bulldogs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "CU Harrodsburg Tigers",
+      "aliases": [
+        "CU Harrodsburg Tigers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Cal Poly",
+      "aliases": [
+        "CP",
+        "CPS",
+        "Cal Poly",
+        "Cal Poly Mustangs",
+        "Cal Poly SLO"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Cal State Bakersfield",
+      "aliases": [
+        "Bakersfield",
+        "CSUB",
+        "Cal State Bakersfield",
+        "Cal State Bakersfield Roadrunners"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Cal State Fullerton",
+      "aliases": [
+        "CS Fullerton",
+        "CSF",
+        "CSUF",
+        "Cal State Fullerton",
+        "Cal State Fullerton Titans",
+        "Fullerton"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Cal State Northridge",
+      "aliases": [
+        "CSU Northridge",
+        "CSUN",
+        "Cal St Northridge",
+        "Cal State Northridge",
+        "Cal State Northridge Matadors"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "California",
+      "aliases": [
+        "CAL",
+        "California",
+        "California Golden Bears"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "California Baptist",
+      "aliases": [
+        "CA Baptist",
+        "CBU",
+        "California Baptist",
+        "California Baptist Lancers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Calvin Knights",
+      "aliases": [
+        "Calvin Knights"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Campbell",
+      "aliases": [
+        "CAM",
+        "CAMP",
+        "Campbell",
+        "Campbell Fighting Camels"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Canisius",
+      "aliases": [
+        "CAN",
+        "Canisius",
+        "Canisius Golden Griffins"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Carolina University Bruins",
+      "aliases": [
+        "Carolina University Bruins"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Carver College Cougars",
+      "aliases": [
+        "Carver College Cougars"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Catawba Indians",
+      "aliases": [
+        "Catawba Indians"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Cedarville Yellow Jackets",
+      "aliases": [
+        "Cedarville Yellow Jackets"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Central Arkansas",
+      "aliases": [
+        "C Arkansas",
+        "CARK",
+        "Central Arkansas",
+        "Central Arkansas Bears",
+        "UCA"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Central Baptist Mustangs",
+      "aliases": [
+        "Central Baptist Mustangs"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Central Connecticut",
+      "aliases": [
+        "C Connecticut",
+        "CCSU",
+        "Central Connecticut",
+        "Central Connecticut Blue Devils"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Central Michigan",
+      "aliases": [
+        "C Michigan",
+        "CMC",
+        "CMU",
+        "Central Michigan",
+        "Central Michigan Chippewas"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Central State (OH)",
+      "aliases": [
+        "CSU",
+        "Central State (OH)"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Central Washington",
+      "aliases": [
+        "C Washington",
+        "CWAU",
+        "CWU",
+        "Central Washington",
+        "Central Washington Wildcats"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Champion Christian Tigers",
+      "aliases": [
+        "Champion Christian Tigers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Chargers Southeastern Baptist College",
+      "aliases": [
+        "Chargers Southeastern Baptist College",
+        "SEBC"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Charleston",
+      "aliases": [
+        "COFC",
+        "Charleston",
+        "Charleston Cougars",
+        "College of Charleston"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Charleston Southern",
+      "aliases": [
+        "CCH",
+        "CHSO",
+        "Charleston So",
+        "Charleston Sou",
+        "Charleston Southern",
+        "Charleston Southern Buccaneers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Charlotte",
+      "aliases": [
+        "CHA",
+        "CHAR",
+        "CLT",
+        "Charlotte",
+        "Charlotte 49ers",
+        "Charlotte U"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Chattanooga",
+      "aliases": [
+        "CHT",
+        "Chattanooga",
+        "Chattanooga Mocs",
+        "UTC"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Chicago State",
+      "aliases": [
+        "CHS",
+        "CHST",
+        "Chicago St",
+        "Chicago State",
+        "Chicago State Cougars"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Chowan Hawks",
+      "aliases": [
+        "Chowan Hawks"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Cincinnati",
+      "aliases": [
+        "CIN",
+        "Cincinnati",
+        "Cincinnati Bearcats"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Clemson",
+      "aliases": [
+        "CLE",
+        "CLEM",
+        "Clemson",
+        "Clemson Tigers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Cleveland State",
+      "aliases": [
+        "CLE",
+        "CLEV",
+        "Cleveland St",
+        "Cleveland State",
+        "Cleveland State Vikings"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Coastal Carolina",
+      "aliases": [
+        "CC",
+        "CCU",
+        "Coastal",
+        "Coastal Carolina",
+        "Coastal Carolina Chanticleers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Coastal Georgia Mariners",
+      "aliases": [
+        "Coastal Georgia Mariners"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Coe Kohawks",
+      "aliases": [
+        "Coe Kohawks"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Coker Cobras",
+      "aliases": [
+        "Coker Cobras"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Colgate",
+      "aliases": [
+        "CGT",
+        "COLG",
+        "Colgate",
+        "Colgate Raiders"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "College of Idaho Yotes",
+      "aliases": [
+        "College of Idaho Yotes"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Colorado",
+      "aliases": [
+        "COL",
+        "COLO",
+        "Colorado",
+        "Colorado Buffaloes"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Colorado Christian Cougars",
+      "aliases": [
+        "Colorado Christian Cougars"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Colorado State",
+      "aliases": [
+        "CSU",
+        "Colorado St",
+        "Colorado State",
+        "Colorado State Rams"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Columbia",
+      "aliases": [
+        "CLMB",
+        "CMB",
+        "COLU",
+        "Columbia",
+        "Columbia Lions"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Columbia International Rams",
+      "aliases": [
+        "Columbia International Rams"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Concordia U Irvine Eagles",
+      "aliases": [
+        "Concordia U Irvine Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Coppin State",
+      "aliases": [
+        "COPP",
+        "Coppin St",
+        "Coppin State",
+        "Coppin State Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Corban University Warriors",
+      "aliases": [
+        "Corban University Warriors"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Cornell",
+      "aliases": [
+        "COR",
+        "Cornell",
+        "Cornell Big Red"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Cougars Clearwater",
+      "aliases": [
+        "CCC",
+        "Cougars Clearwater"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Covenant Scots",
+      "aliases": [
+        "Covenant Scots"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Creighton",
+      "aliases": [
+        "CREI",
+        "Creighton",
+        "Creighton Bluejays"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Crowley's Ridge Pioneers",
+      "aliases": [
+        "Crowley's Ridge Pioneers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Dallas Christian Crusaders",
+      "aliases": [
+        "Dallas Christian Crusaders"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Dalton State Roadrunners",
+      "aliases": [
+        "Dalton State Roadrunners"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Dartmouth",
+      "aliases": [
+        "DART",
+        "DRT",
+        "Dartmouth",
+        "Dartmouth Big Green"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Davidson",
+      "aliases": [
+        "DAV",
+        "Davidson",
+        "Davidson Wildcats"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Dayton",
+      "aliases": [
+        "DAY",
+        "Dayton",
+        "Dayton Flyers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "DePaul",
+      "aliases": [
+        "DEP",
+        "DePaul",
+        "DePaul Blue Demons"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Defiance Yellow Jackets",
+      "aliases": [
+        "Defiance Yellow Jackets"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Delaware",
+      "aliases": [
+        "DEL",
+        "Delaware",
+        "Delaware Blue Hens"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Delaware State",
+      "aliases": [
+        "DLS",
+        "DSU",
+        "Delaware St",
+        "Delaware State",
+        "Delaware State Hornets"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Denver",
+      "aliases": [
+        "DEN",
+        "Denver",
+        "Denver Pioneers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Detroit Mercy",
+      "aliases": [
+        "DET",
+        "DETM",
+        "Detroit",
+        "Detroit Mercy",
+        "Detroit Mercy Titans"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Dickinson State Blue Hawks",
+      "aliases": [
+        "Dickinson State Blue Hawks"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Doane Tigers",
+      "aliases": [
+        "Doane Tigers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Dragons Virginia Lynchburg",
+      "aliases": [
+        "Dragons Virginia Lynchburg",
+        "VLB"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Drake",
+      "aliases": [
+        "DRA",
+        "DRKE",
+        "Drake",
+        "Drake Bulldogs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Drexel",
+      "aliases": [
+        "DREX",
+        "Drexel",
+        "Drexel Dragons"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Duke",
+      "aliases": [
+        "DUK",
+        "DUKE",
+        "Duke",
+        "Duke Blue Devils"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Duquesne",
+      "aliases": [
+        "DUQ",
+        "Duquesne",
+        "Duquesne Dukes"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Eagles Pensacola Christian",
+      "aliases": [
+        "Eagles Pensacola Christian",
+        "PCC"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Eagles Southwestern Christian",
+      "aliases": [
+        "Eagles Southwestern Christian",
+        "SWCU"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Eagles Trinity Baptist",
+      "aliases": [
+        "Eagles Trinity Baptist",
+        "TBC"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "East Carolina",
+      "aliases": [
+        "ECU",
+        "East Carolina",
+        "East Carolina Pirates"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "East Tennessee State",
+      "aliases": [
+        "ETSU",
+        "East Tenn State",
+        "East Tennessee State",
+        "East Tennessee State Buccaneers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "East Texas A&M",
+      "aliases": [
+        "ETAM",
+        "East Texas A&M",
+        "East Texas A&M Lions",
+        "TAMC",
+        "Texas A&M-Commerce"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "East Texas Baptist Tigers",
+      "aliases": [
+        "East Texas Baptist Tigers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Eastern Illinois",
+      "aliases": [
+        "E Illinois",
+        "EIL",
+        "EIU",
+        "Eastern Illinois",
+        "Eastern Illinois Panthers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Eastern Kentucky",
+      "aliases": [
+        "E Kentucky",
+        "EKU",
+        "EKY",
+        "Eastern Kentucky",
+        "Eastern Kentucky Colonels"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Eastern Michigan",
+      "aliases": [
+        "E Michigan",
+        "EMC",
+        "EMU",
+        "Eastern Michigan",
+        "Eastern Michigan Eagles"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Eastern Oregon Mountaineers",
+      "aliases": [
+        "Eastern Oregon Mountaineers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Eastern Washington",
+      "aliases": [
+        "E Washington",
+        "EW",
+        "EWU",
+        "East Washington",
+        "Eastern Washington",
+        "Eastern Washington Eagles"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Edward Waters",
+      "aliases": [
+        "EDW",
+        "EWC",
+        "Edward Waters",
+        "Edward Waters Tigers"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Edward Waters Tigers",
+      "aliases": [
+        "Edward Waters Tigers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Elizabeth City State",
+      "aliases": [
+        "ECSU",
+        "Elizabeth City",
+        "Elizabeth City State",
+        "Elizabeth City State Vikings"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Elon",
+      "aliases": [
+        "ELO",
+        "ELON",
+        "Elon",
+        "Elon Phoenix"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Emporia State Hornets",
+      "aliases": [
+        "Emporia State Hornets"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Evansville",
+      "aliases": [
+        "EVAN",
+        "Evansville",
+        "Evansville Purple Aces"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Fairfield",
+      "aliases": [
+        "FAIR",
+        "Fairfield",
+        "Fairfield Stags"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Fairleigh Dickinson",
+      "aliases": [
+        "FDU",
+        "FDU Knights",
+        "Fairleigh Dickinson",
+        "Fairleigh Dickinson Knights"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Falcons Kansas Christian",
+      "aliases": [
+        "Falcons Kansas Christian",
+        "KCC"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Flagler Saints",
+      "aliases": [
+        "Flagler Saints"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Florida",
+      "aliases": [
+        "FLA",
+        "Florida",
+        "Florida Gators"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Florida A&M",
+      "aliases": [
+        "FAMU",
+        "Florida A&M",
+        "Florida A&M Rattlers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Florida Atlantic",
+      "aliases": [
+        "FAU",
+        "Florida Atlantic",
+        "Florida Atlantic Owls"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Florida College Falcons",
+      "aliases": [
+        "Florida College Falcons"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Florida Gulf Coast",
+      "aliases": [
+        "FGCU",
+        "Fla Gulf Coast",
+        "Florida Gulf Coast",
+        "Florida Gulf Coast Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Florida International",
+      "aliases": [
+        "FIU",
+        "Florida International",
+        "Florida International Panthers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Florida Memorial Lions",
+      "aliases": [
+        "Florida Memorial Lions"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Florida National Conquistadors",
+      "aliases": [
+        "Florida National Conquistadors"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Florida State",
+      "aliases": [
+        "FSU",
+        "Florida St",
+        "Florida State",
+        "Florida State Seminoles"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Fordham",
+      "aliases": [
+        "FOR",
+        "Fordham",
+        "Fordham Rams"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Fort Hays State Tigers",
+      "aliases": [
+        "Fort Hays State Tigers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Franklin Pierce",
+      "aliases": [
+        "FP",
+        "FPU",
+        "Franklin Pierce",
+        "Franklin Pierce Ravens"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Freed Hardeman Lions",
+      "aliases": [
+        "Freed Hardeman Lions"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Fresno Pacific Sunbirds",
+      "aliases": [
+        "Fresno Pacific Sunbirds"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Fresno State",
+      "aliases": [
+        "FRE",
+        "FRES",
+        "Fresno St",
+        "Fresno State",
+        "Fresno State Bulldogs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Furman",
+      "aliases": [
+        "FUR",
+        "Furman",
+        "Furman Paladins"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Gardner-Webb",
+      "aliases": [
+        "GWB",
+        "GWEB",
+        "Gardner-Webb",
+        "Gardner-Webb Runnin' Bulldogs",
+        "WEBB"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "George Mason",
+      "aliases": [
+        "GMU",
+        "George Mason",
+        "George Mason Patriots",
+        "George Mason University",
+        "George Mason University Patriots"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "George Washington",
+      "aliases": [
+        "G Washington",
+        "GW",
+        "George Washington",
+        "George Washington Revolutionaries"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Georgetown",
+      "aliases": [
+        "GTOWN",
+        "GTWN",
+        "Georgetown",
+        "Georgetown Hoyas"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Georgia",
+      "aliases": [
+        "Georgia",
+        "Georgia Bulldogs",
+        "UGA"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Georgia SW Hurricanes",
+      "aliases": [
+        "Georgia SW Hurricanes"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Georgia Southern",
+      "aliases": [
+        "GA Southern",
+        "GASO",
+        "GSO",
+        "Georgia Southern",
+        "Georgia Southern Eagles"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Georgia State",
+      "aliases": [
+        "GAST",
+        "GST",
+        "Georgia St",
+        "Georgia State",
+        "Georgia State Panthers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Georgia Tech",
+      "aliases": [
+        "GT",
+        "Georgia Tech",
+        "Georgia Tech Yellow Jackets"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Gonzaga",
+      "aliases": [
+        "GONZ",
+        "Gonzaga",
+        "Gonzaga Bulldogs"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Grambling",
+      "aliases": [
+        "GRA",
+        "GRAM",
+        "Grambling",
+        "Grambling Tigers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Grand Canyon",
+      "aliases": [
+        "GCU",
+        "Grand Canyon",
+        "Grand Canyon Lopes"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Green Bay",
+      "aliases": [
+        "GB",
+        "Green Bay",
+        "Green Bay Phoenix",
+        "Wisc Green Bay"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Greensboro Pride",
+      "aliases": [
+        "Greensboro Pride"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Hampton",
+      "aliases": [
+        "HAMP",
+        "Hampton",
+        "Hampton Pirates"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Hardin Simmons Cowboys",
+      "aliases": [
+        "Hardin Simmons Cowboys"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Hartford",
+      "aliases": [
+        "HART",
+        "Hartford"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Harvard",
+      "aliases": [
+        "HAR",
+        "HARV",
+        "Harvard",
+        "Harvard Crimson"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Hawai'i",
+      "aliases": [
+        "HAW",
+        "Hawai'i",
+        "Hawai'i Rainbow Warriors",
+        "Hawaii"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Hawaii Pacific Sharks",
+      "aliases": [
+        "Hawaii Pacific Sharks"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "High Point",
+      "aliases": [
+        "HP",
+        "HPU",
+        "High Point",
+        "High Point Panthers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Hofstra",
+      "aliases": [
+        "HOF",
+        "Hofstra",
+        "Hofstra Pride"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Holy Cross",
+      "aliases": [
+        "HC",
+        "Holy Cross",
+        "Holy Cross Crusaders"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Houston",
+      "aliases": [
+        "HOU",
+        "Houston",
+        "Houston Cougars"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Houston Christian",
+      "aliases": [
+        "HB",
+        "HCU",
+        "Hou Christian",
+        "Houston Christian",
+        "Houston Christian Huskies"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Howard",
+      "aliases": [
+        "HOW",
+        "Howard",
+        "Howard Bison"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Howard Payne Yellow Jackets",
+      "aliases": [
+        "Howard Payne Yellow Jackets"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "IU Indianapolis",
+      "aliases": [
+        "IU Indianapolis",
+        "IU Indianapolis Jaguars",
+        "IU Indy",
+        "IUIN",
+        "IUPUI"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Idaho",
+      "aliases": [
+        "IDA",
+        "IDHO",
+        "Idaho",
+        "Idaho Vandals"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Idaho State",
+      "aliases": [
+        "IDS",
+        "IDST",
+        "Idaho St",
+        "Idaho State",
+        "Idaho State Bengals"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Illinois",
+      "aliases": [
+        "ILL",
+        "Illinois",
+        "Illinois Fighting Illini"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Illinois Chicago",
+      "aliases": [
+        "Illinois Chicago"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Illinois State",
+      "aliases": [
+        "ILS",
+        "ILST",
+        "Illinois St",
+        "Illinois State",
+        "Illinois State Redbirds"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Incarnate Word",
+      "aliases": [
+        "IW",
+        "Incarnate Word",
+        "Incarnate Word Cardinals",
+        "UIW"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Indiana",
+      "aliases": [
+        "IND",
+        "IU",
+        "Indiana",
+        "Indiana Hoosiers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Indiana State",
+      "aliases": [
+        "INDS",
+        "INST",
+        "Indiana St",
+        "Indiana State",
+        "Indiana State Sycamores"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Iona",
+      "aliases": [
+        "IONA",
+        "Iona",
+        "Iona Gaels"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Iowa",
+      "aliases": [
+        "IOW",
+        "IOWA",
+        "Iowa",
+        "Iowa Hawkeyes"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Iowa State",
+      "aliases": [
+        "ISU",
+        "Iowa State",
+        "Iowa State Cyclones"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Jackson State",
+      "aliases": [
+        "JKST",
+        "JST",
+        "Jackson St",
+        "Jackson State",
+        "Jackson State Tigers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Jacksonville",
+      "aliases": [
+        "JAC",
+        "JAX",
+        "Jacksonville",
+        "Jacksonville Dolphins"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Jacksonville State",
+      "aliases": [
+        "JVS",
+        "JXST",
+        "Jacksonville State",
+        "Jacksonville State Gamecocks",
+        "Jax State"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "James Madison",
+      "aliases": [
+        "JMU",
+        "James Madison",
+        "James Madison Dukes"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Judson College Eagles",
+      "aliases": [
+        "Judson College Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Kansas",
+      "aliases": [
+        "KAN",
+        "KU",
+        "Kansas",
+        "Kansas Jayhawks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Kansas City",
+      "aliases": [
+        "KC",
+        "Kansas City",
+        "Kansas City Roos",
+        "UMKC"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Kansas State",
+      "aliases": [
+        "KST",
+        "KSU",
+        "Kansas St",
+        "Kansas State",
+        "Kansas State Wildcats"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Kennesaw State",
+      "aliases": [
+        "KENN",
+        "Kennesaw St",
+        "Kennesaw State",
+        "Kennesaw State Owls"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Kent State",
+      "aliases": [
+        "KENT",
+        "KNT",
+        "Kent State",
+        "Kent State Golden Flashes"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Kentucky",
+      "aliases": [
+        "KEN",
+        "Kentucky",
+        "Kentucky Wildcats",
+        "UK"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Kentucky Christian",
+      "aliases": [
+        "KCU",
+        "KYCHR",
+        "Kentucky Christian",
+        "Kentucky Christian Knights"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Kentucky State",
+      "aliases": [
+        "KSU",
+        "KYSU",
+        "Kentucky St",
+        "Kentucky State",
+        "Kentucky State Thorobreds"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Knights Middle Georgia State",
+      "aliases": [
+        "Knights Middle Georgia State",
+        "MGC"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "LIU Brooklyn Blackbeards",
+      "aliases": [
+        "LIU Brooklyn Blackbeards"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "LSU",
+      "aliases": [
+        "LSU",
+        "LSU Tigers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "LSU Alexandria Generals",
+      "aliases": [
+        "LSU Alexandria Generals"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "LSU New Orleans",
+      "aliases": [
+        "LSU N Orleans",
+        "LSU New Orleans",
+        "LSU New Orleans Privateers",
+        "NOLA"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "LSU Shreveport Pilots",
+      "aliases": [
+        "LSU Shreveport Pilots"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "La Salle",
+      "aliases": [
+        "LAS",
+        "La Salle",
+        "La Salle Explorers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "LaGrange College Panthers",
+      "aliases": [
+        "LaGrange College Panthers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Lafayette",
+      "aliases": [
+        "LAF",
+        "Lafayette",
+        "Lafayette Leopards"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Lamar",
+      "aliases": [
+        "LAM",
+        "Lamar",
+        "Lamar Cardinals"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Lancaster Bible Chargers",
+      "aliases": [
+        "Lancaster Bible Chargers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Lane",
+      "aliases": [
+        "LC",
+        "Lane"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Le Moyne",
+      "aliases": [
+        "LEM",
+        "LMC",
+        "Le Moyne",
+        "Le Moyne Dolphins"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Le Tourneau Yellow Jackets",
+      "aliases": [
+        "Le Tourneau Yellow Jackets"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Lee University Flames",
+      "aliases": [
+        "Lee University Flames"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Lehigh",
+      "aliases": [
+        "LEH",
+        "LEI",
+        "Lehigh",
+        "Lehigh Mountain Hawks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Lewis University Flyers",
+      "aliases": [
+        "Lewis University Flyers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Liberty",
+      "aliases": [
+        "LIB",
+        "Liberty",
+        "Liberty Flames"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Lincoln PA Lions",
+      "aliases": [
+        "Lincoln PA Lions"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Lindenwood",
+      "aliases": [
+        "LIN",
+        "LINU",
+        "Lindenwood",
+        "Lindenwood Lions",
+        "Lindenwood University"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Lipscomb",
+      "aliases": [
+        "LIP",
+        "Lipscomb",
+        "Lipscomb Bisons"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Little Rock",
+      "aliases": [
+        "Arkansas Little Rock",
+        "LR",
+        "Little Rock",
+        "Little Rock Trojans"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Long Beach State",
+      "aliases": [
+        "LBSU",
+        "Long Beach St",
+        "Long Beach State",
+        "Long Beach State Beach"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Long Island University",
+      "aliases": [
+        "LIU",
+        "LIUCWP",
+        "Long Island",
+        "Long Island University",
+        "Long Island University Sharks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Longwood",
+      "aliases": [
+        "LONG",
+        "Longwood",
+        "Longwood Lancers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Louisiana",
+      "aliases": [
+        "Louisiana",
+        "Louisiana Ragin' Cajuns",
+        "UL",
+        "UL Lafayette",
+        "ULL"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Louisiana Tech",
+      "aliases": [
+        "LT",
+        "Louisiana Tech",
+        "Louisiana Tech Bulldogs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Louisville",
+      "aliases": [
+        "LOU",
+        "Louisville",
+        "Louisville Cardinals"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Loyola Chicago",
+      "aliases": [
+        "LUC",
+        "Loyola Chicago",
+        "Loyola Chicago Ramblers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Loyola Maryland",
+      "aliases": [
+        "L-MD",
+        "Loyola MD",
+        "Loyola Maryland",
+        "Loyola Maryland Greyhounds"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Loyola Marymount",
+      "aliases": [
+        "LMU",
+        "Loyola Marymount",
+        "Loyola Marymount Lions"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Loyola New Orleans Wolfpack",
+      "aliases": [
+        "Loyola New Orleans Wolfpack"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Maine",
+      "aliases": [
+        "MAINE",
+        "ME",
+        "Maine",
+        "Maine Black Bears",
+        "UMAINE"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Malone University Pioneers",
+      "aliases": [
+        "Malone University Pioneers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Manhattan",
+      "aliases": [
+        "MAN",
+        "Manhattan",
+        "Manhattan Jaspers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Marist",
+      "aliases": [
+        "MRST",
+        "MST",
+        "Marist",
+        "Marist Red",
+        "Marist Red Foxes"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Marquette",
+      "aliases": [
+        "MARQ",
+        "Marquette",
+        "Marquette Golden Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Mars Hill Lions",
+      "aliases": [
+        "Mars Hill Lions"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Marshall",
+      "aliases": [
+        "MARSH",
+        "MRSH",
+        "MSH",
+        "Marshall",
+        "Marshall Thundering Herd"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Mary Hardin Baylor Crusaders",
+      "aliases": [
+        "Mary Hardin Baylor Crusaders"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Maryland",
+      "aliases": [
+        "MAR",
+        "MD",
+        "Maryland",
+        "Maryland Terrapins"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Maryland Eastern Shore",
+      "aliases": [
+        "MD Eastern",
+        "MD Eastern Shore",
+        "Maryland Eastern Shore",
+        "Maryland Eastern Shore Hawks",
+        "UMES"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Massachusetts",
+      "aliases": [
+        "MASS",
+        "Massachusetts",
+        "Massachusetts Minutemen",
+        "UMASS",
+        "UMass",
+        "UMass Minutemen"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "McKendree Bearcats",
+      "aliases": [
+        "McKendree Bearcats"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "McMurry War Hawks",
+      "aliases": [
+        "McMurry War Hawks"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "McNeese",
+      "aliases": [
+        "MCN",
+        "McNeese",
+        "McNeese Cowboys",
+        "McNeese State"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Memphis",
+      "aliases": [
+        "MEM",
+        "Memphis",
+        "Memphis Tigers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Mercer",
+      "aliases": [
+        "MER",
+        "Mercer",
+        "Mercer Bears"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Mercyhurst",
+      "aliases": [
+        "MERC",
+        "MHU",
+        "Mercyhurst",
+        "Mercyhurst Lakers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Merrimack",
+      "aliases": [
+        "MC",
+        "MRMK",
+        "Merrimack",
+        "Merrimack College",
+        "Merrimack Warriors"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Miami Florida",
+      "aliases": [
+        "MFL",
+        "MIA",
+        "Miami",
+        "Miami (FL)",
+        "Miami FL",
+        "Miami Florida",
+        "Miami Hurricanes"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Miami Ohio",
+      "aliases": [
+        "M-OH",
+        "MOH",
+        "Miami (OH)",
+        "Miami (OH) RedHawks",
+        "Miami OH",
+        "Miami Ohio",
+        "Miami RedHawks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Michigan",
+      "aliases": [
+        "MICH",
+        "Michigan",
+        "Michigan Wolverines"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Michigan State",
+      "aliases": [
+        "MSU",
+        "Michigan St",
+        "Michigan State",
+        "Michigan State Spartans"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Middle Tennessee",
+      "aliases": [
+        "MTS",
+        "MTSU",
+        "Middle Tenn St",
+        "Middle Tennessee",
+        "Middle Tennessee Blue Raiders",
+        "Middle Tennessee State"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Midwestern State Mustangs",
+      "aliases": [
+        "Midwestern State Mustangs"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Miles",
+      "aliases": [
+        "MILE",
+        "MILES",
+        "Miles",
+        "Miles Golden Bears"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Milwaukee",
+      "aliases": [
+        "MILW",
+        "Milwaukee",
+        "Milwaukee Panthers",
+        "Wisc Milwaukee"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Minnesota",
+      "aliases": [
+        "MIN",
+        "MINN",
+        "Minnesota",
+        "Minnesota Golden Gophers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Mississippi",
+      "aliases": [
+        "MIS",
+        "MISS",
+        "Mississippi",
+        "Ole Miss",
+        "Ole Miss Rebels"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Mississippi State",
+      "aliases": [
+        "MSST",
+        "Mississippi St",
+        "Mississippi State",
+        "Mississippi State Bulldogs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Mississippi Valley State",
+      "aliases": [
+        "MVS",
+        "MVSU",
+        "Miss Valley St",
+        "Mississippi Valley State",
+        "Mississippi Valley State Delta Devils"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Missouri",
+      "aliases": [
+        "MIZ",
+        "Missouri",
+        "Missouri Tigers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Missouri Science & Tech Miners",
+      "aliases": [
+        "Missouri Science & Tech Miners"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Missouri State",
+      "aliases": [
+        "MIZST",
+        "MOST",
+        "Missouri St",
+        "Missouri State",
+        "Missouri State Bears"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Mobile Rams",
+      "aliases": [
+        "Mobile Rams"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Monmouth",
+      "aliases": [
+        "MNM",
+        "MONM",
+        "Monmouth",
+        "Monmouth Hawks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Montana",
+      "aliases": [
+        "MONT",
+        "Montana",
+        "Montana Grizzlies"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Montana State",
+      "aliases": [
+        "MOS",
+        "MTST",
+        "Montana St",
+        "Montana State",
+        "Montana State Bobcats"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Montana Western Bulldogs",
+      "aliases": [
+        "Montana Western Bulldogs"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Morehead State",
+      "aliases": [
+        "MOR",
+        "MORE",
+        "Morehead St",
+        "Morehead State",
+        "Morehead State Eagles"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Morgan State",
+      "aliases": [
+        "MGN",
+        "MORG",
+        "Morgan St",
+        "Morgan State",
+        "Morgan State Bears"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Mount Marty Lancers",
+      "aliases": [
+        "Mount Marty Lancers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Mount St. Joseph Lions",
+      "aliases": [
+        "Mount St. Joseph Lions"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Mount St. Mary's",
+      "aliases": [
+        "MSM",
+        "Mount St Marys",
+        "Mount St. Mary's",
+        "Mount St. Mary's Mountaineers",
+        "Mt. St. Mary's"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Murray State",
+      "aliases": [
+        "MUR",
+        "Murray St",
+        "Murray State",
+        "Murray State Racers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Mustangs Mount Ida",
+      "aliases": [
+        "MIDA",
+        "Mustangs Mount Ida"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "NC State",
+      "aliases": [
+        "NC State",
+        "NC State Wolfpack",
+        "NCST",
+        "NCSU"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "NC Wesleyan Battling Bishops",
+      "aliases": [
+        "NC Wesleyan Battling Bishops"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "NJIT",
+      "aliases": [
+        "NJIT",
+        "NJIT Highlanders"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "NW Nazarene Crusaders",
+      "aliases": [
+        "NW Nazarene Crusaders"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Navy",
+      "aliases": [
+        "NAV",
+        "NAVY",
+        "Navy",
+        "Navy Midshipmen"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Nebraska",
+      "aliases": [
+        "NEB",
+        "Nebraska",
+        "Nebraska Cornhuskers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Nevada",
+      "aliases": [
+        "NEV",
+        "Nevada",
+        "Nevada Wolf Pack"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "New Hampshire",
+      "aliases": [
+        "NH",
+        "New Hampshire",
+        "New Hampshire Wildcats",
+        "UNH"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "New Haven",
+      "aliases": [
+        "NHC",
+        "NHVN",
+        "New Haven",
+        "New Haven Chargers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "New Mexico",
+      "aliases": [
+        "NM",
+        "New Mexico",
+        "New Mexico Lobos",
+        "UNM"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "New Mexico State",
+      "aliases": [
+        "NMS",
+        "NMSU",
+        "New Mexico St",
+        "New Mexico State",
+        "New Mexico State Aggies"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "New Orleans",
+      "aliases": [
+        "New Orleans"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Newberry Indians",
+      "aliases": [
+        "Newberry Indians"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Newman Jets",
+      "aliases": [
+        "Newman Jets"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Niagara",
+      "aliases": [
+        "NIA",
+        "NIAG",
+        "Niagara",
+        "Niagara Purple Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Nicholls",
+      "aliases": [
+        "NIC",
+        "NICH",
+        "Nicholls",
+        "Nicholls Colonels",
+        "Nicholls State"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Norfolk State",
+      "aliases": [
+        "NFS",
+        "NORF",
+        "Norfolk St",
+        "Norfolk State",
+        "Norfolk State Spartans"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "North Alabama",
+      "aliases": [
+        "North Alabama",
+        "North Alabama Lions",
+        "UNA"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "North Carolina",
+      "aliases": [
+        "NC",
+        "North Carolina",
+        "North Carolina Tar Heels",
+        "UNC"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "North Carolina A&T",
+      "aliases": [
+        "NAT",
+        "NC A&T",
+        "NCAT",
+        "North Carolina A&T",
+        "North Carolina A&T Aggies"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "North Carolina Central",
+      "aliases": [
+        "NC Central",
+        "NCC",
+        "NCCU",
+        "North Carolina Central",
+        "North Carolina Central Eagles"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "North Dakota",
+      "aliases": [
+        "North Dakota",
+        "North Dakota Fighting Hawks",
+        "UND"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "North Dakota State",
+      "aliases": [
+        "N Dakota St",
+        "NDS",
+        "NDSU",
+        "North Dakota State",
+        "North Dakota State Bison"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "North Florida",
+      "aliases": [
+        "North Florida",
+        "North Florida Ospreys",
+        "UNF"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "North Georgia Saints",
+      "aliases": [
+        "North Georgia Saints"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "North Texas",
+      "aliases": [
+        "NTX",
+        "North Texas",
+        "North Texas Mean Green",
+        "UNT"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Northeastern",
+      "aliases": [
+        "NE",
+        "Northeastern",
+        "Northeastern Huskies"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Northeastern State RiverHawks",
+      "aliases": [
+        "Northeastern State RiverHawks"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Northern Arizona",
+      "aliases": [
+        "N Arizona",
+        "NAU",
+        "NAZ",
+        "Northern Arizona",
+        "Northern Arizona Lumberjacks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Northern Colorado",
+      "aliases": [
+        "N Colorado",
+        "NOCO",
+        "No. Colorado",
+        "Northern Colorado",
+        "Northern Colorado Bears",
+        "UNCO"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Northern Illinois",
+      "aliases": [
+        "N Illinois",
+        "NIL",
+        "NIU",
+        "Northern Illinois",
+        "Northern Illinois Huskies"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Northern Iowa",
+      "aliases": [
+        "Northern Iowa",
+        "Northern Iowa Panthers",
+        "UNI"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Northern Kentucky",
+      "aliases": [
+        "N Kentucky",
+        "NKU",
+        "Northern Kentucky",
+        "Northern Kentucky Norse"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Northwest University Eagles",
+      "aliases": [
+        "Northwest University Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Northwestern",
+      "aliases": [
+        "NU",
+        "NW",
+        "Northwestern",
+        "Northwestern Wildcats"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Northwestern State",
+      "aliases": [
+        "N'Western St",
+        "NWS",
+        "NWST",
+        "Northwestern State",
+        "Northwestern State Demons"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Notre Dame",
+      "aliases": [
+        "ND",
+        "Notre Dame",
+        "Notre Dame Fighting Irish"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Oakland",
+      "aliases": [
+        "OAK",
+        "Oakland",
+        "Oakland Golden Grizzlies"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Oaklanders Lincoln University (CA)",
+      "aliases": [
+        "LUCA",
+        "Oaklanders Lincoln University (CA)"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Ohio",
+      "aliases": [
+        "OHI",
+        "OHIO",
+        "Ohio",
+        "Ohio Bobcats"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Ohio State",
+      "aliases": [
+        "OSU",
+        "Ohio State",
+        "Ohio State Buckeyes"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Oklahoma",
+      "aliases": [
+        "OKL",
+        "OKLA",
+        "OU",
+        "Oklahoma",
+        "Oklahoma Sooners"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Oklahoma State",
+      "aliases": [
+        "OKS",
+        "OKST",
+        "Oklahoma St",
+        "Oklahoma State",
+        "Oklahoma State Cowboys"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Old Dominion",
+      "aliases": [
+        "ODU",
+        "Old Dominion",
+        "Old Dominion Monarchs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Olivet College Comets",
+      "aliases": [
+        "Olivet College Comets"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Omaha",
+      "aliases": [
+        "Nebraska Omaha",
+        "OMA",
+        "Omaha",
+        "Omaha Mavericks"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Oral Roberts",
+      "aliases": [
+        "ORU",
+        "Oral Roberts",
+        "Oral Roberts Golden Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Oregon",
+      "aliases": [
+        "ORE",
+        "Oregon",
+        "Oregon Ducks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Oregon State",
+      "aliases": [
+        "ORS",
+        "ORST",
+        "Oregon St",
+        "Oregon State",
+        "Oregon State Beavers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Our Lady of the Lake Saints",
+      "aliases": [
+        "Our Lady of the Lake Saints"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Pacific",
+      "aliases": [
+        "PAC",
+        "Pacific",
+        "Pacific Tigers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Park University Buccaneers",
+      "aliases": [
+        "Park University Buccaneers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Paul Quinn Tigers",
+      "aliases": [
+        "Paul Quinn Tigers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Penn State",
+      "aliases": [
+        "PSU",
+        "Penn State",
+        "Penn State Nittany Lions"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Pennsylvania",
+      "aliases": [
+        "PEN",
+        "PENN",
+        "Penn",
+        "Pennsylvania",
+        "Pennsylvania Quakers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Pepperdine",
+      "aliases": [
+        "PEPP",
+        "Pepperdine",
+        "Pepperdine Waves"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Pittsburgh",
+      "aliases": [
+        "PITT",
+        "Pitt",
+        "Pittsburgh",
+        "Pittsburgh Panthers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Point Park Pioneers",
+      "aliases": [
+        "Point Park Pioneers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Portland",
+      "aliases": [
+        "PORT",
+        "Portland",
+        "Portland Pilots"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Portland State",
+      "aliases": [
+        "PRST",
+        "Portland St",
+        "Portland State",
+        "Portland State Vikings"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Prairie View A&M",
+      "aliases": [
+        "PRV",
+        "PV",
+        "Prairie View",
+        "Prairie View A&M",
+        "Prairie View A&M Panthers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Presbyterian",
+      "aliases": [
+        "PRE",
+        "PRES",
+        "Presbyterian",
+        "Presbyterian Blue Hose"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Princeton",
+      "aliases": [
+        "PRI",
+        "PRIN",
+        "Princeton",
+        "Princeton Tigers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Providence",
+      "aliases": [
+        "PROV",
+        "Providence",
+        "Providence Friars"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Purdue",
+      "aliases": [
+        "PUR",
+        "Purdue",
+        "Purdue Boilermakers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Purdue Fort Wayne",
+      "aliases": [
+        "IPFW",
+        "PFW",
+        "Purdue FW",
+        "Purdue Fort Wayne",
+        "Purdue Fort Wayne Mastodons"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Purdue Northwest Pride",
+      "aliases": [
+        "Purdue Northwest Pride"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Queens NC",
+      "aliases": [
+        "Queens NC"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Quincy Hawks",
+      "aliases": [
+        "Quincy Hawks"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Quinnipiac",
+      "aliases": [
+        "QU",
+        "QUIN",
+        "Quinnipiac",
+        "Quinnipiac Bobcats"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Radford",
+      "aliases": [
+        "RAD",
+        "Radford",
+        "Radford Highlanders"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Regent University Royals",
+      "aliases": [
+        "Regent University Royals"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Regis Univ Rangers",
+      "aliases": [
+        "Regis Univ Rangers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Rhode Island",
+      "aliases": [
+        "RIL",
+        "Rhode Island",
+        "Rhode Island Rams",
+        "URI"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Rice",
+      "aliases": [
+        "RICE",
+        "Rice",
+        "Rice Owls"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Richmond",
+      "aliases": [
+        "RCH",
+        "RICH",
+        "Richmond",
+        "Richmond Spiders"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Rider",
+      "aliases": [
+        "RID",
+        "Rider",
+        "Rider Broncs"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Robert Morris",
+      "aliases": [
+        "RM",
+        "RMU",
+        "Robert Morris",
+        "Robert Morris Colonials"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Rochester College Warriors",
+      "aliases": [
+        "Rochester College Warriors"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Royals Ecclesia",
+      "aliases": [
+        "ECCC",
+        "Royals Ecclesia"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Royals Johnson University",
+      "aliases": [
+        "JU",
+        "Royals Johnson University"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Rutgers",
+      "aliases": [
+        "RUT",
+        "RUTG",
+        "Rutgers",
+        "Rutgers Scarlet Knights"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "SAGU American Indian Warriors",
+      "aliases": [
+        "SAGU American Indian Warriors"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "SE Louisiana",
+      "aliases": [
+        "SE Louisiana",
+        "SE Louisiana Lions",
+        "SEL",
+        "SELA"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "SIU Edwardsville",
+      "aliases": [
+        "SIU Edwardsville",
+        "SIU Edwardsville Cougars",
+        "SIUE"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "SMU",
+      "aliases": [
+        "SMU",
+        "SMU Mustangs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "SW Adventist Knights",
+      "aliases": [
+        "SW Adventist Knights"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "SW Christian Univ Eagles",
+      "aliases": [
+        "SW Christian Univ Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Sacramento State",
+      "aliases": [
+        "CSUS",
+        "SAC",
+        "Sacramento St",
+        "Sacramento State",
+        "Sacramento State Hornets"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Sacred Heart",
+      "aliases": [
+        "SCH",
+        "SHU",
+        "Sacred Heart",
+        "Sacred Heart Pioneers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Saint Francis",
+      "aliases": [
+        "SFPA",
+        "STF",
+        "Saint Francis",
+        "Saint Francis Red Flash",
+        "St. Francis (PA)"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Saint Joseph's",
+      "aliases": [
+        "JOES",
+        "Saint Joseph's",
+        "Saint Joseph's Hawks",
+        "St. Josephs"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Saint Louis",
+      "aliases": [
+        "SLU",
+        "Saint Louis",
+        "Saint Louis Billikens"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Saint Mary's",
+      "aliases": [
+        "SMC",
+        "Saint Mary's",
+        "Saint Mary's Gaels",
+        "Saint Marys CA"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Saint Peter's",
+      "aliases": [
+        "SPU",
+        "Saint Peter's",
+        "Saint Peter's Peacocks",
+        "St. Peter's"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Saints Hillsdale Free Will Baptist College",
+      "aliases": [
+        "HFWBC",
+        "Saints Hillsdale Free Will Baptist College"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Saints Randall University",
+      "aliases": [
+        "RU",
+        "Saints Randall University"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Salem University Tigers",
+      "aliases": [
+        "Salem University Tigers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Sam Houston",
+      "aliases": [
+        "SHS",
+        "SHSU",
+        "Sam Houston",
+        "Sam Houston Bearkats",
+        "Sam Houston St",
+        "Sam Houston State"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Samford",
+      "aliases": [
+        "SAM",
+        "Samford",
+        "Samford Bulldogs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "San Diego",
+      "aliases": [
+        "SDG",
+        "San Diego",
+        "San Diego Toreros",
+        "USD"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "San Diego State",
+      "aliases": [
+        "SDSU",
+        "San Diego St",
+        "San Diego State",
+        "San Diego State Aztecs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "San Francisco",
+      "aliases": [
+        "SF",
+        "San Francisco",
+        "San Francisco Dons"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "San Jos\u00e9 State",
+      "aliases": [
+        "SJS",
+        "SJSU",
+        "San Jose State",
+        "San Jos\u00e9 St",
+        "San Jos\u00e9 State",
+        "San Jos\u00e9 State Spartans"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Santa Clara",
+      "aliases": [
+        "SCU",
+        "Santa Clara",
+        "Santa Clara Broncos"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Savannah State",
+      "aliases": [
+        "Savannah State"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Seattle U",
+      "aliases": [
+        "SEA",
+        "Seattle U",
+        "Seattle U Redhawks"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Seton Hall",
+      "aliases": [
+        "HALL",
+        "Seton Hall",
+        "Seton Hall Pirates"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Siena",
+      "aliases": [
+        "SIE",
+        "Siena",
+        "Siena Saints"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Simpson College Storm",
+      "aliases": [
+        "Simpson College Storm"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "South Alabama",
+      "aliases": [
+        "SAB",
+        "South Alabama",
+        "South Alabama Jaguars",
+        "USA"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "South Carolina",
+      "aliases": [
+        "SC",
+        "South Carolina",
+        "South Carolina Gamecocks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "South Carolina State",
+      "aliases": [
+        "SC State",
+        "SCS",
+        "SCST",
+        "South Carolina State",
+        "South Carolina State Bulldogs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "South Carolina Upstate",
+      "aliases": [
+        "SC Upstate",
+        "South Carolina Upstate",
+        "South Carolina Upstate Spartans",
+        "UPST",
+        "USC Upstate"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "South Dakota",
+      "aliases": [
+        "SD",
+        "SDAK",
+        "South Dakota",
+        "South Dakota Coyotes"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "South Dakota State",
+      "aliases": [
+        "S Dakota St",
+        "SDS",
+        "SDST",
+        "South Dakota State",
+        "South Dakota State Jackrabbits"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "South Florida",
+      "aliases": [
+        "South Florida",
+        "South Florida Bulls",
+        "USF"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "South Wesleyan Warriors",
+      "aliases": [
+        "South Wesleyan Warriors"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Southeast Missouri State",
+      "aliases": [
+        "SE Missouri",
+        "SE Missouri State",
+        "SEM",
+        "SEMO",
+        "Southeast Missouri State",
+        "Southeast Missouri State Redhawks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Southern",
+      "aliases": [
+        "SOU",
+        "SU",
+        "Southern",
+        "Southern Jaguars"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Southern Connecticut State",
+      "aliases": [
+        "S Conn St",
+        "SCSU",
+        "SCTS",
+        "Southern Connecticut State",
+        "Southern Connecticut State Owls"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Southern Illinois",
+      "aliases": [
+        "S Illinois",
+        "SIL",
+        "SIU",
+        "Southern Illinois",
+        "Southern Illinois Salukis"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Southern Indiana",
+      "aliases": [
+        "Southern Indiana"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Southern Miss",
+      "aliases": [
+        "Southern Miss",
+        "Southern Miss Golden Eagles",
+        "USM"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Southern Utah",
+      "aliases": [
+        "SUT",
+        "SUU",
+        "Southern Utah",
+        "Southern Utah Thunderbirds"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Spring Hill Badgers",
+      "aliases": [
+        "Spring Hill Badgers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "St. Ambrose Fighting Bees",
+      "aliases": [
+        "St. Ambrose Fighting Bees"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "St. Andrews Knights",
+      "aliases": [
+        "St. Andrews Knights"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "St. Bonaventure",
+      "aliases": [
+        "SBON",
+        "SBU",
+        "St Bonaventure",
+        "St. Bonaventure",
+        "St. Bonaventure Bonnies"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "St. Francis IL Fighting Saints",
+      "aliases": [
+        "St. Francis IL Fighting Saints"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "St. Francis NY",
+      "aliases": [
+        "St. Francis NY"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "St. Francis PA",
+      "aliases": [
+        "St. Francis PA"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "St. John's",
+      "aliases": [
+        "SJU",
+        "St John's",
+        "St. John's",
+        "St. John's Red Storm",
+        "St. Johns"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "St. Katherine Firebirds",
+      "aliases": [
+        "St. Katherine Firebirds"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "St. Martin's Saints",
+      "aliases": [
+        "St. Martin's Saints"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "St. Mary's MD Seahawks",
+      "aliases": [
+        "St. Mary's MD Seahawks"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "St. Mary's TX Rattlers",
+      "aliases": [
+        "St. Mary's TX Rattlers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "St. Thomas",
+      "aliases": [
+        "STMN",
+        "St Thomas",
+        "St. Thomas",
+        "St. Thomas Tommies",
+        "UST"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Stanford",
+      "aliases": [
+        "STA",
+        "STAN",
+        "Stanford",
+        "Stanford Cardinal"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Stephen F. Austin",
+      "aliases": [
+        "SAU",
+        "SF Austin",
+        "SFA",
+        "Stephen F. Austin",
+        "Stephen F. Austin Lumberjacks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Stetson",
+      "aliases": [
+        "STET",
+        "STU",
+        "Stetson",
+        "Stetson Hatters"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Stonehill",
+      "aliases": [
+        "STHL",
+        "STO",
+        "Stonehill",
+        "Stonehill College",
+        "Stonehill Skyhawks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Stony Brook",
+      "aliases": [
+        "SBK",
+        "STBK",
+        "STON",
+        "Stony Brook",
+        "Stony Brook Seawolves"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Sul Ross Lobos",
+      "aliases": [
+        "Sul Ross Lobos"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Syracuse",
+      "aliases": [
+        "SYR",
+        "Syracuse",
+        "Syracuse Orange"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "TCU",
+      "aliases": [
+        "TCU",
+        "TCU Horned Frogs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Tarleton State",
+      "aliases": [
+        "TAR",
+        "TSU",
+        "Tarleton",
+        "Tarleton St",
+        "Tarleton State",
+        "Tarleton State Texans"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Temple",
+      "aliases": [
+        "TEM",
+        "Temple",
+        "Temple Owls"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Tennessee",
+      "aliases": [
+        "TEN",
+        "TENN",
+        "Tennessee",
+        "Tennessee Volunteers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Tennessee State",
+      "aliases": [
+        "TNST",
+        "Tennessee St",
+        "Tennessee State",
+        "Tennessee State Tigers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Tennessee Tech",
+      "aliases": [
+        "TNT",
+        "TNTC",
+        "Tennessee Tech",
+        "Tennessee Tech Golden Eagles"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Texarkana Eagles",
+      "aliases": [
+        "Texarkana Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Texas",
+      "aliases": [
+        "TEX",
+        "Texas",
+        "Texas Longhorns"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Texas A&M",
+      "aliases": [
+        "TA&M",
+        "TXAM",
+        "Texas A&M",
+        "Texas A&M Aggies"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Texas A&M Intl Dust Devils",
+      "aliases": [
+        "Texas A&M Intl Dust Devils"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Texas A&M-Corpus Christi",
+      "aliases": [
+        "AMCC",
+        "Texas A&M Corpus",
+        "Texas A&M-CC",
+        "Texas A&M-Corpus Christi",
+        "Texas A&M-Corpus Christi Islanders"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Texas Southern",
+      "aliases": [
+        "TSO",
+        "TXSO",
+        "Texas Southern",
+        "Texas Southern Tigers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Texas State",
+      "aliases": [
+        "TXST",
+        "Texas St",
+        "Texas State",
+        "Texas State Bobcats"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Texas Tech",
+      "aliases": [
+        "TT",
+        "TTU",
+        "Texas Tech",
+        "Texas Tech Red Raiders"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Texas Wesleyan",
+      "aliases": [
+        "TWU",
+        "Texas Wesleyan"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "The Citadel",
+      "aliases": [
+        "CIT",
+        "The Citadel",
+        "The Citadel Bulldogs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Tigers Grace Bible College",
+      "aliases": [
+        "GBC",
+        "Tigers Grace Bible College"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Tigers Hiwassee",
+      "aliases": [
+        "HIW",
+        "Tigers Hiwassee"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Tigers Trinity (FL)",
+      "aliases": [
+        "TRIN",
+        "Tigers Trinity (FL)"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Toccoa Falls Eagles",
+      "aliases": [
+        "Toccoa Falls Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Toledo",
+      "aliases": [
+        "TOL",
+        "Toledo",
+        "Toledo Rockets"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Towson",
+      "aliases": [
+        "TOW",
+        "TOWS",
+        "TWN",
+        "Towson",
+        "Towson Tigers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Transylvania Pioneers",
+      "aliases": [
+        "Transylvania Pioneers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Trevecca Nazarene Trojans",
+      "aliases": [
+        "Trevecca Nazarene Trojans"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Troy",
+      "aliases": [
+        "TROY",
+        "TRY",
+        "Troy",
+        "Troy Trojans"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Truman State Bulldogs",
+      "aliases": [
+        "Truman State Bulldogs"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Tulane",
+      "aliases": [
+        "TUL",
+        "TULN",
+        "Tulane",
+        "Tulane Green Wave"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Tulsa",
+      "aliases": [
+        "TLSA",
+        "TSA",
+        "Tulsa",
+        "Tulsa Golden Hurricane"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Tusculum",
+      "aliases": [
+        "TC",
+        "TUSC",
+        "Tusculum",
+        "Tusculum Pioneers"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Tuskegee Golden Tigers",
+      "aliases": [
+        "Tuskegee Golden Tigers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "UAB",
+      "aliases": [
+        "UAB",
+        "UAB Blazers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "UAlbany",
+      "aliases": [
+        "ALB",
+        "Albany",
+        "UALB",
+        "UAlbany",
+        "UAlbany Great Danes"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "UC Davis",
+      "aliases": [
+        "UC Davis",
+        "UC Davis Aggies",
+        "UCD"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "UC Irvine",
+      "aliases": [
+        "Cal Irvine",
+        "UC Irvine",
+        "UC Irvine Anteaters",
+        "UCI"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "UC Riverside",
+      "aliases": [
+        "Cal Riverside",
+        "UC Riverside",
+        "UC Riverside Highlanders",
+        "UCR",
+        "UCRV"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "UC San Diego",
+      "aliases": [
+        "UC San Diego",
+        "UC San Diego Tritons",
+        "UCSD"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "UC Santa Barbara",
+      "aliases": [
+        "Cal Santa Barbara",
+        "Santa Barbara",
+        "UC Santa Barbara",
+        "UC Santa Barbara Gauchos",
+        "UCSB"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "UCF",
+      "aliases": [
+        "Central Florida",
+        "UCF",
+        "UCF Knights"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "UCLA",
+      "aliases": [
+        "UCLA",
+        "UCLA Bruins"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "UConn",
+      "aliases": [
+        "CONN",
+        "Connecticut",
+        "UConn",
+        "UConn Huskies"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "UIC",
+      "aliases": [
+        "UIC",
+        "UIC Flames"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "UL Monroe",
+      "aliases": [
+        "UL Monroe",
+        "UL Monroe Warhawks",
+        "ULM"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "UMBC",
+      "aliases": [
+        "MD Baltimore Co",
+        "UMBC",
+        "UMBC Retrievers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "UMass Lowell",
+      "aliases": [
+        "UML",
+        "UMass Lowell",
+        "UMass Lowell River Hawks"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "UNC Asheville",
+      "aliases": [
+        "NC Asheville",
+        "UNC Asheville",
+        "UNC Asheville Bulldogs",
+        "UNCA"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "UNC Greensboro",
+      "aliases": [
+        "NC Greensboro",
+        "UNC Greensboro",
+        "UNC Greensboro Spartans",
+        "UNCG"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "UNC Wilmington",
+      "aliases": [
+        "NC Wilmington",
+        "UNC Wilmington",
+        "UNC Wilmington Seahawks",
+        "UNCW"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "UNLV",
+      "aliases": [
+        "UNLV",
+        "UNLV Rebels"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "USC",
+      "aliases": [
+        "USC",
+        "USC Trojans"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "UT Arlington",
+      "aliases": [
+        "UT Arlington",
+        "UT Arlington Mavericks",
+        "UTA"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "UT Martin",
+      "aliases": [
+        "TNM",
+        "UT Martin",
+        "UT Martin Skyhawks",
+        "UTM"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "UT Rio Grande Valley",
+      "aliases": [
+        "RGV",
+        "UT Rio Grande",
+        "UT Rio Grande Valley",
+        "UT Rio Grande Valley Vaqueros",
+        "UTRGV"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "UTEP",
+      "aliases": [
+        "UTEP",
+        "UTEP Miners"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "UTSA",
+      "aliases": [
+        "Texas San Antonio",
+        "UTSA",
+        "UTSA Roadrunners"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Utah",
+      "aliases": [
+        "UTAH",
+        "UTH",
+        "Utah",
+        "Utah Utes"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Utah State",
+      "aliases": [
+        "USU",
+        "UTS",
+        "Utah State",
+        "Utah State Aggies"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Utah Tech",
+      "aliases": [
+        "DSU",
+        "UTU",
+        "Utah Tech",
+        "Utah Tech Trailblazers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Utah Valley",
+      "aliases": [
+        "UVU",
+        "Utah Valley",
+        "Utah Valley Wolverines"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "VA Wesleyan Blue Marlins",
+      "aliases": [
+        "VA Wesleyan Blue Marlins"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "VCU",
+      "aliases": [
+        "VCU",
+        "VCU Rams",
+        "Va Commonwealth"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "VMI",
+      "aliases": [
+        "VMI",
+        "VMI Keydets"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Valparaiso",
+      "aliases": [
+        "VAL",
+        "VALP",
+        "Valparaiso",
+        "Valparaiso Beacons"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Vanderbilt",
+      "aliases": [
+        "VAN",
+        "Vanderbilt",
+        "Vanderbilt Commodores"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Vermont",
+      "aliases": [
+        "UVM",
+        "Vermont",
+        "Vermont Catamounts"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Villanova",
+      "aliases": [
+        "NOVA",
+        "VIL",
+        "VILL",
+        "Villanova",
+        "Villanova Wildcats"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Virginia",
+      "aliases": [
+        "UVA",
+        "Virginia",
+        "Virginia Cavaliers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Virginia Tech",
+      "aliases": [
+        "VT",
+        "Virginia Tech",
+        "Virginia Tech Hokies"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Virginia Wise Cavaliers",
+      "aliases": [
+        "Virginia Wise Cavaliers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "W. Virginia Tech Golden Bears",
+      "aliases": [
+        "W. Virginia Tech Golden Bears"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Wagner",
+      "aliases": [
+        "WAG",
+        "Wagner",
+        "Wagner Seahawks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Wake Forest",
+      "aliases": [
+        "WAKE",
+        "WF",
+        "Wake Forest",
+        "Wake Forest Demon Deacons"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Warner Pacific Knights",
+      "aliases": [
+        "Warner Pacific Knights"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Warriors Calvary University",
+      "aliases": [
+        "CU",
+        "Warriors Calvary University"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Warriors Life Pacific College",
+      "aliases": [
+        "LPC",
+        "Warriors Life Pacific College"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Washburn Ichabods",
+      "aliases": [
+        "Washburn Ichabods"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Washington",
+      "aliases": [
+        "WAS",
+        "WASH",
+        "Washington",
+        "Washington Huskies"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Washington Adventist Shock",
+      "aliases": [
+        "Washington Adventist Shock"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Washington State",
+      "aliases": [
+        "WST",
+        "WSU",
+        "Washington St",
+        "Washington State",
+        "Washington State Cougars"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Webber International",
+      "aliases": [
+        "WEB",
+        "WINT",
+        "Webber Int'l",
+        "Webber International",
+        "Webber International Warriors"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Webber International Warriors",
+      "aliases": [
+        "Webber International Warriors"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Weber State",
+      "aliases": [
+        "WBS",
+        "WEB",
+        "Weber St",
+        "Weber State",
+        "Weber State Wildcats"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "West Florida",
+      "aliases": [
+        "UWF",
+        "UWFL",
+        "West Florida",
+        "West Florida Argonauts"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "West Georgia",
+      "aliases": [
+        "UWGA",
+        "WGA",
+        "West Georgia",
+        "West Georgia Wolves"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "West New Mexico Mustangs",
+      "aliases": [
+        "West New Mexico Mustangs"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "West Virginia",
+      "aliases": [
+        "WVU",
+        "West Virginia",
+        "West Virginia Mountaineers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "West Virginia State",
+      "aliases": [
+        "W Virginia St",
+        "WVSU",
+        "West Virginia State",
+        "West Virginia State Yellow Jackets"
+      ],
+      "sports": [
+        "cfb"
+      ]
+    },
+    {
+      "name": "Western Carolina",
+      "aliases": [
+        "W Carolina",
+        "WCU",
+        "Western Carolina",
+        "Western Carolina Catamounts"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Western Illinois",
+      "aliases": [
+        "W Illinois",
+        "WIL",
+        "WIU",
+        "Western Illinois",
+        "Western Illinois Leathernecks"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Western Kentucky",
+      "aliases": [
+        "WKU",
+        "WKY",
+        "Western KY",
+        "Western Kentucky",
+        "Western Kentucky Hilltoppers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Western Michigan",
+      "aliases": [
+        "W Michigan",
+        "WMC",
+        "WMU",
+        "Western Michigan",
+        "Western Michigan Broncos"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Westmont Warriors",
+      "aliases": [
+        "Westmont Warriors"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Whitworth Pirates",
+      "aliases": [
+        "Whitworth Pirates"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Wichita State",
+      "aliases": [
+        "WICH",
+        "Wichita St",
+        "Wichita State",
+        "Wichita State Shockers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "William & Mary",
+      "aliases": [
+        "W&M",
+        "WM",
+        "William & Mary",
+        "William & Mary Tribe"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "William Carey Crusaders",
+      "aliases": [
+        "William Carey Crusaders"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "William Jessup Warriors",
+      "aliases": [
+        "William Jessup Warriors"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Winthrop",
+      "aliases": [
+        "WIN",
+        "Winthrop",
+        "Winthrop Eagles"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Wisconsin",
+      "aliases": [
+        "WIS",
+        "WISC",
+        "Wisconsin",
+        "Wisconsin Badgers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Wofford",
+      "aliases": [
+        "WOF",
+        "Wofford",
+        "Wofford Terriers"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Wolfpack Oak Hills Christian",
+      "aliases": [
+        "OHCC",
+        "Wolfpack Oak Hills Christian"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Wright State",
+      "aliases": [
+        "WRST",
+        "Wright St",
+        "Wright State",
+        "Wright State Raiders"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Wyoming",
+      "aliases": [
+        "WYO",
+        "Wyoming",
+        "Wyoming Cowboys"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Xavier",
+      "aliases": [
+        "XAV",
+        "Xavier",
+        "Xavier Musketeers"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Yale",
+      "aliases": [
+        "YAL",
+        "YALE",
+        "Yale",
+        "Yale Bulldogs"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    },
+    {
+      "name": "Yellowstone Centurions",
+      "aliases": [
+        "Yellowstone Centurions"
+      ],
+      "sports": [
+        "cbb"
+      ]
+    },
+    {
+      "name": "Youngstown State",
+      "aliases": [
+        "YSU",
+        "Youngstown St",
+        "Youngstown State",
+        "Youngstown State Penguins"
+      ],
+      "sports": [
+        "cbb",
+        "cfb"
+      ]
+    }
+  ]
+}

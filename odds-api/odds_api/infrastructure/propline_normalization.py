@@ -4,6 +4,7 @@ from collections import Counter
 from datetime import timedelta
 from decimal import Decimal
 
+from odds_api.domain.college import COLLEGE_LEAGUES, CollegePlayers, name_key, player_parts
 from odds_api.domain.models import Availability, Board, Event, Quote, Sportsbook, identity
 from odds_api.infrastructure.bet365 import normalized, same_team
 from odds_api.infrastructure.college_teams import COLLEGE_SPORTS, school_key
@@ -80,10 +81,45 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
     candidates, matched, books, counts = {"moneyline": {}, "props": {}}, {}, {}, Counter()
     # Reuse existing player identities only for a unique, complete name on this fixture.
     players = {}
+    college = league_key in COLLEGE_LEAGUES
+    college_players = {
+        event["id"]: CollegePlayers(event["home"], event["away"]) for event in events if college
+    }
+    event_matches = {source.id: match_event(source, events) for source in result.events} if college else {}
+
+    def observe_college_players(source, resolver):
+        for book in source.bookmakers:
+            if book.key in DFS_BOOKS - COLLECTED_DFS_BOOKS or book.pregame_only:
+                continue
+            for market in book.markets:
+                if (
+                    market.key not in PROP_MARKETS[league_key]
+                    or market.period not in PERIODS
+                    or market.suspended_at
+                    or market.last_update is None
+                    or not -5 <= (now - market.last_update).total_seconds() <= max_age
+                ):
+                    continue
+                for outcome in market.outcomes:
+                    if outcome.description and (
+                        not outcome.last_seen_at or outcome.last_seen_at >= market.last_update
+                    ):
+                        resolver.add(outcome.description)
+
     for row in repository.quotes(league_key):
         q = row["quote"]
         if not row["book_key"].startswith("propline_") and q.player_id and q.description:
             players.setdefault((q.event_id, normalized(q.description)), set()).add(q.player_id)
+            if q.event_id in college_players:
+                college_players[q.event_id].add(q.description, q.player_id)
+    # A school tag supplied by one book can identify the same complete name at
+    # another book on this fixture, even before Unabated posts that player's prop.
+    for source in result.events if college else ():
+        event = event_matches[source.id]
+        if event is None or source.live or source.completed or source.commence_time <= now:
+            continue
+        resolver = college_players[event["id"]]
+        observe_college_players(source, resolver)
     for source in result.events:
         if (
             source.live
@@ -93,7 +129,7 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
         ):
             counts["commenced_or_outright_events"] += 1
             continue
-        event = match_event(source, events)
+        event = event_matches[source.id] if college else match_event(source, events)
         if event is None and discover_events:
             discovered = Event(
                 "propline:" + source.id,
@@ -109,6 +145,9 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
             counts["unmatched_or_ambiguous_events"] += 1
             continue
         eid = event["id"]
+        if college and eid not in college_players:
+            college_players[eid] = CollegePlayers(event["home"], event["away"])
+            observe_college_players(source, college_players[eid])
         matched[eid] = Event(
             event["source_id"], league_key, event["start"], event["home"], event["away"], event["status"]
         )
@@ -171,7 +210,24 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
                         if not description:
                             counts["props_without_player_context"] += 1
                             continue
-                        known = players.get((eid, normalized(description)), set())
+                        resolver = college_players.get(eid)
+                        school = None
+                        if resolver:
+                            resolved = resolver.resolve(description)
+                            if resolved is None:
+                                counts["ambiguous_or_conflicting_college_players"] += 1
+                                continue
+                            description, school, known = resolved
+                            if school:
+                                counts["school_matched_player_outcomes"] += 1
+                            # Retain the legacy unique-name match while stored
+                            # quotes are upgraded to school-qualified names.
+                            if not known:
+                                known = players.get((eid, normalized(description)), set()) or players.get(
+                                    (eid, normalized(player_parts(description)[0])), set()
+                                )
+                        else:
+                            known = players.get((eid, normalized(description)), set())
                         if len(known) > 1:
                             counts["ambiguous_players"] += 1
                             continue
@@ -183,6 +239,10 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
                             continue
                         if known:
                             player = next(iter(known))
+                        elif school:
+                            player = identity(
+                                "college_player", league_key, school, name_key(player_parts(description)[0])
+                            )
                         elif outcome.player_id:
                             player = identity("propline_player", league_key, outcome.player_id)
                         else:

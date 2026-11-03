@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
 
@@ -7,6 +8,7 @@ from odds_api.application.async_work import blocking_work
 from odds_api.application.ports import Clock, Provider, Repository
 from odds_api.application.prepared_odds import project_response, response_freshness, time_value
 from odds_api.application.quote_merge import select_public_quotes
+from odds_api.domain.college import consolidate_rows
 from odds_api.domain.models import Availability, decimal_odds
 from odds_api.domain.sportsbooks import sportsbook_key, sportsbook_title
 
@@ -310,8 +312,14 @@ class OddsQueryService:
             for row in rows
             if self.bet365_enabled or row["book_key"] != "bet365"
         ]
+        candidates = consolidate_rows(candidates, events)
         rows = [
             r["original"]
+            if r["original"]["quote"].description == r["quote"]["description"]
+            else {
+                **r["original"],
+                "quote": replace(r["original"]["quote"], description=r["quote"]["description"]),
+            }
             for r in select_public_quotes(
                 candidates, now, self.collected_ttl, self.source_ttl, self.propline_collected_ttl
             )
