@@ -6,7 +6,7 @@ import worker from '../dist/server/index.js';
 const app = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
 const compliance = fs.readFileSync(new URL('../web/compliance.js', import.meta.url), 'utf8');
 const projections = [
-  {id:1, book:'FanDuel', league:'NBA', live:false, ev:2, quotes:[{book:'FanDuel', odds:'-110'}, {book:'PrizePicks', odds:'+100'}, {book:'Underdog', odds:'-105'}, {book:'DraftKings Pick6', odds:'+100'}]},
+  {id:1, book:'FanDuel', league:'NBA', live:false, ev:2, quotes:[{book:'FanDuel', odds:'-110'}, {book:'PrizePicks', odds:'+100'}, {book:'Underdog', odds:'-105'}, {book:'DraftKings Pick6', odds:'+100'}, {book:'Sleeper', odds:'+100'}, {book:'Dabble', odds:'+100'}, {book:'ParlayPlay', odds:'+100'}]},
   {id:2, book:'PrizePicks', league:'NBA', live:false, ev:3, quotes:[{book:'PrizePicks', odds:'+100'}, {book:'FanDuel', odds:'-110'}]},
   {id:3, book:'DraftKings Pick6', league:'NBA', live:false, ev:2, quotes:[{book:'DraftKings Pick6', odds:'+100'}, {book:'FanDuel', odds:'-110'}]},
 ];

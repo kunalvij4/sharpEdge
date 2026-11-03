@@ -14,7 +14,7 @@ const visibleStatuses=new Set(['Y','U','C','L']);
 const nationwidePredictionMarkets=new Set(['Kalshi','Polymarket US']);
 function availability(name,code=region){const product=catalogProducts[name];const row=product&&platformFilter.states[code]?.[product];return row?{product,status:row[0],category:row[1],description:row[2],requiresPremises:!!row[3],unverified:!!row[4],legalDispute:!!row[5]}:null}
 let region=stateNames[localStorage.getItem('se-region')]?localStorage.getItem('se-region'):'';
-const fantasyBookNames=new Set(['PrizePicks','Underdog','Underdog Fantasy',"Underdog Pick'em",'DraftKings Pick6','DK Pick6','Pick6','Pick 6']);
+const fantasyBookNames=new Set(['PrizePicks','Underdog','Underdog Fantasy',"Underdog Pick'em",'DraftKings Pick6','DK Pick6','Pick6','Pick 6','Sleeper','Sleeper Picks','Dabble','ParlayPlay','DraftKings DFS']);
 function bookCategory(name){return fantasyBookNames.has(name)?'Fantasy player picks':nationwidePredictionMarkets.has(name)?'Prediction/exchange':availability(name)?.category||'Sportsbook'}
 function bookAllowed(name){if(!region||nationwidePredictionMarkets.has(name))return true;const entry=availability(name);return !!entry&&visibleStatuses.has(entry.status)}
 function offerAllowed(d){if(!region)return !(d.book==='PrizePicks'&&['NCAAF','NCAAB'].includes(d.league));const entry=availability(d.book);return !!entry&&visibleStatuses.has(entry.status)&&!entry.requiresPremises&&!(d.book==='PrizePicks'&&['NCAAF','NCAAB'].includes(d.league))}

@@ -166,7 +166,7 @@ function eventTime(value, timezone = 'UTC') {
     return `${part('hour')}:${part('minute')} ${part('dayPeriod')} ${part('timeZoneName')}`.trim();
   } catch { return eventTime(value, 'UTC'); }
 }
-const fantasyBooks = new Set(['PrizePicks', 'Underdog', 'DraftKings Pick6']);
+const fantasyBooks = new Set(['PrizePicks', 'Underdog', 'DraftKings Pick6', 'Sleeper', 'Sleeper Picks', 'Dabble', 'ParlayPlay', 'DraftKings DFS']);
 function renderServerPage(route, feed, state, timezone, fantasyView = false) {
   const rows = route !== 'arbitrage' ? feed.ev.filter(d => permitted(d.book, state) && (route !== 'parlay' || !d.live) && (route !== 'ev' || fantasyBooks.has(d.book) === fantasyView)) : feed.arbs.filter(d => permitted(d.left, state) && permitted(d.right, state));
   const label = route === 'parlay' ? 'Parlay Builder' : route === 'ev' ? 'Positive EV bets' : 'Arbitrage';
