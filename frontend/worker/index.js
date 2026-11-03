@@ -166,8 +166,9 @@ function eventTime(value, timezone = 'UTC') {
     return `${part('hour')}:${part('minute')} ${part('dayPeriod')} ${part('timeZoneName')}`.trim();
   } catch { return eventTime(value, 'UTC'); }
 }
-function renderServerPage(route, feed, state, timezone) {
-  const rows = route !== 'arbitrage' ? feed.ev.filter(d => permitted(d.book, state) && (route !== 'parlay' || !d.live)) : feed.arbs.filter(d => permitted(d.left, state) && permitted(d.right, state));
+const fantasyBooks = new Set(['PrizePicks', 'Underdog']);
+function renderServerPage(route, feed, state, timezone, fantasyView = false) {
+  const rows = route !== 'arbitrage' ? feed.ev.filter(d => permitted(d.book, state) && (route !== 'parlay' || !d.live) && (route !== 'ev' || fantasyBooks.has(d.book) === fantasyView)) : feed.arbs.filter(d => permitted(d.left, state) && permitted(d.right, state));
   const label = route === 'parlay' ? 'Parlay Builder' : route === 'ev' ? 'Positive EV bets' : 'Arbitrage';
   const items = route !== 'arbitrage' ? rows.map(d => `<tr><td class="ev">${safe(d.kellyFull == null ? '—' : (d.kellyFull * 25).toFixed(2) + '%')}</td><td><strong>${safe(d.bet)}</strong><small>${safe(d.name)}</small></td><td>${safe(d.game)}<small>${safe(d.league)} · ${safe(eventTime(d.time, timezone))}</small></td><td>${safe(d.book)}</td><td class="odds-cell"><strong class="best-odds">${safe(d.odds)}</strong></td><td class="ev">${safe(d.ev.toFixed(2))}%</td></tr>`)
     : rows.map(d => `<tr><td>${safe(d.left)} <strong>${safe(d.a)}</strong></td><td>${safe(d.side1)}</td><td>${safe(d.game)}<small>${safe(d.prop)} · ${safe(d.league)} · ${safe(eventTime(d.time, timezone))}</small></td><td>${safe(d.side2)}</td><td>${safe(d.right)} <strong>${safe(d.b)}</strong></td><td class="ev">${safe(d.ev.toFixed(2))}%</td></tr>`);
@@ -179,7 +180,7 @@ function pageHtml(route, feed, state, timezone, account = null) {
   html = html.replace(/href="#(ev|arbitrage|parlay)"/g, (_, p) => `href="/${p}"`).replace(/href="#(home|pricing|analysis|coverage|privacy|terms|cookies|billing|accessibility|copyright|responsible)"/g, (_, p) => `href="/#${p}"`);
   html = html.replace('</head>', `<script>window.__SHARPEDGE_SERVER__=true;window.__SHARPEDGE_ACCOUNT__=${JSON.stringify(account).replace(/</g, '\\u003c')};</script></head>`);
   if (feed && (route === 'ev' || route === 'arbitrage' || route === 'parlay')) {
-    html = html.replace('<main id="app" tabindex="-1"></main>', `<main id="app" tabindex="-1">${renderServerPage(route, feed, state, timezone)}</main>`);
+    html = html.replace('<main id="app" tabindex="-1"></main>', `<main id="app" tabindex="-1">${renderServerPage(route, feed, state, timezone, ['fantasy', 'fantasyplus'].includes(account?.plan))}</main>`);
     const boot = JSON.stringify(feed).replace(/</g, '\\u003c');
     html = html.replace('</head>', `<script>window.__SHARPEDGE_FEED__=${boot};</script></head>`);
   }
