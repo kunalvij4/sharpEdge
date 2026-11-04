@@ -65,7 +65,7 @@ def runtime(monkeypatch, closing_store):
                     {"name": side, "description": "Player", "point": 20.5, "price": 2.2}
                     for side in ("Over", "Under")
                 ]} for market in prop_markets
-            ]} for book in ("FanDuel", "DraftKings")
+            ]} for book in ("FanDuel", "DraftKings", "NoVig")
         ]}
 
     api.get_odds = Mock(side_effect=get_odds)

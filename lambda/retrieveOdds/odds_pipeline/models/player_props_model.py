@@ -6,8 +6,33 @@ from datetime import datetime, timedelta
 
 from .liquidity import apply_liquidity_boost
 
+# College props: exchange-led weights; every other book (retail, fantasy) gets 0.
+COLLEGE_PROP_WEIGHTS = {
+    "NoVig": 0.35,
+    "Kalshi": 0.225,
+    "ProphetX": 0.175,
+    "FanDuel": 0.15,
+    "DraftKings": 0.10,
+}
+COLLEGE_ANCHOR_BOOKS = frozenset({"NoVig", "Kalshi", "ProphetX"})
+COLLEGE_LEAGUES = frozenset({"NCAAB", "NCAAF"})
+
+
 class PlayerPropsModel:
-    def __init__(self, main_line_weights: Dict[str, float] = None, min_books: int = 3):
+    @classmethod
+    def for_league(cls, league: str, min_books: int = 2) -> "PlayerPropsModel":
+        if league in COLLEGE_LEAGUES:
+            return cls(
+                min_books=min_books,
+                prop_weights=COLLEGE_PROP_WEIGHTS,
+                tier_books=COLLEGE_ANCHOR_BOOKS,
+                min_tier_books=1,
+            )
+        return cls(min_books=min_books)
+
+    def __init__(self, main_line_weights: Dict[str, float] = None, min_books: int = 3,
+                 prop_weights: Optional[Dict[str, float]] = None,
+                 tier_books: Optional[frozenset] = None, min_tier_books: int = 2):
         """
         Initialize Player Props Model with specialized prop weighting.
         
@@ -19,7 +44,7 @@ class PlayerPropsModel:
         self.min_books = min_books
         
         # PLAYER PROP WEIGHTS (locked-in)
-        self.prop_weights = {
+        self.prop_weights = dict(prop_weights) if prop_weights is not None else {
             "FanDuel": 0.35,
             "DraftKings": 0.25,
             "NoVig": 0.15,
@@ -29,7 +54,8 @@ class PlayerPropsModel:
         }
         
         # Tier-1/Tier-2 (sharp) books requirement
-        self.tier_books = {"FanDuel", "DraftKings", "NoVig", "ProphetX"}
+        self.tier_books = set(tier_books) if tier_books is not None else {"FanDuel", "DraftKings", "NoVig", "ProphetX"}
+        self.min_tier_books = min_tier_books
         
         # Player prop market types and their characteristics
         self.prop_types = {
@@ -69,7 +95,7 @@ class PlayerPropsModel:
             if book in available_books:
                 raw_weights[book] = base[book]
         
-        if others_books:
+        if others_books and base.get("Others", 0) > 0:
             per_other = base["Others"] / len(others_books)
             for b in others_books:
                 raw_weights[b] = per_other
@@ -82,11 +108,11 @@ class PlayerPropsModel:
         return {k: v / total for k, v in raw_weights.items()}
     
     def _validate_tier_books(self, book_names: List[str]) -> None:
-        """Require at least two Tier-1/Tier-2 books to compute fair probability."""
+        """Require enough tier books to compute fair probability."""
         tier_count = sum(1 for b in set(book_names) if b in self.tier_books)
-        if tier_count < 2:
+        if tier_count < self.min_tier_books:
             raise ValueError(
-                "Need at least two Tier-1/Tier-2 books (FanDuel, DraftKings, NoVig, ProphetX)"
+                f"Need at least {self.min_tier_books} tier books ({', '.join(sorted(self.tier_books))})"
             )
     
         """Return the prop-specific weights (for transparency/debugging)."""
@@ -174,6 +200,8 @@ class PlayerPropsModel:
         
         if not dynamic_weights:
             raise ValueError("No valid weighted books available for prop analysis")
+        if sum(1 for book in prop_data if dynamic_weights.get(book, 0) > 0) < self.min_books:
+            raise ValueError(f"Need at least {self.min_books} weighted books for analysis")
         
         market_probs = []
         books_used = 0

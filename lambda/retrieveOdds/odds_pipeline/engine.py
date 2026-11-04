@@ -42,7 +42,7 @@ def _fair_probability(category, quotes, sides):
         for book, prices in by_book.items() if book in pairs
     }
     if category == "props":
-        model = PlayerPropsModel(min_books=2)
+        model = PlayerPropsModel.for_league(quotes[0]["league"], min_books=2)
         data = {
             book: {"over_odds": odds[0], "under_odds": odds[1], "line": quotes[0]["line"]}
             for book, odds in pairs.items() if min(odds) > 1.01
