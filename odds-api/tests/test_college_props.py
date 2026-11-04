@@ -72,6 +72,99 @@ def test_college_alias_match_still_requires_unique_fixture_and_kickoff():
     assert match_event(source, [{**canonical, "start": canonical["start"] + timedelta(minutes=6)}]) is None
 
 
+@pytest.mark.parametrize("offset", [-60, 60])
+def test_ncaab_hour_offset_requires_two_recognized_schools_and_unique_fixture(offset):
+    source = Event.model_validate(
+        {
+            "id": "byu-ohio-state",
+            "sport_key": "basketball_ncaab",
+            "home_team": "BYU Cougars",
+            "away_team": "Ohio St.",
+            "commence_time": "2026-11-03T01:00:00Z",
+            "bookmakers": [],
+        }
+    )
+    canonical = {
+        "status": "pregame",
+        "start": source.commence_time + timedelta(minutes=offset),
+        "home": "Ohio State",
+        "away": "BYU",
+    }
+    assert match_event(source, [canonical]) is canonical
+    other = {**canonical, "start": source.commence_time - timedelta(minutes=offset)}
+    assert match_event(source, [canonical, other]) is None
+    closer = {**canonical, "start": source.commence_time}
+    assert match_event(source, [canonical, closer]) is closer
+    assert match_event(source, [{**canonical, "status": "live"}]) is None
+    assert match_event(source, [{**canonical, "away": "Utah"}]) is None
+    for minutes in (6, 45, 90):
+        assert (
+            match_event(source, [{**canonical, "start": source.commence_time + timedelta(minutes=minutes)}])
+            is None
+        )
+    for sport in ("football_ncaaf", "basketball_nba"):
+        assert match_event(source.model_copy(update={"sport_key": sport}), [canonical]) is None
+    for school in ("Unknown University", "MSU"):
+        unconfirmed = source.model_copy(update={"home_team": school})
+        assert match_event(unconfirmed, [{**canonical, "away": school}]) is None
+
+
+@pytest.mark.parametrize("offset", [-60, 60])
+def test_ncaab_hour_offset_quotes_expire_at_the_earlier_reported_tipoff(repo, board, clock, offset):
+    raw = snapshot(board, clock)
+    original = board()
+    config = DEFAULT_LEAGUES["ncaab_basketball"]
+    canonical_start = clock.now() + timedelta(minutes=5 if offset == 60 else 65)
+    event = replace(
+        original.events[0],
+        league_key="ncaab_basketball",
+        start=canonical_start,
+        home="BYU",
+        away="Ohio State",
+    )
+    repo.save(
+        replace(
+            original,
+            league=League("ncaab_basketball", config["title"], config["route"], "4"),
+            events=(event,),
+            quotes=(),
+        )
+    )
+    source_start = canonical_start + timedelta(minutes=offset)
+    raw[0].update(
+        sport_key="basketball_ncaab",
+        commence_time=source_start.isoformat(),
+        home_team="BYU Cougars",
+        away_team="Ohio St.",
+    )
+    raw[0]["bookmakers"][0]["markets"] = raw[0]["bookmakers"][0]["markets"][2:]
+    result = BulkOdds(
+        "ncaab_basketball", tuple(Event.model_validate(e) for e in raw), raw, {}, clock.now(), 0, 0
+    )
+    output, counts = boards(result, repo)
+    assert counts["one_hour_start_offset_events"] == 1
+    props = next(b for b in output if b.kind == "props")
+    assert len(props.quotes) == 3
+    assert props.events[0].id == event.id
+    assert props.events[0].start == canonical_start
+    assert all(q.expires_at == clock.now() + timedelta(minutes=5) for q in props.quotes)
+    for collected in output:
+        repo.save(collected)
+    with TestClient(create_app(Settings(_env_file=None, api_keys="test"), repo, clock)) as api:
+        path = f"/v1/events/{event.id}/props?freshOnly=true"
+        headers = {"X-API-Key": "test"}
+        assert api.get(path, headers=headers).json()["freshness"]["fresh_outcomes"] == 3
+        clock.value = 301
+        expired = api.get(path, headers=headers)
+        if offset == 60:
+            assert expired.status_code == 404  # Canonical event has started.
+        else:
+            assert expired.json()["freshness"]["fresh_outcomes"] == 0
+    # Both feeds must still describe an unstarted fixture.
+    output, counts = boards(replace(result, collected_at=clock.now()), repo)
+    assert not any(b.quotes for b in output)
+
+
 @pytest.mark.parametrize("backend", ["sql", "redis"])
 @pytest.mark.parametrize("sport", ["ncaaf_football", "ncaab_basketball"])
 def test_college_sportsbooks_with_named_players_but_no_ids_reach_fresh_api(

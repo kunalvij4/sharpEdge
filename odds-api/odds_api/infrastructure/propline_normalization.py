@@ -4,7 +4,7 @@ from collections import Counter
 from datetime import timedelta
 from decimal import Decimal
 
-from odds_api.domain.college import COLLEGE_LEAGUES, CollegePlayers, name_key, player_parts
+from odds_api.domain.college import COLLEGE_LEAGUES, SCHOOL_LABELS, CollegePlayers, name_key, player_parts
 from odds_api.domain.models import Availability, Board, Event, Quote, Sportsbook, identity
 from odds_api.infrastructure.bet365 import normalized, same_team
 from odds_api.infrastructure.college_teams import COLLEGE_SPORTS, school_key
@@ -55,11 +55,10 @@ def match_event(source, events):
     # NBA books commonly publish tipoff ten minutes after the advertised start.
     # The saved live capture confirms this offset; require one exact team pairing.
     tolerance = 900 if source.sport_key == "basketball_nba" else 300
-    matches = [
+    fixtures = [
         event
         for event in events
         if event["status"] == "pregame"
-        and abs((event["start"] - source.commence_time).total_seconds()) <= tolerance
         and (
             (
                 teams_match(source.home_team, event["home"], source.sport_key)
@@ -70,6 +69,24 @@ def match_event(source, events):
                 and teams_match(source.away_team, event["home"], source.sport_key)
             )
         )
+    ]
+    matches = [
+        event
+        for event in fixtures
+        if abs((event["start"] - source.commence_time).total_seconds()) <= tolerance
+    ]
+    if matches:
+        return matches[0] if len(matches) == 1 else None
+    # The captured BYU–Ohio State board has a one-hour provider offset.
+    # Allow this narrow NCAAB fallback only for two recognized schools and
+    # a unique fixture; retain the canonical event ID and advertised start.
+    schools = {school_key(source.home_team), school_key(source.away_team)}
+    if source.sport_key != "basketball_ncaab" or len(schools) != 2 or not schools <= SCHOOL_LABELS.keys():
+        return None
+    matches = [
+        event
+        for event in fixtures
+        if abs(abs((event["start"] - source.commence_time).total_seconds()) - 3600) <= 300
     ]
     return matches[0] if len(matches) == 1 else None
 
@@ -144,6 +161,8 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
         if event is None:
             counts["unmatched_or_ambiguous_events"] += 1
             continue
+        if college and abs((event["start"] - source.commence_time).total_seconds()) > 300:
+            counts["one_hour_start_offset_events"] += 1
         eid = event["id"]
         if college and eid not in college_players:
             college_players[eid] = CollegePlayers(event["home"], event["away"])
@@ -277,6 +296,7 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
                         market.last_update,
                         min(
                             event["start"],
+                            source.commence_time,
                             now + timedelta(seconds=collected_ttl),
                             market.last_update + timedelta(seconds=max_age),
                         ),
