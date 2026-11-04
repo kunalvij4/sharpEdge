@@ -157,6 +157,13 @@ async function loadFeed(env) {
   const arbs = arbRows.map(normalizeArb).filter(d => d && !fantasyBooks.has(d.left) && !fantasyBooks.has(d.right) && !inactiveLeagues.has(d.league)).sort((a, b) => (b.kellyFull ?? -1) - (a.kellyFull ?? -1) || b.ev - a.ev);
   return { ev, arbs, fetchedAt: new Date().toISOString(), status:'ok' };
 }
+function eventDate(value, timezone = 'UTC') {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return 'Date TBD';
+  try {
+    return new Intl.DateTimeFormat('en-US', { month:'long', day:'numeric', year:'numeric', timeZone:timezone }).format(date);
+  } catch { return eventDate(value, 'UTC'); }
+}
 function eventTime(value, timezone = 'UTC') {
   const date = new Date(value);
   if (!value || Number.isNaN(date.getTime())) return clean(value || 'Time TBD');
@@ -170,8 +177,8 @@ const fantasyBooks = new Set(['PrizePicks', 'Underdog', 'DraftKings Pick6', 'Sle
 function renderServerPage(route, feed, state, timezone, fantasyView = false) {
   const rows = route !== 'arbitrage' ? feed.ev.filter(d => permitted(d.book, state) && (route !== 'parlay' || !d.live) && (route !== 'ev' || fantasyBooks.has(d.book) === fantasyView)) : feed.arbs.filter(d => permitted(d.left, state) && permitted(d.right, state));
   const label = route === 'parlay' ? 'Parlay Builder' : route === 'ev' ? 'Positive EV bets' : 'Arbitrage';
-  const items = route !== 'arbitrage' ? rows.map(d => `<tr><td class="ev">${safe(d.kellyFull == null ? '—' : (d.kellyFull * 25).toFixed(2) + '%')}</td><td><strong>${safe(d.bet)}</strong><small>${safe(d.name)}</small></td><td>${safe(d.game)}<small>${safe(d.league)} · ${safe(eventTime(d.time, timezone))}</small></td><td>${safe(d.book)}</td><td class="odds-cell"><strong class="best-odds">${safe(d.odds)}</strong></td><td class="ev">${safe(d.ev.toFixed(2))}%</td></tr>`)
-    : rows.map(d => `<tr><td>${safe(d.left)} <strong>${safe(d.a)}</strong></td><td>${safe(d.side1)}</td><td>${safe(d.game)}<small>${safe(d.prop)} · ${safe(d.league)} · ${safe(eventTime(d.time, timezone))}</small></td><td>${safe(d.side2)}</td><td>${safe(d.right)} <strong>${safe(d.b)}</strong></td><td class="ev">${safe(d.ev.toFixed(2))}%</td></tr>`);
+  const items = route !== 'arbitrage' ? rows.map(d => `<tr><td class="ev">${safe(d.kellyFull == null ? '—' : (d.kellyFull * 25).toFixed(2) + '%')}</td><td><strong>${safe(d.bet)}</strong><small>${safe(d.name)}</small></td><td>${safe(d.game)}<small class="event-date">${safe(eventDate(d.time, timezone))}</small><small>${safe(d.league)} · ${safe(eventTime(d.time, timezone))}</small></td><td>${safe(d.book)}</td><td class="odds-cell"><strong class="best-odds">${safe(d.odds)}</strong></td><td class="ev">${safe(d.ev.toFixed(2))}%</td></tr>`)
+    : rows.map(d => `<tr><td>${safe(d.left)} <strong>${safe(d.a)}</strong></td><td>${safe(d.side1)}</td><td>${safe(d.game)}<small class="event-date">${safe(eventDate(d.time, timezone))}</small><small>${safe(d.prop)} · ${safe(d.league)} · ${safe(eventTime(d.time, timezone))}</small></td><td>${safe(d.side2)}</td><td>${safe(d.right)} <strong>${safe(d.b)}</strong></td><td class="ev">${safe(d.ev.toFixed(2))}%</td></tr>`);
   const headings = route !== 'arbitrage' ? '<th>¼ Kelly ↓</th><th>Selection</th><th>Event</th><th>Book</th><th>Best odds</th><th>EV</th>' : '<th>Side A</th><th>Selection</th><th>Event</th><th>Opposite</th><th>Side B</th><th>Return</th>';
   return `<div class="demo">${feed.status === 'error' ? 'FEED TEMPORARILY UNAVAILABLE' : `LIVE FEED · Updated ${safe(feed.fetchedAt)}`}</div><div class="page"><div class="eyebrow">SHARPEDGE / LIVE DATA</div><div class="page-title"><div><h1>${label}</h1><p>Data from the latest market snapshot.</p></div></div><div class="preview table-wrap">${items.length ? `<table class="feed-table"><thead><tr>${headings}</tr></thead><tbody>${items.join('')}</tbody></table>` : `<div class="empty"><h2>${feed.status === 'error' ? 'Feed temporarily unavailable.' : 'No opportunities right now.'}</h2><p>Check back later.</p></div>`}</div></div>`;
 }
