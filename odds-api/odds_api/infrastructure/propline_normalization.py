@@ -94,8 +94,27 @@ def match_event(source, events):
 def boards(result, repository, *, max_age=900, collected_ttl=600, discover_events=False):
     now, league_key = result.collected_at, result.league
     league = next(league for league in repository.leagues() if league.key == league_key)
-    events = [event for event in repository.events(league_key) if event["start"] > now]
+    context = getattr(repository, "collection_context", None)
+    if callable(context):
+        catalog, identities = context(league_key)
+    else:
+        catalog = repository.events(league_key)
+        identities = (
+            (row["quote"].event_id, row["quote"].player_id, row["quote"].description)
+            for row in repository.quotes(league_key)
+            if not row["book_key"].startswith("propline_")
+            and row["quote"].player_id
+            and row["quote"].description
+        )
+    events = [event for event in catalog if event["start"] > now]
     candidates, matched, books, counts = {"moneyline": {}, "props": {}}, {}, {}, Counter()
+    counts["source_player_prop_outcomes"] = sum(
+        len(market.outcomes)
+        for source in result.events
+        for book in source.bookmakers
+        for market in book.markets
+        if market.key in PROP_MARKETS[league_key]
+    )
     # Reuse existing player identities only for a unique, complete name on this fixture.
     players = {}
     college = league_key in COLLEGE_LEAGUES
@@ -123,12 +142,10 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
                     ):
                         resolver.add(outcome.description)
 
-    for row in repository.quotes(league_key):
-        q = row["quote"]
-        if not row["book_key"].startswith("propline_") and q.player_id and q.description:
-            players.setdefault((q.event_id, normalized(q.description)), set()).add(q.player_id)
-            if q.event_id in college_players:
-                college_players[q.event_id].add(q.description, q.player_id)
+    for event_id, player_id, description in identities:
+        players.setdefault((event_id, normalized(description)), set()).add(player_id)
+        if event_id in college_players:
+            college_players[event_id].add(description, player_id)
     # A school tag supplied by one book can identify the same complete name at
     # another book on this fixture, even before Unabated posts that player's prop.
     for source in result.events if college else ():
@@ -330,8 +347,14 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
         )
     counts["matched_events"] = len(matched)
     counts["stored_outcomes"] = sum(len(board.quotes) for board in output)
+    counts["stored_player_prop_outcomes"] = 0
+    counts["stored_game_outcomes"] = 0
     for board in output:
         for quote in board.quotes:
             if quote.state == Availability.AVAILABLE:
                 counts["stored_outcomes:" + books[quote.book_id].source_id] += 1
+                category = "player_prop" if board.kind == "props" else "game"
+                counts["stored_" + category + "_outcomes"] += 1
+                if category == "player_prop":
+                    counts["stored_player_props:" + books[quote.book_id].source_id] += 1
     return output, dict(counts)

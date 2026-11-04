@@ -3,6 +3,7 @@ from dataclasses import replace
 from datetime import timedelta
 
 import fakeredis
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from test_propline_integration import snapshot
@@ -12,9 +13,10 @@ from odds_api.domain.models import League
 from odds_api.http.app import create_app
 from odds_api.infrastructure.config import DEFAULT_LEAGUES, Settings
 from odds_api.infrastructure.normalization import Normalizer, values
-from odds_api.infrastructure.propline import SPORT_KEYS, BulkOdds, Event
+from odds_api.infrastructure.propline import SPORT_KEYS, BulkOdds, Event, ProplineClient
 from odds_api.infrastructure.propline_normalization import boards, match_event, teams_match
 from odds_api.infrastructure.redis_repository import RedisRepository
+from odds_api.propline_collector import collect_cycle
 
 
 @pytest.mark.parametrize(
@@ -70,6 +72,39 @@ def test_college_alias_match_still_requires_unique_fixture_and_kickoff():
     assert match_event(source, [canonical]) is canonical
     assert match_event(source, [canonical, dict(canonical)]) is None
     assert match_event(source, [{**canonical, "start": canonical["start"] + timedelta(minutes=6)}]) is None
+
+
+@pytest.mark.parametrize("coverage", ["source_empty", "available", "filtered"])
+async def test_college_collection_reports_prop_coverage_separately_from_game_lines(
+    repo, board, clock, coverage
+):
+    raw = snapshot(board, clock)
+    original = board()
+    key = "ncaab_basketball"
+    event = replace(original.events[0], league_key=key)
+    repo.save(replace(original, league=League(key, "NCAAB", "cbb", "4"), events=(event,), quotes=()))
+    raw[0].update(sport_key="basketball_ncaab")
+    markets = raw[0]["bookmakers"][0]["markets"]
+    if coverage == "source_empty":
+        raw[0]["bookmakers"][0]["markets"] = markets[:2]
+    elif coverage == "filtered":
+        markets[2]["last_update"] = (clock.now() - timedelta(minutes=16)).isoformat()
+    http = httpx.AsyncClient(
+        base_url="https://api.prop-line.com",
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=raw)),
+    )
+    settings = Settings(_env_file=None, collection_excluded_leagues=set(DEFAULT_LEAGUES) - {key})
+    client, state = ProplineClient(settings, clock, http), {}
+    try:
+        await collect_cycle(client, repo, settings, state)
+    finally:
+        await client.close()
+    status = state[key]
+    assert status["outcome"] == "success"
+    assert status["prop_coverage"] == coverage
+    assert status["counts"]["stored_game_outcomes"] == 4
+    assert status["counts"]["source_player_prop_outcomes"] == (0 if coverage == "source_empty" else 3)
+    assert status["counts"]["stored_player_prop_outcomes"] == (3 if coverage == "available" else 0)
 
 
 @pytest.mark.parametrize("offset", [-60, 60])
@@ -203,7 +238,13 @@ def test_college_sportsbooks_with_named_players_but_no_ids_reach_fresh_api(
     for outcome in market["outcomes"]:
         outcome.update(player_id=None, last_seen_at=clock.now().isoformat())
     raw[0]["bookmakers"] = []
-    for key, title in (("draftkings", "DraftKings"), ("fanduel", "FanDuel"), ("courtside", "Courtside")):
+    for key, title in (
+        ("draftkings", "DraftKings"),
+        ("fanduel", "FanDuel"),
+        ("courtside", "Courtside"),
+        ("unibet", "Unibet"),
+        ("pick6", "DK Pick 6"),
+    ):
         book = copy.deepcopy(template)
         book.update(key=key, title=title)
         raw[0]["bookmakers"].append(book)
@@ -215,7 +256,10 @@ def test_college_sportsbooks_with_named_players_but_no_ids_reach_fresh_api(
     raw.append(second)
     result = BulkOdds(sport, tuple(Event.model_validate(e) for e in raw), raw, {}, clock.now(), 0, 0)
     output, counts = boards(result, repository)
-    assert counts["stored_outcomes"] == 12
+    assert counts["stored_outcomes"] == 20
+    assert counts["source_player_prop_outcomes"] == 20
+    assert counts["stored_player_prop_outcomes"] == 20
+    assert counts["stored_game_outcomes"] == 0
     props = next(b for b in output if b.kind == "props")
     assert len({q.player_id for q in props.quotes if q.event_id == event.id}) == 1
     assert len({q.player_id for q in props.quotes}) == 2
@@ -225,8 +269,14 @@ def test_college_sportsbooks_with_named_players_but_no_ids_reach_fresh_api(
         response = api.get(f"/v1/events/{event.id}/props?freshOnly=true", headers={"X-API-Key": "test"})
         assert response.status_code == 200
         payload = response.json()
-        assert {b["key"] for b in payload["bookmakers"]} == {"draftkings", "fanduel", "courtside"}
-        assert payload["freshness"]["fresh_outcomes"] == 6
+        assert {b["key"] for b in payload["bookmakers"]} == {
+            "draftkings",
+            "fanduel",
+            "courtside",
+            "unibet",
+            "draftkingspick6",
+        }
+        assert payload["freshness"]["fresh_outcomes"] == 10
         assert payload["home_team"] == "Duke"
 
 

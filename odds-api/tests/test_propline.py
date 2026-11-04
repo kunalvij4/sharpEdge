@@ -89,7 +89,7 @@ async def test_bulk_probe_filters_requested_books_with_one_call_per_league(tmp_p
         assert request.method == "GET" and request.url.host == "api.prop-line.com"
         assert request.headers["X-API-Key"] == "offline-propline-key"
         assert "apiKey" not in request.url.params
-        assert set(request.url.params["bookmakers"].split(",")) == {
+        expected_books = {
             "onexbet",
             "bet25",
             "bet99",
@@ -118,6 +118,10 @@ async def test_bulk_probe_filters_requested_books_with_one_call_per_league(tmp_p
             "thrillzz",
             "underdog",
         }
+        if "basketball_ncaab" in request.url.path:
+            assert "bookmakers" not in request.url.params, "NCAAB must include newly available books"
+        else:
+            assert set(request.url.params["bookmakers"].split(",")) == expected_books
         assert "max_age" not in request.url.params
         assert request.url.params["period"] == "all"
         assert request.url.params["includeBookIds"] == "true"

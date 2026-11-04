@@ -47,6 +47,68 @@ def future_board(board, clock):
     )
 
 
+@pytest.mark.parametrize("legacy", [False, True])
+def test_collection_context_reads_trusted_player_ids_without_decoding_retained_prices(
+    board, clock, monkeypatch, legacy
+):
+    from test_propline_integration import snapshot
+
+    from odds_api.application.prepared_odds import stored_event, stored_rows
+    from odds_api.infrastructure.propline import BulkOdds, Event
+    from odds_api.infrastructure.propline_normalization import boards
+
+    raw = snapshot(board, clock)
+    original = board("props")
+    future = future_board(board, clock)
+    event = future.events[0]
+    props = replace(
+        original,
+        events=future.events,
+        quotes=tuple(
+            replace(q, collected_at=clock.now(), source_updated_at=clock.now()) for q in original.quotes
+        ),
+    )
+    repository = RedisRepository(
+        "", DEFAULT_LEAGUES, clock=clock, client=fakeredis.FakeRedis(decode_responses=True)
+    )
+    repository.save(props)
+    other_book = Sportsbook("draftkings", "DraftKings", "propline")
+    repository.save(
+        replace(
+            props,
+            provider="propline",
+            books=(other_book,),
+            covered_markets=("player_points",),
+            quotes=tuple(
+                replace(q, book_id=other_book.id, player_id="different-propline-id") for q in props.quotes
+            ),
+        )
+    )
+    if legacy:
+        key = repository.key("event:" + event.id)
+        document = decode_document(repository.client.get(key))
+        repository.client.set(
+            key, encode({"event": stored_event(document), "quotes": dict(stored_rows(document))})
+        )
+    catalog, identities = repository.collection_context("nba_basketball")
+    assert len(catalog) == 1 and catalog[0]["id"] == event.id
+    assert set(identities) == {(event.id, "300", "Sample Player")}
+
+    def full_quotes_are_unnecessary(*args, **kwargs):
+        raise AssertionError("Collection must not decode every retained price to find player identities")
+
+    monkeypatch.setattr(repository, "quotes", full_quotes_are_unnecessary)
+    raw[0]["commence_time"] = event.start.isoformat()
+    for market in raw[0]["bookmakers"][0]["markets"]:
+        market["last_update"] = clock.now().isoformat()
+        for outcome in market["outcomes"]:
+            outcome["last_seen_at"] = clock.now().isoformat()
+    bulk = BulkOdds("nba_basketball", tuple(Event.model_validate(e) for e in raw), raw, {}, clock.now(), 0, 0)
+    output, counts = boards(bulk, repository)
+    assert counts["stored_player_prop_outcomes"] == 3
+    assert {q.player_id for b in output if b.kind == "props" for q in b.quotes} == {"300"}
+
+
 def test_redis_shared_reads_refresh_preservation_and_expiry(board, clock):
     server = fakeredis.FakeServer()
     writer = RedisRepository(

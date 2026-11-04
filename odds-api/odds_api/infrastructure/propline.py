@@ -168,7 +168,7 @@ QUOTA_HEADERS = (
 )
 # Retain these books in raw captures, but identify them separately for integration.
 DFS_BOOKS = {"prizepicks", "underdog", "sleeper", "dabble", "parlayplay", "pick6", "draftkings_pick6"}
-COLLECTED_DFS_BOOKS = {"prizepicks", "underdog"}
+COLLECTED_DFS_BOOKS = {"prizepicks", "underdog", "pick6", "draftkings_pick6"}
 
 
 class ProplineError(RuntimeError):
@@ -274,11 +274,14 @@ class ProplineClient:
             raise ProplineError("daily_quota_exhausted")
         params = {
             "markets": ",".join((*GAME_MARKETS, *PROP_MARKETS[league])),
-            "bookmakers": ",".join(BOOKMAKERS),
             "period": "all",
             "includeBookIds": "true",
             "includeLinks": "true",
         }
+        # NCAAB coverage varies by book as the season opens. The documented
+        # all-book response includes college books absent from our older list.
+        if league != "ncaab_basketball":
+            params["bookmakers"] = ",".join(BOOKMAKERS)
         # No per-event discovery, per-book fanout, or automatic retries.
         # Filter upstream to avoid downloading and validating irrelevant bookmakers.
         # Omitting max_age preserves diagnostic coverage.

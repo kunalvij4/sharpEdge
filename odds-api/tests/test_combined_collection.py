@@ -166,6 +166,7 @@ async def test_both_feeds_collect_active_leagues_and_keep_mlb_route(repo, board,
         }
         assert not any(league == "mlb_baseball" for league, _ in unabated_calls)
         assert len(calls) == 5  # Catalog rejoin never calls the provider again.
+        assert all(state["prop_coverage"] == "available" for state in collection.state.values())
         with TestClient(create_app(settings, repo, clock)) as api:
             mlb = api.get("/v1/sports/mlb_baseball/odds", headers={"X-API-Key": "offline-product"})
             assert mlb.status_code == 200 and mlb.json() == []

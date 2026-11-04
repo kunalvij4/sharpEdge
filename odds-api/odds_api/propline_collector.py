@@ -25,8 +25,10 @@ async def collect_cycle(client, repository, settings, state, *, lease=None, snap
             lease.ping()
         previous = state.get(league, {})
         attempt = client.clock.now().isoformat()
+        started = client.clock.monotonic()
         try:
             result = await client.fetch_bulk(league)
+            fetched = client.clock.monotonic()
             if snapshots is not None:
                 snapshots[league] = result
             output, counts = await blocking_work(
@@ -37,6 +39,7 @@ async def collect_cycle(client, repository, settings, state, *, lease=None, snap
                 collected_ttl=settings.propline_collected_ttl,
                 discover_events=not settings.unabated_enabled,
             )
+            normalized = client.clock.monotonic()
             if lease:
                 lease.ping()
             for board in output:
@@ -48,6 +51,16 @@ async def collect_cycle(client, repository, settings, state, *, lease=None, snap
                 "counts": counts,
                 "quota": result.headers,
                 "source_events": len(result.events),
+                "prop_coverage": "source_empty"
+                if not counts["source_player_prop_outcomes"]
+                else "available"
+                if counts["stored_player_prop_outcomes"]
+                else "filtered",
+                "timing_seconds": {
+                    "fetch": round(fetched - started, 3),
+                    "normalize": round(normalized - fetched, 3),
+                    "save": round(client.clock.monotonic() - normalized, 3),
+                },
             }
             log.info("propline_collection", extra={"league": league, "counts": counts})
         except Exception as error:

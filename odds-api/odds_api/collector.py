@@ -83,6 +83,8 @@ class CombinedCollection:
                         self.lease.ping()
                         await blocking_work(self.repository.save, board)
                     self.state[league]["counts"] = counts
+                    if counts["stored_player_prop_outcomes"]:
+                        self.state[league]["prop_coverage"] = "available"
                     self.state[league]["catalog_rejoined_at"] = self.clock.now().isoformat()
             self.snapshots.clear()
             if self.state:

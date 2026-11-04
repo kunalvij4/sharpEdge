@@ -115,6 +115,43 @@ def test_observed_mlb_names_resolve_discovered_ids(raw, board, name, expected):
 @pytest.mark.parametrize(
     "name,expected",
     [
+        ("Points and Rebounds", "player_points_rebounds"),
+        ("Points Rebounds Assists", "player_points_rebounds_assists"),
+        ("Points Assists", "player_points_assists"),
+        ("Rebounds Assists", "player_rebounds_assists"),
+        ("Player Turnovers", "player_turnovers"),
+        ("Steals Blocks", "player_blocks_steals"),
+    ],
+)
+def test_observed_college_basketball_stats_preserve_terms_and_public_market(raw, board, name, expected):
+    raw["bets"][1]["name"] = name
+    original = board("props")
+    assert original.complete
+    assert {q.market for q in original.quotes} == {expected, expected + "_alternate"}
+    assert {(q.name, q.price, q.point, q.description) for q in original.quotes} == {
+        ("Over", -110, 25.5, "Sample Player"),
+        ("Under", -110, 25.5, "Sample Player"),
+        ("Over", 180, 30.5, "Sample Player"),
+    }
+
+
+@pytest.mark.parametrize("bet", ["First Basket", "Double Double (yes/no)", "Triple Double (yes/no)"])
+def test_discovered_binary_basketball_props_keep_yes_no_without_a_numeric_line(raw, board, bet):
+    raw["bets"][1].update(name=bet, sides="yes-no", hasPoints=False)
+    group = raw["props"]["data"]["odds"]["arbitrary"]["periodTypes"]["arbitrary"]["pregame"]["ignored"]
+    for side in group["sides"].values():
+        for line in side["marketSourceLines"].values():
+            line["points"] = None
+            line["alternateLines"] = []
+    result = board("props")
+    assert result.complete
+    assert {(q.name, q.point) for q in result.quotes} == {("Yes", None), ("No", None)}
+    assert {q.description for q in result.quotes} == {"Sample Player"}
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
         ("Second Inning", "2nd_1_innings"),
         ("First Five Innings", "1st_5_innings"),
         ("First Three Innings", "1st_3_innings"),

@@ -58,7 +58,21 @@ def test_ambiguous_school_alias_cannot_accidentally_equal_a_canonical_name():
 
 
 @pytest.mark.parametrize("backend", ["sql", "redis"])
-def test_school_and_name_unify_source_ids_and_retained_quotes_in_public_api(repo, raw, clock, backend):
+@pytest.mark.parametrize(
+    "stat,market_key",
+    [
+        ("Player Points", "player_points"),
+        ("Points and Rebounds", "player_points_rebounds"),
+        ("Points Rebounds Assists", "player_points_rebounds_assists"),
+        ("Points Assists", "player_points_assists"),
+        ("Rebounds Assists", "player_rebounds_assists"),
+        ("Player Turnovers", "player_turnovers"),
+        ("Steals Blocks", "player_blocks_steals"),
+    ],
+)
+def test_school_and_name_unify_source_ids_and_retained_quotes_in_public_api(
+    repo, raw, clock, backend, stat, market_key
+):
     repository = (
         repo
         if backend == "sql"
@@ -69,6 +83,7 @@ def test_school_and_name_unify_source_ids_and_retained_quotes_in_public_api(repo
     raw["teams"]["20"]["name"] = "Duke"
     raw["teams"]["10"]["name"] = "Army"
     raw["people"]["300"].update(firstName="D.J.", lastName="Smith", teamId=20)
+    raw["bets"][1]["name"] = stat
     league = League("ncaab_basketball", "NCAAB", "cbb", "42")
     canonical = Normalizer().parse(
         league,
@@ -83,6 +98,7 @@ def test_school_and_name_unify_source_ids_and_retained_quotes_in_public_api(repo
         clock.now(),
     )
     assert {q.description for q in canonical.quotes} == {"D.J. Smith (Duke)"}
+    assert {q.market for q in canonical.quotes} == {market_key, market_key + "_alternate"}
     clock.origin = datetime.now(UTC)
     canonical = replace(
         canonical,
@@ -121,7 +137,7 @@ def test_school_and_name_unify_source_ids_and_retained_quotes_in_public_api(repo
                 "title": title,
                 "markets": [
                     {
-                        "key": "player_points",
+                        "key": market_key,
                         "last_update": clock.now().isoformat(),
                         "outcomes": [
                             {
@@ -161,7 +177,7 @@ def test_school_and_name_unify_source_ids_and_retained_quotes_in_public_api(repo
             for market in book["markets"]:
                 outcomes = market["outcomes"]
                 assert {q["description"] for q in outcomes} == {"D.J. Smith (Duke)"}
-                if market["key"] == "player_points":
+                if market["key"] == market_key:
                     assert len(outcomes) == 2
                 assert all(set(q) == {"name", "price", "point", "description"} for q in outcomes)
     assert repository.quotes(league.key) == stored

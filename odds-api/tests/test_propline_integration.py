@@ -219,7 +219,7 @@ def test_excludes_dfs_withdrawn_suspended_and_stale_prices(repo, board, clock):
     raw = snapshot(board, clock)
     book = raw[0]["bookmakers"][0]
     dfs = copy.deepcopy(book)
-    dfs.update(key="pick6", title="DraftKings Pick6")
+    dfs.update(key="sleeper", title="Sleeper")
     raw[0]["bookmakers"].append(dfs)
     book["markets"][0]["suspended_at"] = clock.now().isoformat()
     book["markets"][1]["last_update"] = (clock.now() - timedelta(seconds=901)).isoformat()

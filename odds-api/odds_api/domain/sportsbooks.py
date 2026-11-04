@@ -14,6 +14,8 @@ ALIASES = {
     "prophetexchange": "prophetxchange",
     "underdogfantasy": "underdog",
     "underdogpickem": "underdog",
+    "dkpick6": "draftkingspick6",
+    "pick6": "draftkingspick6",
 }
 
 TITLES = {
@@ -21,6 +23,7 @@ TITLES = {
     "prizepicks": "PrizePicks",
     "underdog": "Underdog",
     "sportzino": "Sportzino",
+    "draftkingspick6": "DraftKings Pick6",
 }
 
 

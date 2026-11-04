@@ -213,6 +213,39 @@ class RedisRepository:
             key=lambda event: (event["start"], event["id"]),
         )
 
+    def collection_context(self, sport):
+        """Read fixtures and trusted player identities once, without decoding prices.
+
+        PropLine normalization needs existing Unabated identities, not another
+        copy of every retained PropLine quote and its parsed timestamps.
+        """
+        events, players = [], []
+        for document in self._documents(sport):
+            event = self._event(document)
+            if event["start"] <= self.clock.now():
+                continue
+            events.append(event)
+            if "quotes" in document:
+                candidates = (
+                    row["quote"]
+                    for row in document["quotes"].values()
+                    if not row["book_key"].startswith("propline_")
+                )
+            else:
+                candidates = (
+                    {**outcome["_storage"], "description": outcome.get("description")}
+                    for book in document["bookmakers"]
+                    if not book["key"].startswith("propline_")
+                    for market in book["markets"]
+                    for outcome in market["outcomes"]
+                )
+            players.extend(
+                (event["id"], quote["player_id"], quote["description"])
+                for quote in candidates
+                if quote["player_id"] and quote["description"]
+            )
+        return events, players
+
     def event(self, event_id):
         value = self.client.get(self.key("event:" + event_id))
         if not value:

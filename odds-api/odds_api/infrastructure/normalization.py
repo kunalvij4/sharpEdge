@@ -29,14 +29,25 @@ BET_NAMES = {
     "assists": "player_assists",
     "player assists": "player_assists",
     "points + rebounds + assists": "player_points_rebounds_assists",
+    "points rebounds assists": "player_points_rebounds_assists",
     "points + rebounds": "player_points_rebounds",
+    "points and rebounds": "player_points_rebounds",
     "points + assists": "player_points_assists",
+    "points assists": "player_points_assists",
     "rebounds + assists": "player_rebounds_assists",
+    "rebounds assists": "player_rebounds_assists",
     "three pointers made": "player_threes",
     "3 pointers made": "player_threes",
     "steals": "player_steals",
     "blocks": "player_blocks",
     "turnovers": "player_turnovers",
+    "player turnovers": "player_turnovers",
+    "steals blocks": "player_blocks_steals",
+    "double double": "player_double_double",
+    "double double (over/under)": "player_double_double",
+    "double double (yes/no)": "player_double_double",
+    "triple double (yes/no)": "player_triple_double",
+    "first basket": "player_first_basket",
     "passing yards": "player_pass_yds",
     "passing touchdowns": "player_pass_tds",
     "passing attempts": "player_pass_attempts",
@@ -178,6 +189,7 @@ class Normalizer:
             raise ValueError("Missing odds board; cannot confirm empty scope")
         event_map, books, quotes, warnings = {}, {}, {}, set()
         market_map, period_map = self.market_map(bets), self.period_map(periods)
+        bet_sides = {str(bet["id"]): bet.get("sides", "ou") for bet in values(bets)}
         people_map = {
             str(p["id"]): " ".join(filter(None, (p.get("firstName"), p.get("lastName"))))
             for p in values(people)
@@ -253,6 +265,11 @@ class Normalizer:
                             continue
                         bet_id = str(group["betTypeId"])
                         base = market_map.get(bet_id)
+                        binary = bet_sides.get(bet_id) == "yes-no" and base in {
+                            "player_double_double",
+                            "player_triple_double",
+                            "player_first_basket",
+                        }
                         if not base or not period_key:
                             warnings.add("unsupported_mapping:bet=" + bet_id + ":period=" + pid)
                             continue
@@ -272,8 +289,10 @@ class Normalizer:
                                 name = {0: event.away, 1: event.home, 2: "Draw"}.get(side["sideIndex"])
                                 description = None
                             else:
-                                # Phase 1 supports conventional over/under props.
-                                name = {0: "Over", 1: "Under"}.get(side["sideIndex"])
+                                # The discovered bet type distinguishes Yes/No
+                                # props without points from conventional O/U.
+                                names = {0: "Yes", 1: "No"} if binary else {0: "Over", 1: "Under"}
+                                name = names.get(side["sideIndex"])
                                 description = people_map.get(player)
                                 if not description:
                                     warnings.add("unresolved_player:" + player)
@@ -327,7 +346,9 @@ class Normalizer:
                                     market = base + ("_alternate" if is_alt else "")
                                     if period_key != "full":
                                         market += "_" + period_key
-                                    if (kind == "props" or base == "spreads") and item.points is None:
+                                    if (
+                                        (kind == "props" and not binary) or base == "spreads"
+                                    ) and item.points is None:
                                         warnings.add(
                                             "missing_prop_points:bet=" + bet_id + ":source=" + source_id
                                         )
