@@ -29,6 +29,34 @@ courtside,draftkings,fanatics,fanduel,fliff,hardrock,kalshi,novig,pinnacle,
 polymarket,polymarket_us,prophetx,prizepicks,rebet,sportzino,thescorebet,thrillzz,underdog
 ```
 
+### Novig liquidity observation pilot
+
+The optional read-only probe compares NBA or NCAAB player props with Novig's
+public order-book snapshots. It does not write to Redis or change fair value.
+From `odds-api`, supply `ODDS_API_BASE_URL` and `ODDS_API_KEY` through the
+environment or an existing local env file:
+
+```powershell
+python -m scripts.probe_novig_liquidity --env-file ..\lambda\.env --league NBA --max-events 10 --max-books 10
+python -m scripts.probe_novig_liquidity --env-file ..\lambda\.env --league NCAAB --max-events 10 --max-books 10
+```
+
+The JSON report includes coverage, rejection reasons, and observations, including
+non-matching or old prices. `matched_tiers` counts only observations that pass
+the probe's price and timestamp checks. An empty result is not proof that a
+league has no liquidity. `--max-books` caps order-book requests; the event
+limit and sequential request delay also bound traffic. HTTP and pagination
+failures cause a nonzero exit rather than a partial success report.
+
+The probe infers team and player names from Novig display labels, which Novig
+does not guarantee as stable identifiers. It uses exact conservative matching
+and requires unique candidate markets. Stake is the opposite-side best bid's
+contract quantity multiplied by its complementary taker price and $0.01; worse
+price levels and fees are excluded. Public snapshots can be cached, and the
+odds API exposes a market-level timestamp rather than a per-outcome timestamp.
+The reported freshness, price comparison, and tiers are diagnostic, not proof
+that a quote is actionable. Do not feed this output into the weighting model.
+
 These are the documented keys for the requested bookmakers. PropLine's
 [full reference](https://prop-line.com/llms-full.txt) identifies `thescorebet`
 as the Ontario book; it does not document separate TheScore US/CA keys or a
