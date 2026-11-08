@@ -111,7 +111,7 @@ async def health_check():
         "models_loaded": {
             "sharpedge_model": sharpedge_model is not None,
             "props_model": props_model is not None,
-            "database": db is not None,
+            "database": False,  # Bet persistence is disabled.
             "odds_api": odds_api is not None
         }
     }
@@ -127,7 +127,7 @@ async def test_models():
         prop_weights = props_model.get_effective_weights() if props_model else {}
         
         # Test database connection
-        db_status = db.db.test_connection() if db else {"error": "Database not initialized"}
+        db_status = db.test_connection() if db else {"connection": "DISABLED"}
         
         return {
             "main_line_weights": main_weights,

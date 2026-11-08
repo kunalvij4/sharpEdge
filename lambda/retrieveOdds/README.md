@@ -15,16 +15,13 @@ does not expose game totals, so those result arrays remain empty.
 flowchart LR
     A[Every five minutes] --> B[Fetch fresh odds and props]
     B --> C[Calculate EV and arbitrage in memory]
-    B --> D{Observed within 10 minutes before start?}
-    D -->|Yes| E[DynamoDB last-known prices, seven-day TTL]
     C --> F[S3 result snapshots]
     C --> G[Redis EV and arbitrage hashes]
 ```
 
-All freshly fetched odds are processed, including events outside the archival
-window. Raw odds are not written to S3. EV and arbitrage use the same collected
-data; there are no independent hourly processing functions or S3/DynamoDB
-snapshot readbacks in the processing path.
+All freshly fetched odds are processed in memory. Raw odds are not persisted.
+EV and arbitrage use the same collected data; there are no independent hourly
+processing functions or snapshot readbacks in the processing path.
 
 The client uses `X-API-Key` authentication and maps league keys to the in-house
 `/v1/sports/{sport}/odds` and `/events` routes. Event discovery includes games
@@ -38,48 +35,18 @@ PrizePicks uses provider-supplied synthetic prices and does not contribute to
 fair-price consensus. Fantasy entries are evaluated as targets but are excluded
 from sportsbook arbitrage. Underdog names normalize to `Underdog` consistently.
 
-## Last-known prices in DynamoDB
+## DynamoDB storage disabled
 
-By default, SAM creates `${AWS::StackName}-ClosingOdds` with:
-
-| Attribute | Meaning |
-| --- | --- |
-| `event_id` (partition key) | Actual Odds API event ID |
-| `bet_key` (sort key) | Stable hash of event, market, player, line, book, and side |
-| `odds` | Last observed decimal price for that exact bet/book |
-| `league`, `category`, `market` | League and game-market/prop identity |
-| `selection`, `side`, `player`, `line`, `book` | Quote identity and line |
-| `commence_time` | Event's advertised start time |
-| `observed_at` | UTC timestamp when this API response was received |
-| `expires_at` | Numeric Unix timestamp: observation time plus seven days |
-
-A quote is eligible only when `0 < commence_time - observed_at <= 600 seconds`.
-Prices observed at or after the start, or more than ten minutes beforehand, are
-not persisted. The filter uses each response's capture time: slow prop requests
-cannot re-date earlier game-line quotes or slip post-start props into the archive.
-
-Each eligible update overwrites the same event/bet/book row. Other books, players,
-lines, and sides remain separate. Missing quotes keep their last-known price;
-slower/older observations cannot overwrite newer ones. Prices are archived
-regardless of whether the bet has positive EV or forms an arbitrage opportunity.
-
-The table has DynamoDB TTL enabled on `expires_at`. Expiry is seven days after
-the last captured price. AWS deletes expired items asynchronously; the event
-lookup filters them immediately. See [AWS TTL behavior](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/TTL.html).
-
-```python
-from odds_pipeline.archive import ClosingOddsStore
-
-prices = ClosingOddsStore().get_event("provider-event-id")
-```
-
-The lookup uses the event partition key and paginates; it does not scan the table.
+The pipeline does not create a DynamoDB client, read or write closing prices,
+or depend on a table name. Old `CLOSING_ODDS_TABLE` settings are ignored. SAM
+creates no DynamoDB tables and grants the function no DynamoDB permissions.
+The legacy `EV_Bets` adapters also skip storage; `/storeBet` returns HTTP 410
+with `stored: false`.
 
 ## EV and arbitrage results
 
-Every EV and arbitrage record contains **`event_id`**. EV `id` is a stable string
-matching the corresponding closing-price row's `bet_key`, allowing a result to be
-joined to its last-known price using `(event_id, id)`.
+Every EV and arbitrage record contains **`event_id`**. EV `id` remains a stable
+identifier for the event, market, player, line, bookmaker, and selection.
 
 The existing fair-odds models and book weights are retained. Two-way markets are
 compared only when their event, player, and complementary lines match. Arbitrage
@@ -113,8 +80,8 @@ Redis uses two hashes, **`EV`** and **`arbitrage`**. Fields are
 Successful empty results replace stale opportunities with empty arrays. Failed
 leagues retain previous outputs while others proceed. If any prop event fails,
 that league's previous complete prop outputs are preserved and game-market
-outputs continue updating. S3, Redis, and closing-price failures are reported
-independently; an outage of one store does not block the others.
+outputs continue updating. S3 and Redis failures are reported independently;
+an outage of one store does not block the other.
 
 ## Deployment
 
@@ -126,8 +93,8 @@ Set the GitHub **repository variable `ODDS_API_BASE_URL`** to that API's reachab
 HTTPS origin, without `/v1`. The local `lambda/.env` file is not read by Lambda.
 The workflow builds, tests, and deploys changes pushed to `main`.
 
-SAM supplies `CLOSING_ODDS_TABLE`, `RESULTS_BUCKET`, `REDIS_URL`, `ODDS_API_KEY`,
-and `ODDS_API_BASE_URL` to the Lambda and creates its DynamoDB/S3 permissions. Redis credentials are
+SAM supplies `RESULTS_BUCKET`, `REDIS_URL`, `ODDS_API_KEY`, and
+`ODDS_API_BASE_URL` to the Lambda and creates its S3 write permissions. Redis credentials are
 passed through a `NoEcho` parameter and are omitted from error logs. TLS verifies
 the Redis certificate and hostname.
 
@@ -146,38 +113,31 @@ If deployment fails with `ReservedConcurrentExecutions` reducing unreserved
 concurrency below its minimum, leave `ENABLE_RESERVED_CONCURRENCY` unset or set
 it to `false`. A stack in `UPDATE_ROLLBACK_COMPLETE` can be updated again.
 
-The workflow checks whether CloudFormation already manages `ClosingOddsTable`.
-If so, the table stays managed by the stack. Otherwise, it looks for the table
-used by the last successful deployment or `${AWS::StackName}-ClosingOdds`. When
-rollback retained that table, the workflow validates its string `event_id`/`bet_key`
-keys and TTL on `expires_at`, then passes its name to SAM automatically. This
-avoids `AWS::EarlyValidation::ResourceExistenceCheck` caused by recreating the
-retained table. If no table exists, CloudFormation creates it normally. AWS read
-errors stop deployment instead of being treated as a missing table.
-
-The GitHub repository variable `EXISTING_CLOSING_ODDS_TABLE_NAME` can override
-discovery for a different existing table. Reused tables remain managed outside
-CloudFormation; subsequent deployments remember the table through the stack's
-`ExistingClosingOddsTableName` parameter. For manual SAM deployments, check the
-table ownership first and pass
-`ExistingClosingOddsTableName=retrieve-odds-stack-ClosingOdds` for a retained table.
-
-Deployment credentials need `cloudformation:DescribeStacks`,
-`cloudformation:ListStackResources`, `dynamodb:DescribeTable`, and
-`dynamodb:DescribeTimeToLive` for this read-only check. If SAM fails, an additional
-step reads the latest change set's validation errors using
-`cloudformation:ListChangeSets` and `cloudformation:DescribeEvents`, including the
-resource ID and failure reason without dumping stack parameters.
+The workflow no longer discovers or reuses closing-odds tables. Remove the
+obsolete `EXISTING_CLOSING_ODDS_TABLE_NAME` repository variable if present.
+Deployment failure diagnostics still use `cloudformation:ListChangeSets` and
+`cloudformation:DescribeEvents`, without dumping stack parameters.
 
 For `sam local invoke`, copy `env.example.json`, fill in its values, and pass
 `--env-vars <private-file.json>`. Keep the filled-in file private. For a manual
 deployment, pass `OddsApiKey`, `OddsApiBaseUrl`, and `RedisUrl` as SAM parameters.
 
-The original `AllOdds` table is preserved during migration and no longer receives
-writes. Existing raw S3 objects are not deleted; their caches stop refreshing.
-Processed S3 results continue updating. The old hourly EV/arbitrage Lambda
-resources are removed by deployment. The earlier experimental prop-history table
-is no longer used; its existing retention policy preserves it if already deployed.
+### Retained table cleanup
+
+Deploying this change stops the scheduled closing-odds writes and removes the
+function's DynamoDB permissions. Redeploy the legacy Flask/FastAPI service if
+it is still running to disable its old EV bet writer as well.
+
+Earlier templates set `DeletionPolicy: Retain`. Removing those resources from
+SAM does not delete their stored data: `${AWS::StackName}-ClosingOdds` and
+`${AWS::StackName}-AllOdds` can remain outside the stack. Any previously retained
+experimental prop-history table and the legacy `EV_Bets` table are also outside
+this deployment's cleanup. Retained data and backups can continue incurring
+charges after writes stop. Review and delete the unused tables and backups in
+the correct AWS account and region to finish eliminating those charges. This
+deployment does not automatically delete historical data.
+
+Processed S3 results continue updating. Existing raw S3 objects remain as before.
 The frontend's old Current Markets view still reads the retired raw-moneyline S3
 cache; its data source needs separate wiring. EV/arbitrage moneyline and props
 object paths remain compatible.
@@ -193,7 +153,8 @@ sam validate --lint --template-file template.yaml
 sam build --template-file template.yaml
 ```
 
-Tests emulate provider responses, DynamoDB, S3, and Redis without accessing a live
-account. They cover time boundaries, TTL and last-price updates, event lookup,
-all five leagues, event-ID propagation, line/player separation, and store/provider
-failures. The built Lambda is also checked against Python 3.11.
+Tests emulate provider responses, S3, and Redis without accessing a live account.
+All tests reject DynamoDB API calls. They cover all five leagues, event-ID
+propagation, line/player separation, store/provider failures, the retired legacy
+writers and endpoint, and stale table settings. Deployment checks ensure SAM
+contains no DynamoDB resources, permissions, or environment settings.

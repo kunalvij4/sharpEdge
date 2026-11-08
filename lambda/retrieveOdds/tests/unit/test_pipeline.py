@@ -34,7 +34,7 @@ def raw_event(league, label="near", minutes=5):
     }
 
 @pytest.fixture
-def runtime(monkeypatch, closing_store):
+def runtime(monkeypatch, aws_mock):
     app = importlib.import_module("odds_pipeline.handler")
     cache = importlib.import_module("odds_pipeline.cache")
     results = importlib.import_module("odds_pipeline.results")
@@ -42,7 +42,7 @@ def runtime(monkeypatch, closing_store):
     monkeypatch.setenv("ODDS_API_BASE_URL", "https://odds.example.com")
     monkeypatch.setenv("REDIS_URL", "rediss://default:test-password@cache.invalid:6379")
     monkeypatch.setattr(app, "utc_now", lambda: NOW)
-    monkeypatch.setattr(app, "ClosingOddsStore", lambda: closing_store)
+    monkeypatch.delenv("CLOSING_ODDS_TABLE", raising=False)
     s3 = boto3.client("s3", region_name="us-east-1")
     s3.create_bucket(Bucket="test-pipeline-results")
     monkeypatch.setattr(app, "ResultsPublisher", lambda: results.ResultsPublisher(bucket="test-pipeline-results", s3=s3))
@@ -72,7 +72,7 @@ def runtime(monkeypatch, closing_store):
     api.get_events = Mock(return_value=[])
     api.get_event_odds = Mock(side_effect=get_event_odds)
     monkeypatch.setattr(app, "OddsAPI", lambda key, base_url: api)
-    return app, api, s3, snapshots, cache, closing_store
+    return app, api, s3, snapshots, cache
 
 
 def s3_results(s3):
@@ -82,8 +82,8 @@ def s3_results(s3):
     }
 
 
-def test_one_run_fetches_all_leagues_archives_only_near_start_and_publishes_results(runtime):
-    app, api, s3, snapshots, _, store = runtime
+def test_one_run_fetches_all_leagues_and_publishes_results_without_dynamodb(runtime):
+    app, api, s3, snapshots, _ = runtime
 
     summary = app.lambda_handler({}, None)
 
@@ -95,15 +95,10 @@ def test_one_run_fetches_all_leagues_archives_only_near_start_and_publishes_resu
     }
     assert api.get_events.call_count == 5
     assert api.get_event_odds.call_count == 15
-    assert summary["closing_prices_written"] > 0
     objects = s3_results(s3)
     assert len(objects) == len(snapshots) == 40
     assert all(key.startswith(("ev/", "arbitrage/")) for key in objects)
     for league in LEAGUES:
-        archived = store.get_event(f"{league}-near", now=NOW)
-        assert {row["category"] for row in archived} == {"moneyline", "spreads", "totals", "props"}
-        assert store.get_event(f"{league}-far", now=NOW) == []
-        assert store.get_event(f"{league}-started", now=NOW) == []
         for category in ("moneyline", "spreads", "totals", "props"):
             for table, prefix, suffix in (("EV", "ev", "ev"), ("arbitrage", "arbitrage", "arb")):
                 rows = objects[f"{prefix}/{league}/{category}_{suffix}.json"]
@@ -115,14 +110,10 @@ def test_one_run_fetches_all_leagues_archives_only_near_start_and_publishes_resu
                 assert snapshot["league"] == league
                 assert snapshot["opportunities"] == rows
                 assert snapshot["count"] == len(rows)
-            archive_keys = {row["bet_key"] for row in archived}
-            for bet in objects[f"ev/{league}/{category}_ev.json"]:
-                if bet["event_id"] == f"{league}-near":
-                    assert bet["id"] in archive_keys
 
 
-def test_props_only_events_are_processed_and_archived_for_all_leagues(runtime):
-    app, api, s3, snapshots, _, store = runtime
+def test_props_only_events_are_processed_for_all_leagues(runtime):
+    app, api, s3, snapshots, _ = runtime
     api.get_odds.side_effect = lambda *args, **kwargs: []
 
     def events(sport):
@@ -139,8 +130,6 @@ def test_props_only_events_are_processed_and_archived_for_all_leagues(runtime):
     assert api.get_event_odds.call_count == 5
     objects = s3_results(s3)
     for league in LEAGUES:
-        archived = store.get_event(f"{league}-near", now=NOW)
-        assert {row["category"] for row in archived} == {"props"}
         assert objects[f"ev/{league}/props_ev.json"]
         assert snapshots["EV", f"{league}/props"]["count"] > 0
         assert objects[f"ev/{league}/moneyline_ev.json"] == []
@@ -250,32 +239,29 @@ def test_empty_current_results_replace_old_cache_entries(runtime):
     summary = app.lambda_handler({}, None)
 
     assert summary["status"] == "complete"
-    assert summary["closing_prices_written"] == 0
     assert all(rows == [] for rows in s3_results(s3).values())
     assert snapshots["EV", "NBA/moneyline"]["opportunities"] == []
 
 
-def test_redis_failure_does_not_block_s3_or_closing_prices(runtime, monkeypatch, caplog):
-    app, _, s3, _, cache, store = runtime
+def test_redis_failure_does_not_block_s3(runtime, monkeypatch, caplog):
+    app, _, s3, _, cache = runtime
     monkeypatch.setattr(cache, "_get_client", Mock(side_effect=ConnectionError("test-password")))
 
     summary = app.lambda_handler({}, None)
 
     assert summary["status"] == "partial"
     assert len(s3_results(s3)) == 40
-    assert store.get_event("NBA-near", now=NOW)
     assert "test-password" not in caplog.text
 
 
-def test_s3_failure_does_not_block_redis_or_closing_prices(runtime, monkeypatch):
-    app, _, s3, snapshots, _, store = runtime
+def test_s3_failure_does_not_block_redis(runtime, monkeypatch):
+    app, _, s3, snapshots, _ = runtime
     monkeypatch.setattr(s3, "put_object", Mock(side_effect=RuntimeError("S3 unavailable")))
 
     summary = app.lambda_handler({}, None)
 
     assert summary["status"] == "partial"
     assert len(snapshots) == 40
-    assert store.get_event("NBA-near", now=NOW)
 
 
 def test_one_failed_league_does_not_clear_its_previous_results_or_block_others(runtime):
@@ -313,21 +299,16 @@ def test_partial_props_failure_preserves_complete_props_results(runtime):
     assert "ev/NFL/props_ev.json" not in s3_results(s3)
 
 
-def test_props_response_after_start_cannot_retimestamp_or_archive_game_lines(runtime, monkeypatch):
-    app, api, _, _, _, store = runtime
-    monkeypatch.setattr(app, "ACTIVE_LEAGUE_SPORT_KEYS", {"NBA": "basketball_nba"})
-    start = NOW + timedelta(minutes=5)
-    times = iter([start - timedelta(seconds=1), start + timedelta(seconds=1)])
-    monkeypatch.setattr(app, "utc_now", lambda: next(times))
-    api.get_odds.side_effect = lambda *args, **kwargs: [raw_event("NBA")]
+def test_old_table_configuration_cannot_reenable_dynamodb_storage(runtime, monkeypatch):
+    app, _, s3, snapshots, _ = runtime
+    monkeypatch.setenv("CLOSING_ODDS_TABLE", "previously-configured-table")
+    monkeypatch.setenv("EXISTING_CLOSING_ODDS_TABLE_NAME", "previously-configured-table")
 
     summary = app.lambda_handler({}, None)
 
     assert summary["status"] == "complete"
-    archived = store.get_event("NBA-near", now=start)
-    assert archived
-    assert {row["category"] for row in archived} == {"moneyline", "spreads", "totals"}
-    assert {row["observed_at"] for row in archived} == {(start - timedelta(seconds=1)).isoformat(timespec="microseconds")}
+    assert summary["events_fetched"] == 15
+    assert len(s3_results(s3)) == len(snapshots) == 40
 
 
 @pytest.mark.parametrize("status, retry", [(429, True), (503, True), (400, False)])

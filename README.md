@@ -1,16 +1,15 @@
 # SharpEdge
 
-SharpEdge is a sports betting analytics tool that fetches live odds from various sportsbooks, analyzes markets (moneyline, spreads, totals), and identifies +EV (positive expected value) betting opportunities. It integrates with AWS DynamoDB to store betting data.
+SharpEdge is a sports betting analytics tool that fetches live odds from various sportsbooks, analyzes markets (moneyline, spreads, totals), and identifies +EV (positive expected value) betting opportunities. The scheduled pipeline calculates in memory and publishes current results to S3 and Redis.
 
 ## Features
 - Fetch live odds for multiple sports (e.g., NFL, NBA).
 - Analyze moneyline, spreads, and totals markets.
 - Identify +EV opportunities using a weighted model.
-- Store betting data in AWS DynamoDB under the `EV_Bets` table.
+- Publish current EV and arbitrage opportunities to S3 and Redis.
 
 ## Requirements
 - Python 3.11+
-- AWS DynamoDB
 - `.env` file for environment variables.
 
 ## Installation
@@ -27,4 +26,8 @@ SharpEdge is a sports betting analytics tool that fetches live odds from various
     ```bash
     ODDS_API_KEY=your_api_key_here
     ```
+
+DynamoDB bet and closing-odds storage has been disabled, including the legacy
+`/storeBet` endpoint. See the [pipeline deployment notes](lambda/retrieveOdds/README.md)
+for rollout and cleanup of previously retained tables.
 

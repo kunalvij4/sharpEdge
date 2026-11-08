@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Fetch all five leagues every five minutes, retain closing prices, and publish EV/arbitrage.
+Description: Fetch all five leagues every five minutes and publish EV/arbitrage without DynamoDB storage.
 
 Parameters:
   OddsApiKey:
@@ -19,14 +19,9 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
     Description: Reserve one execution only when the regional Lambda quota allows it.
-  ExistingClosingOddsTableName:
-    Type: String
-    Default: ''
-    Description: Optional existing closing-odds table retained outside this stack after a failed deployment.
 
 Conditions:
   ReserveConcurrency: !Equals [!Ref EnableReservedConcurrency, 'true']
-  CreateClosingOddsTable: !Equals [!Ref ExistingClosingOddsTableName, '']
 
 Resources:
   RetrieveOddsFunction:
@@ -45,12 +40,9 @@ Resources:
         Variables:
           ODDS_API_KEY: !Ref OddsApiKey
           ODDS_API_BASE_URL: !Ref OddsApiBaseUrl
-          CLOSING_ODDS_TABLE: !If [CreateClosingOddsTable, !Ref ClosingOddsTable, !Ref ExistingClosingOddsTableName]
           RESULTS_BUCKET: !Ref OddsCacheBucket
           REDIS_URL: !Ref RedisUrl
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !If [CreateClosingOddsTable, !Ref ClosingOddsTable, !Ref ExistingClosingOddsTableName]
         - S3WritePolicy:
             BucketName: !Ref OddsCacheBucket
       Events:
@@ -60,56 +52,12 @@ Resources:
             Schedule: rate(5 minutes)
             Enabled: true
 
-  ClosingOddsTable:
-    Type: AWS::DynamoDB::Table
-    Condition: CreateClosingOddsTable
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      TableName: !Sub "${AWS::StackName}-ClosingOdds"
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: event_id
-          AttributeType: S
-        - AttributeName: bet_key
-          AttributeType: S
-      KeySchema:
-        - AttributeName: event_id
-          KeyType: HASH
-        - AttributeName: bet_key
-          KeyType: RANGE
-      TimeToLiveSpecification:
-        AttributeName: expires_at
-        Enabled: true
-
   OddsCacheBucket:
     Type: AWS::S3::Bucket
     Properties:
       VersioningConfiguration:
         Status: Enabled
 
-  # Preserve the original table during this migration. The new pipeline does
-  # not read or write it; removing it here would delete existing historical data.
-  AllOddsTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      TableName: !Sub "${AWS::StackName}-AllOdds"
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: game_id
-          AttributeType: S
-        - AttributeName: retrieved_at
-          AttributeType: S
-      KeySchema:
-        - AttributeName: game_id
-          KeyType: HASH
-        - AttributeName: retrieved_at
-          KeyType: RANGE
-
 Outputs:
-  ClosingOddsTableName:
-    Value: !If [CreateClosingOddsTable, !Ref ClosingOddsTable, !Ref ExistingClosingOddsTableName]
   ResultsBucketName:
     Value: !Ref OddsCacheBucket
