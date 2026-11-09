@@ -185,7 +185,7 @@ def test_invalid_game_line_pairs_are_rejected(label, points):
     assert organize_leagues([message])["normalization_issues"][0]["type"] == "invalid_game_line_pair"
 
 
-@pytest.mark.parametrize("spread_label", ["Línea", "LÃ\u00adnea"])
+@pytest.mark.parametrize("spread_label", ["Línea", "LÃ\u00adnea", "L\u00c3\u0192\u00c2\u00adnea"])
 def test_observed_spanish_nhl_labels_normalize_without_changing_source_evidence(spread_label):
     from scripts.capture_bet365_league import observed_game_lines
 

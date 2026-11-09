@@ -21,6 +21,7 @@ GAME_LINE_LABELS = {
     "Ganador": "Money",
     "Línea": "Spread",
     "LÃ\u00adnea": "Spread",
+    "L\u00c3\u0192\u00c2\u00adnea": "Spread",
 }
 
 
