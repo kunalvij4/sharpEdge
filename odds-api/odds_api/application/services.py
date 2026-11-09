@@ -5,6 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from odds_api.application.async_work import blocking_work
+from odds_api.application.bet_links import bet_link
 from odds_api.application.ports import Clock, Provider, Repository
 from odds_api.application.prepared_odds import project_response, response_freshness, time_value
 from odds_api.application.quote_merge import select_public_quotes
@@ -216,6 +217,7 @@ class OddsQueryService:
         end=None,
         fresh_only=False,
         props_only=False,
+        include_bet_links=False,
     ):
         documents = self.repository.response_documents(sport, event_id=event_id)
         now = self.clock.now()
@@ -247,6 +249,7 @@ class OddsQueryService:
                 props_cache_ttl=self.props_cache_ttl,
                 propline_collected_ttl=self.propline_collected_ttl,
                 include_freshness=prop_query,
+                include_bet_links=include_bet_links,
             )
             if time_value(document["commence_time"]) <= self.clock.now():
                 continue
@@ -269,6 +272,7 @@ class OddsQueryService:
         start=None,
         end=None,
         fresh_only=False,
+        include_bet_links=False,
     ) -> list[dict] | dict:
         if self.prepared_responses:
             return self._prepared_odds(
@@ -280,6 +284,7 @@ class OddsQueryService:
                 start=start,
                 end=end,
                 fresh_only=fresh_only,
+                include_bet_links=include_bet_links,
             )
         market_set, book_set = self.validate(sport, markets, bookmakers, start, end)
         prop_query = bool(market_set and any(not is_game_market(market) for market in market_set))
@@ -400,6 +405,8 @@ class OddsQueryService:
                 outcome["point"] = float(q.point)
             if q.description:
                 outcome["description"] = q.description
+            if include_bet_links and (link := bet_link(vars(q), row["book_key"], not retained)):
+                outcome["bet_link"] = link
             if outcome not in market["outcomes"]:
                 market["outcomes"].append(outcome)
                 if retained:

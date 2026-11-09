@@ -235,6 +235,7 @@ class SqlRepository:
                     "source_updated_at": q.source_updated_at,
                     "expires_at": q.expires_at,
                     "deep_link": q.deep_link,
+                    "app_link": q.app_link,
                 }
             self.upsert_many(conn, "markets", list(markets.values()))
             self.upsert_many(conn, "selections", list(selections.values()))
@@ -443,6 +444,7 @@ class SqlRepository:
                 o.c.source_updated_at,
                 o.c.expires_at,
                 o.c.deep_link,
+                o.c.app_link,
                 b.c.key.label("book_key"),
                 b.c.title.label("book_title"),
             )
@@ -478,6 +480,7 @@ class SqlRepository:
                 aware(r["source_updated_at"]),
                 aware(r["expires_at"]),
                 r["deep_link"],
+                r["app_link"],
             )
             result.append({"quote": q, "book_key": r["book_key"], "book_title": r["book_title"]})
         return result
@@ -552,7 +555,7 @@ class SqlRepository:
             with self.engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
                 version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                return version == "0002"
+                return version == "0003"
         except Exception:
             return False
 

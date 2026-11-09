@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     propline_max_age: float = Field(default=900, ge=300)
     propline_output_dir: str = "artifacts/propline"
     unabated_api_base_url: str = "https://data.unabated.com"
-    unabated_partner_code: str = ""
+    unabated_partner_code: str = "sharpedge"
     leagues_json: str = json.dumps(DEFAULT_LEAGUES)
     collection_excluded_leagues: set[str] = {"mlb_baseball"}
     poll_interval: float = Field(default=480, gt=0)

@@ -11,7 +11,6 @@ from scripts.probe_novig_liquidity import (
     quote_pairs,
 )
 
-
 NOW = datetime(2026, 11, 6, 12, 0, tzinfo=timezone.utc)
 MARKET = {
     "marketId": "market-1",
@@ -19,8 +18,10 @@ MARKET = {
     "description": "Trae Young 9.5 ASSISTS",
     "strike": "9.5",
     "status": "OPEN",
-    "outcomes": [{"outcomeId": "over-id", "name": "Over 9.5"},
-                 {"outcomeId": "under-id", "name": "Under 9.5"}],
+    "outcomes": [
+        {"outcomeId": "over-id", "name": "Over 9.5"},
+        {"outcomeId": "under-id", "name": "Under 9.5"},
+    ],
 }
 BOOK = {
     "marketId": "market-1",
@@ -45,7 +46,9 @@ class NovigProbeTests(unittest.TestCase):
             "over": ("over", Decimal("1.72414"), "Trae Young", NOW.isoformat()),
             "under": ("under", Decimal("1.92308"), "Trae Young", NOW.isoformat()),
         }
-        status, result = compare(MARKET, {"marketId": "market-1", "orders": {}}, pair, NOW, 900, Decimal(".005"))
+        status, result = compare(
+            MARKET, {"marketId": "market-1", "orders": {}}, pair, NOW, 900, Decimal(".005")
+        )
         self.assertEqual(status, "one_sided_book")
         self.assertEqual(result["sides"]["over"]["available_stake_usd"], "0")
 
@@ -60,7 +63,9 @@ class NovigProbeTests(unittest.TestCase):
         pair["over"] = ("over", Decimal("2.0"), "Trae Young", NOW.isoformat())
         self.assertEqual(compare(MARKET, BOOK, pair, NOW, 900, Decimal(".005"))[0], "price_mismatch")
         pair["over"] = ("over", Decimal("1.72414"), "Trae Young", (NOW - timedelta(seconds=901)).isoformat())
-        self.assertEqual(compare(MARKET, BOOK, pair, NOW, 900, Decimal(".005"))[0], "stale_or_missing_quote_timestamp")
+        self.assertEqual(
+            compare(MARKET, BOOK, pair, NOW, 900, Decimal(".005"))[0], "stale_or_missing_quote_timestamp"
+        )
 
     def test_exact_identity_and_unsupported_markets(self):
         self.assertEqual(market_identity(MARKET), ("traeyoung", "player_assists", Decimal("9.5")))
@@ -83,10 +88,17 @@ class NovigProbeTests(unittest.TestCase):
         self.assertEqual(quote_pairs(event), {})
 
     def test_event_requires_exact_unique_teams_and_close_time(self):
-        event = {"id": "ours", "away_team": "Washington Wizards", "home_team": "Atlanta Hawks",
-                 "commence_time": NOW.isoformat()}
-        novig = {"eventId": "theirs", "description": "Washington Wizards @ Atlanta Hawks",
-                 "startsTs": int(NOW.timestamp() * 1000)}
+        event = {
+            "id": "ours",
+            "away_team": "Washington Wizards",
+            "home_team": "Atlanta Hawks",
+            "commence_time": NOW.isoformat(),
+        }
+        novig = {
+            "eventId": "theirs",
+            "description": "Washington Wizards @ Atlanta Hawks",
+            "startsTs": int(NOW.timestamp() * 1000),
+        }
         self.assertEqual(match_events([event], [novig])["ours"], novig)
         self.assertEqual(match_events([event], [novig, novig]), {})
         self.assertEqual(match_events([event, {**event, "id": "duplicate"}], [novig]), {})

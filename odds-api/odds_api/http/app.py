@@ -127,6 +127,9 @@ def create_app(settings=None, repository=None, clock=None):
                     description="Return only quotes within collection, source, and expiry freshness limits"
                 ),
             ] = False,
+            includeBetLinks: Annotated[
+                bool, Query(description="Include fresh selection URLs and provider IDs for link generation")
+            ] = False,
         ):
             allowed = {
                 "markets",
@@ -136,6 +139,7 @@ def create_app(settings=None, repository=None, clock=None):
                 "commenceTimeTo",
                 "apiKey",
                 "freshOnly",
+                "includeBetLinks",
             }
             if set(request.query_params) - allowed:
                 raise QueryError("Unsupported query parameter")
@@ -146,6 +150,7 @@ def create_app(settings=None, repository=None, clock=None):
                 "start": commenceTimeFrom,
                 "end": commenceTimeTo,
                 "fresh_only": freshOnly,
+                "include_bet_links": includeBetLinks,
             }
 
         return filters

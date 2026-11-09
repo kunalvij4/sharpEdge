@@ -3,6 +3,7 @@
 from datetime import datetime
 from decimal import Decimal
 
+from odds_api.application.bet_links import bet_link
 from odds_api.application.quote_merge import select_public_quotes
 from odds_api.domain.college import consolidate_rows
 from odds_api.domain.models import decimal_odds
@@ -18,6 +19,7 @@ QUOTE_METADATA_FIELDS = (
     "price",
     "state",
     "deep_link",
+    "app_link",
 )
 QUOTE_TIMES = ("collected_at", "source_updated_at", "expires_at")
 PUBLIC_OUTCOME_FIELDS = ("name", "price", "point", "description")
@@ -44,7 +46,7 @@ def stored_rows(document):
         for market in book["markets"]:
             for outcome in market["outcomes"]:
                 metadata = outcome["_storage"]
-                quote = {key: metadata[key] for key in QUOTE_METADATA_FIELDS}
+                quote = {key: metadata.get(key) for key in QUOTE_METADATA_FIELDS}
                 times = outcome.get("freshness", metadata)
                 quote.update({key: times[key] for key in QUOTE_TIMES})
                 quote.update(
@@ -128,7 +130,7 @@ def prepare_document(event, rows):
             outcome["description"] = quote["description"]
         # Keep only fields absent from (or rounded in) the public outcome. The
         # canonical quote can be restored without storing a second full copy.
-        metadata = {key: quote[key] for key in QUOTE_METADATA_FIELDS}
+        metadata = {key: quote.get(key) for key in QUOTE_METADATA_FIELDS}
         metadata["selection_id"] = selection_id
         metadata.update({key: quote[key] for key in QUOTE_TIMES})
         if quote["description"] is not None and "description" not in outcome:
@@ -161,6 +163,7 @@ def project_response(
     props_cache_ttl,
     propline_collected_ttl,
     include_freshness=False,
+    include_bet_links=False,
 ):
     """Filter prepared JSON without rebuilding domain quotes or grouping prices."""
     payload = {key: value for key, value in document.items() if key not in {"_storage", "bookmakers"}}
@@ -228,6 +231,8 @@ def project_response(
         outcome = {key: row["outcome"][key] for key in PUBLIC_OUTCOME_FIELDS if key in row["outcome"]}
         if odds_format == "american":
             outcome["price"] = quote["price"]
+        if include_bet_links and (link := bet_link(quote, row["book_key"], fresh)):
+            outcome["bet_link"] = link
         market["outcomes"].append(outcome)
         if fresh:
             fresh_outcomes += 1

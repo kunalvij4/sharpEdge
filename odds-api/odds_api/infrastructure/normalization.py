@@ -156,7 +156,7 @@ def resolve_duplicates(candidates):
         return chosen, False
     # Explicitly suspend the conflicting selection so an older cached price
     # cannot remain actionable after a partial refresh.
-    return replace(chosen, price=None, state=Availability.SUSPENDED, deep_link=None), True
+    return replace(chosen, price=None, state=Availability.SUSPENDED, deep_link=None, app_link=None), True
 
 
 class Normalizer:

@@ -3,6 +3,7 @@
 from collections import Counter
 from datetime import timedelta
 from decimal import Decimal
+from urllib.parse import urlsplit
 
 from odds_api.domain.college import COLLEGE_LEAGUES, SCHOOL_LABELS, CollegePlayers, name_key, player_parts
 from odds_api.domain.models import Availability, Board, Event, Quote, Sportsbook, identity
@@ -13,6 +14,24 @@ from odds_api.infrastructure.propline import COLLECTED_DFS_BOOKS, DFS_BOOKS, GAM
 
 MARKET_ALIASES = {"batter_runs": "batter_runs_scored"}
 NAMED_PLAYER_BOOKS = COLLECTED_DFS_BOOKS | {"sportzino"}
+
+
+def app_link(value, book):
+    if not isinstance(value, str):
+        return None
+    try:
+        url = urlsplit(value)
+        if url.username or url.password:
+            return None
+        if url.scheme == "https" and url.hostname:
+            return value
+        if book in {"courtside", "prophetx"} and url.scheme == book and (url.netloc or url.path):
+            return value
+    except ValueError:
+        pass
+    return None
+
+
 PERIODS = {
     None: "full",
     "q1": "q1",
@@ -317,7 +336,12 @@ def boards(result, repository, *, max_age=900, collected_ttl=600, discover_event
                             now + timedelta(seconds=collected_ttl),
                             market.last_update + timedelta(seconds=max_age),
                         ),
-                        link_with_partner(book.model_extra.get("link"), ""),
+                        # Bulk book links open the fixture. Keep them as the
+                        # handoff when no selection-level link was returned.
+                        link_with_partner(
+                            outcome.model_extra.get("bet_link") or book.model_extra.get("link"), ""
+                        ),
+                        app_link(book.model_extra.get("app_link"), book.key),
                     )
                     kind = "moneyline" if is_game else "props"
                     candidates[kind].setdefault(quote.selection_id, []).append(quote)

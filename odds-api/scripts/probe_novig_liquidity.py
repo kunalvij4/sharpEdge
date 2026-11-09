@@ -15,7 +15,6 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-
 NOVIG_URL = "https://api.novig.com"
 LEAGUES = {"NBA": "nba_basketball", "NCAAB": "ncaab_basketball"}
 PROP_TYPES = {
@@ -114,7 +113,10 @@ def match_events(our_events, novig_events):
             milliseconds = other.get("startsTs")
             if len(parts) != 2 or not isinstance(milliseconds, (int, float)):
                 continue
-            if tuple(key(part) for part in parts) == wanted and abs(start.timestamp() - milliseconds / 1000) <= 900:
+            if (
+                tuple(key(part) for part in parts) == wanted
+                and abs(start.timestamp() - milliseconds / 1000) <= 900
+            ):
                 candidates.append(other)
         if len(candidates) == 1:
             matches[event["id"]] = candidates[0]
@@ -186,7 +188,13 @@ def book_sides(market, book):
             if not isinstance(order, dict):
                 raise ValueError("Invalid Novig order-book order")
             price, qty = decimal(order.get("price")), order.get("qty")
-            if price is None or not 0 < price < 1 or not isinstance(qty, int) or isinstance(qty, bool) or qty < 0:
+            if (
+                price is None
+                or not 0 < price < 1
+                or not isinstance(qty, int)
+                or isinstance(qty, bool)
+                or qty < 0
+            ):
                 raise ValueError("Invalid Novig order price or quantity")
             bids.append((price, qty))
         if not bids:
@@ -218,17 +226,32 @@ def compare(market, book, pair, now, max_age, tolerance):
         if age is None or not 0 <= age <= max_age:
             if "stale_or_missing_quote_timestamp" not in flags:
                 flags.append("stale_or_missing_quote_timestamp")
-        if sides[side] is not None and abs(Decimal(1) / pair[side][1] - sides[side]["probability"]) > tolerance:
+        if (
+            sides[side] is not None
+            and abs(Decimal(1) / pair[side][1] - sides[side]["probability"]) > tolerance
+        ):
             if "price_mismatch" not in flags:
                 flags.append("price_mismatch")
     stakes = [sides[side]["stake_usd"] if sides[side] is not None else Decimal(0) for side in sides]
     thinner = min(stakes)
-    tier = "under_100" if thinner < 100 else "100_to_499" if thinner < 500 else "500_to_1999" if thinner < 2000 else "2000_plus"
+    tier = (
+        "under_100"
+        if thinner < 100
+        else "100_to_499"
+        if thinner < 500
+        else "500_to_1999"
+        if thinner < 2000
+        else "2000_plus"
+    )
     status = flags[0] if flags else "matched"
     return status, {
-        "player": pair["over"][2], "market": market["marketType"], "line": str(market["strike"]),
-        "novig_market_id": market["marketId"], "sequence": book.get("seq"),
-        "status": status, "warnings": flags,
+        "player": pair["over"][2],
+        "market": market["marketType"],
+        "line": str(market["strike"]),
+        "novig_market_id": market["marketId"],
+        "sequence": book.get("seq"),
+        "status": status,
+        "warnings": flags,
         "sides": {
             side: {
                 "available_stake_usd": str(sides[side]["stake_usd"]) if sides[side] else "0",
@@ -240,7 +263,8 @@ def compare(market, book, pair, now, max_age, tolerance):
             }
             for side in ("over", "under")
         },
-        "thinner_side_usd": str(thinner), "observed_tier": tier,
+        "thinner_side_usd": str(thinner),
+        "observed_tier": tier,
     }
 
 
@@ -258,7 +282,14 @@ def main(argv=None):
     settings = read_settings(args.env_file)
     base, api_key = settings["ODDS_API_BASE_URL"].rstrip("/"), settings["ODDS_API_KEY"]
     parsed = urlsplit(base)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
         parser.error("ODDS_API_BASE_URL must be an HTTPS URL without credentials, query, or fragment")
     if not api_key:
         parser.error("Set ODDS_API_KEY or provide --env-file")
@@ -274,10 +305,16 @@ def main(argv=None):
     events = odds("/sports/" + LEAGUES[args.league] + "/events")
     if not isinstance(events, list):
         raise ValueError("Invalid odds API events response")
-    upcoming = [event for event in events if timestamp(event.get("commence_time")) and timestamp(event["commence_time"]) > started]
+    upcoming = [
+        event
+        for event in events
+        if timestamp(event.get("commence_time")) and timestamp(event["commence_time"]) > started
+    ]
     upcoming.sort(key=lambda event: timestamp(event["commence_time"]))
-    upcoming = upcoming[:args.max_events]
-    novig_events = list(paged(novig, "/v3/public/catalog/events", {"league": args.league, "status": "OPEN_PREGAME"}, 20))
+    upcoming = upcoming[: args.max_events]
+    novig_events = list(
+        paged(novig, "/v3/public/catalog/events", {"league": args.league, "status": "OPEN_PREGAME"}, 20)
+    )
     matched_events = match_events(upcoming, novig_events)
     counts = Counter(events_scanned=len(upcoming), events_matched=len(matched_events))
     observations = []
@@ -308,16 +345,22 @@ def main(argv=None):
             book = novig("/v3/public/catalog/markets/" + market["marketId"] + "/book?depth=1")
             counts["orderbooks_fetched"] += 1
             observed = datetime.now(timezone.utc)
-            status, row = compare(market, book, pairs[identity], observed, args.max_age_seconds, Decimal("0.005"))
+            status, row = compare(
+                market, book, pairs[identity], observed, args.max_age_seconds, Decimal("0.005")
+            )
             counts[status] += 1
             if row:
                 row.update(event_id=event["id"], event=other["description"], observed_at=observed.isoformat())
                 observations.append(row)
     report = {
-        "started_at": started.isoformat(), "completed_at": datetime.now(timezone.utc).isoformat(),
-        "league": args.league, "counts": dict(counts),
+        "started_at": started.isoformat(),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "league": args.league,
+        "counts": dict(counts),
         "observed_tiers_all_snapshots": dict(Counter(row["observed_tier"] for row in observations)),
-        "matched_tiers": dict(Counter(row["observed_tier"] for row in observations if row["status"] == "matched")),
+        "matched_tiers": dict(
+            Counter(row["observed_tier"] for row in observations if row["status"] == "matched")
+        ),
         "observations": observations,
         "notice": "Experimental display-label matching; snapshots may be cached; not suitable for model input.",
     }

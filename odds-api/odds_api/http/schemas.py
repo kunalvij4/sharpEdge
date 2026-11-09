@@ -71,11 +71,21 @@ class ResponseFreshness(BaseModel):
     )
 
 
+class BetLinkResponse(BaseModel):
+    provider: str
+    market_line_id: str | None = None
+    market_source_id: str | None = None
+    url: str | None = None
+    app_url: str | None = None
+    status: Literal["provided", "event_support"] | None = None
+
+
 class OutcomeResponse(BaseModel):
     name: str
     price: int | float
     point: float | None = None
     description: str | None = None
+    bet_link: BetLinkResponse | None = None
 
 
 class MarketResponse(BaseModel):

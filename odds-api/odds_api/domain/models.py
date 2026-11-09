@@ -117,6 +117,7 @@ class Quote:
     source_updated_at: datetime | None = None
     expires_at: datetime | None = None
     deep_link: str | None = None
+    app_link: str | None = None
 
     def __post_init__(self):
         object.__setattr__(self, "collected_at", utc(self.collected_at))

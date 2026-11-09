@@ -162,6 +162,7 @@ def test_docs_and_openapi_do_not_contain_provider_credentials(client):
         "price",
         "point",
         "description",
+        "bet_link",
     }
     assert spec["paths"]["/v1/sports/{sport}/odds"]["get"]["security"]
     assert "provider-secret" not in response.text
