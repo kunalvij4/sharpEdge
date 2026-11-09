@@ -6,11 +6,22 @@ from test_bet365_league_dump import capture, row
 from test_bet365_streaming import post
 from test_bet365_streaming import stream as stream_fixture
 
-from scripts.capture_bet365_league import fixture_routes
+from scripts.capture_bet365_league import captured_market, fixture_routes
 from scripts.organize_bet365_league_dump import organize_leagues
 from scripts.verify_bet365_dump import verify
 
 stream = stream_fixture
+
+
+def test_only_priced_payloads_for_the_same_fixture_avoid_duplicate_prop_navigation():
+    message = capture()
+    message["stage"] = "nba_event_123"
+    message["records"][3]["fields"].update(SY="mgh", NA="Points O/U")
+    assert captured_market([message], "nba_event_123", "Points O/U")
+    assert not captured_market([message], "nba_event_456", "Points O/U")
+    for record in message["records"]:
+        record["fields"].pop("OD", None)
+    assert not captured_market([message], "nba_event_123", "Points O/U")
 
 
 def native_message(now, start):

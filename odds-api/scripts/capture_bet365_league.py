@@ -13,7 +13,7 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 from odds_api.infrastructure.bet365_runtime import safe_text, safe_url
 from scripts.bet365_browser_runtime import close_native_browser, launch_native_browser
 from scripts.capture_bet365_markets import records
-from scripts.organize_bet365_league_dump import GAME_LINE_LABELS
+from scripts.organize_bet365_league_dump import GAME_LINE_LABELS, blocks
 
 
 def observed_game_lines(messages, stage, league):
@@ -53,6 +53,17 @@ def fixture_routes(messages, league):
                 if identifier:
                     result[identifier] = route
     return list(result.items())
+
+
+def captured_market(messages, prefix, label):
+    return any(
+        group.get("NA") == label
+        and group.get("SY") in {"mgi", "mgh", "fe"}
+        and any(cell.get("OD") for column in columns for _, cell in column["cells"])
+        for message in messages
+        if message["stage"] == prefix or message["stage"].startswith(prefix + "_")
+        for (_, group), columns in blocks(message["records"])
+    )
 
 
 async def capture(args):
@@ -543,6 +554,8 @@ async def capture(args):
 
             async def visit_tab(tab, prefix, event_mode=False):
                 nonlocal stage
+                if event_mode and tab.endswith(" O/U") and captured_market(messages, prefix, tab):
+                    return  # The event's full snapshot already contains these prices.
                 stage = prefix + "_" + re.sub(r"[^a-z0-9]+", "_", tab.lower()).strip("_")
                 try:
                     start_index = len(messages)
