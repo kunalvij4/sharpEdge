@@ -18,6 +18,7 @@ def verify(report, messages):
         for event in league["events"]:
             groups = event["player_props"]
             selections = [(None, s) for s in (event.get("moneyline") or {}).get("outcomes", [])]
+            selections.extend((None, s) for game in event.get("game_lines", []) for s in game["outcomes"])
             selections.extend((group, s) for group in groups for s in group["selections"])
             for group, selection in selections:
                 checked += 1
@@ -31,6 +32,8 @@ def verify(report, messages):
                         or prices(source["OD"]) != selection["price"]
                     ):
                         problems.append("price_mismatch")
+                    if "point" in selection and float(source.get("HA")) != selection["point"]:
+                        problems.append("line_mismatch")
                     if selection.get("comparison") in {"over", "under"}:
                         ou_checked += 1
                         if float(source.get("HA") or source.get("HD")) != selection["threshold"]:

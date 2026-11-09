@@ -100,6 +100,7 @@ jobs:
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ODDS_REDIS_URL: ${{ secrets.ODDS_REDIS_URL }}
+          BET365_INGEST_KEY: ${{ secrets.BET365_INGEST_KEY }}
           REGISTRY_USER: ${{ github.actor }}
           SSH_PASSWORD: ${{ secrets.DEPLOY_SSH_PASSWORD }}
         shell: bash
@@ -123,7 +124,7 @@ jobs:
             ssh "${ssh_options[@]}" "$target" "set -eu; umask 077; mkdir -p '$RELEASE_DIR'; tar -xzf - -C '$RELEASE_DIR'"
           # shellcheck disable=SC2029
           [[ "$ODDS_REDIS_URL" != *$'\n'* && "$ODDS_REDIS_URL" != *$'\r'* ]] || { echo "ODDS_REDIS_URL must be a single-line URL." >&2; exit 1; }
-          printf '%s\n%s\n' "$REGISTRY_TOKEN" "$ODDS_REDIS_URL" |
+          printf '%s\n%s\n%s\n' "$REGISTRY_TOKEN" "$ODDS_REDIS_URL" "$BET365_INGEST_KEY" |
             ssh "${ssh_options[@]}" "$target" "bash '$RELEASE_DIR/deploy/deploy.sh' '$DEPLOY_DIR' '$IMAGE_REF' '$REGISTRY_USER' '$DEPLOY_PROJECT'"
           {
             printf '### Odds API deployed\n\n'

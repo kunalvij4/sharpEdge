@@ -42,7 +42,9 @@ services:
       SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-20}
       UNABATED_BET_TYPE_MAP: '{}'
       UNABATED_PERIOD_MAP: '{}'
-      BET365_ENABLED: "false"
+      BET365_ENABLED: ${BET365_ENABLED:-false}
+      BET365_INGEST_KEY: ${BET365_INGEST_KEY:-}
+      BET365_MAX_AGE: ${BET365_MAX_AGE:-600}
       TZ: America/New_York
     volumes:
       - collection-artifacts:/app/artifacts

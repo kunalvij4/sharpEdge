@@ -9,7 +9,14 @@ from decimal import ROUND_HALF_UP, Decimal
 from fractions import Fraction
 from pathlib import Path
 
-LEAGUES = {"NBA": "nba_basketball", "NFL": "nfl_football", "MLB": "mlb_baseball"}
+LEAGUES = {
+    "NBA": "nba_basketball",
+    "NFL": "nfl_football",
+    "MLB": "mlb_baseball",
+    "NHL": "nhl_hockey",
+    "NCAAF": "ncaaf_football",
+    "NCAAB": "ncaab_basketball",
+}
 QUICK_PICK = {"Points", "Assists", "Rebounds", "Threes Made", "Double Double", "Triple Double"}
 
 
@@ -41,6 +48,7 @@ def event_data(identifier, league, name, start=None):
         "start_timezone_verified": False,
         "phase": "unverified",
         "moneyline": None,
+        "game_lines": [],
         "player_props": [],
     }
 

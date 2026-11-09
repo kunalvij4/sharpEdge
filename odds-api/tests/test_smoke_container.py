@@ -33,14 +33,26 @@ def test_smoke_seed_and_api_checks_use_redis(monkeypatch):
     exec(seed, {})
     assert len(repository.events("nba_basketball")) == 1
     assert len(repository.quotes("nba_basketball")) == 5
-    settings = Settings(_env_file=None, api_keys="smoke-product-key")
+    settings = Settings(
+        _env_file=None,
+        api_keys="smoke-product-key",
+        bet365_enabled=True,
+        bet365_ingest_key="smoke-collector-key",
+    )
     with TestClient(create_app(settings, repository)) as client:
 
         def urlopen(request, timeout):
-            response = client.get(request.full_url, headers=dict(request.header_items()))
+            response = client.request(
+                request.get_method(),
+                request.full_url,
+                headers=dict(request.header_items()),
+                content=request.data,
+            )
             if response.status_code >= 400:
                 raise HTTPError(request.full_url, response.status_code, "", {}, None)
             return io.BytesIO(response.content)
 
         monkeypatch.setattr("urllib.request.urlopen", urlopen)
+        exec(ast.literal_eval(assignments["check"]), {})
+        exec(ast.literal_eval(assignments["streaming"]), {})
         exec(ast.literal_eval(assignments["check"]), {})

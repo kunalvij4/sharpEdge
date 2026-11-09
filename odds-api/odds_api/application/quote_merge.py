@@ -69,7 +69,12 @@ def select_public_quotes(rows, now, collected_ttl, source_ttl, propline_collecte
             # the winner after aging; it must never revert to an older price.
             if collected > now + timedelta(seconds=5) or not fresh(quote, collected, ttl, source_ttl):
                 continue
-            if old_source is not None and (source is None or source < old_source):
+            if row["book_key"] == "bet365" or previous["book_key"] == "bet365":
+                # A browser HTTP snapshot observes the actual displayed price at
+                # collection time; compare it with the other feed's source time.
+                if (source or collected) < (old_source or time_value(prior["collected_at"])):
+                    continue
+            elif old_source is not None and (source is None or source < old_source):
                 continue
             if time_value(quote["collected_at"]) == time_value(prior["collected_at"]):
                 if source is None or (old_source is not None and source <= old_source):

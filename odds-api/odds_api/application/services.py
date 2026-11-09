@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 
 def is_game_market(market):
-    return any(market == base or market.startswith(base + "_") for base in ("h2h", "spreads"))
+    return any(market == base or market.startswith(base + "_") for base in ("h2h", "spreads", "totals"))
 
 
 class QueryError(ValueError):
@@ -250,6 +250,8 @@ class OddsQueryService:
                 propline_collected_ttl=self.propline_collected_ttl,
                 include_freshness=prop_query,
                 include_bet_links=include_bet_links,
+                bet365_enabled=self.bet365_enabled,
+                bet365_collected_ttl=self.bet365_collected_ttl,
             )
             if time_value(document["commence_time"]) <= self.clock.now():
                 continue

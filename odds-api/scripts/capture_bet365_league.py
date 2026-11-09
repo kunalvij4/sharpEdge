@@ -33,7 +33,12 @@ async def capture(args):
         if args.cdp:
             profile = args.profile_dir or Path(".cache") / ("bet365-cdp-" + output.name)
             browser, cdp_process = await launch_native_browser(
-                playwright, args.channel, profile, output / "browser.log", no_sandbox=args.no_browser_sandbox
+                playwright,
+                args.channel,
+                profile,
+                output / "browser.log",
+                no_sandbox=args.no_browser_sandbox,
+                lightweight=args.lightweight,
             )
             context = browser.contexts[0]
         elif args.profile_dir:
@@ -48,6 +53,13 @@ async def capture(args):
             browser = await playwright.chromium.launch(headless=False, channel=args.channel)
             context = await browser.new_context(viewport={"width": 1600, "height": 1100})
         page = await context.new_page()
+        if args.lightweight:
+            await context.route(
+                "**/*",
+                lambda route: route.abort()
+                if route.request.resource_type in {"image", "media", "font"}
+                else route.continue_(),
+            )
 
         def socket_opened(socket):
             item = {"url": safe_url(socket.url), "frames": 0, "bytes": 0}
@@ -177,7 +189,8 @@ async def capture(args):
                     ),
                 }
             )
-            await page.screenshot(path=str(output / f"{label}.png"))
+            if not args.lightweight:
+                await page.screenshot(path=str(output / f"{label}.png"))
             for name, data in [
                 ("messages", messages),
                 ("network", network),
@@ -214,7 +227,8 @@ async def capture(args):
             return False
 
         page.on("response", received)
-        page.on("websocket", socket_opened)
+        if not args.lightweight:
+            page.on("websocket", socket_opened)
         page.on(
             "console",
             lambda message: errors.append(
@@ -258,9 +272,23 @@ async def capture(args):
                     if row["type"] == "MG" and fields.get("SY") == "ppg":
                         source_routes.setdefault("player-props", fields["PD"])
             stage = args.league + "_lines"
-            title = {"nba": "NBA", "nfl": "NFL", "mlb": "World Series"}[args.league]
+            title = {
+                "nba": "NBA",
+                "nfl": "NFL",
+                "mlb": "World Series",
+                "nhl": "NHL",
+                "ncaaf": "NCAAF",
+                "ncaab": "NCAAB",
+            }[args.league]
             if args.entry == "classification":
-                title = {"nba": "Basketball", "nfl": "Football", "mlb": "Baseball"}[args.league]
+                title = {
+                    "nba": "Basketball",
+                    "nfl": "Football",
+                    "mlb": "Baseball",
+                    "nhl": "Ice Hockey",
+                    "ncaaf": "Football",
+                    "ncaab": "Basketball",
+                }[args.league]
             if args.entry in {"event", "player-props", "league"}:
                 route = source_routes.get("event" if args.entry == "league" else args.entry)
                 if not route:
@@ -482,11 +510,22 @@ async def capture(args):
                         and re.search(r"#D(?:43|47)#", row["fields"].get("PD", ""))
                     ]
                     candidates = page.get_by_text(tab, exact=True).filter(visible=True)
-                    if getattr(args, "skip_unavailable_tabs", False) and not await candidates.count():
+                    if (
+                        getattr(args, "skip_unavailable_tabs", False)
+                        and not routes
+                        and not await candidates.count()
+                    ):
                         errors.append({"stage": stage, "error_type": "market_tab_unavailable"})
                         continue
                     target = candidates.last if tab in {"A-Z", "Player", "Main Props"} else candidates.first
-                    await target.click(timeout=8000)
+                    if routes and not await candidates.count():
+                        await page.goto(
+                            f"https://www.{args.region}.bet365.com/#/"
+                            + routes[-1].strip("#").replace("#", "/")
+                            + "/"
+                        )
+                    else:
+                        await target.click(timeout=8000)
                     if routes and args.entry not in {"event", "player-props"}:
                         if not await market_loaded(routes[-1], start_index, timeout=15):
                             errors.append(
@@ -528,6 +567,11 @@ async def capture(args):
                         "browser_mode": "headed_cdp" if args.cdp else "headed_playwright",
                         "region": args.region,
                         "league": args.league,
+                        "resources": {
+                            name: Path("/sys/fs/cgroup", name).read_text().strip()
+                            for name in ("memory.peak", "memory.max", "cpu.max", "memory.events")
+                            if Path("/sys/fs/cgroup", name).exists()
+                        },
                     },
                     indent=2,
                 )
@@ -547,7 +591,8 @@ async def capture(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--region", choices=("va", "nj"), default="va")
-    parser.add_argument("--league", choices=("nba", "nfl", "mlb"), default="nba")
+    parser.add_argument("--league", choices=("nba", "nfl", "mlb", "nhl", "ncaaf", "ncaab"), default="nba")
+    parser.add_argument("--lightweight", action="store_true")
     parser.add_argument("--channel", choices=("chromium", "msedge"), default="chromium")
     parser.add_argument("--reload-league", action="store_true")
     parser.add_argument("--profile-dir", type=Path)

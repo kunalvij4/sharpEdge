@@ -3,6 +3,7 @@
 .env
 .env.*
 !.env.example
+!.env.bet365.example
 __pycache__
 .pytest_cache
 .ruff_cache

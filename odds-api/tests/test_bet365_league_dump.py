@@ -166,3 +166,20 @@ def test_unoffered_suspended_moneyline_is_reported_without_exporting_an_empty_fi
     assert report["normalization_issues"] == []
     assert report["source_unavailable_moneylines"][0]["event_id"] == "fixture"
     assert report["source_unavailable_moneylines"][0]["reason"] == "both_prices_unavailable"
+
+
+@pytest.mark.parametrize(
+    "label,points", [("Spread", ("-3.5", "-3.5")), ("Total", ("219.5", "220.5")), ("Spread", ("NaN", "NaN"))]
+)
+def test_invalid_game_line_pairs_are_rejected(label, points):
+    message = capture()
+    message["records"] = [
+        row("CL", L3="NBA"),
+        row("MG", SY="cmx"),
+        row("MA", SY="ef"),
+        row("PA", OI="fixture", NA="Away", N2="Home"),
+        row("MA", SY="eo", NA=label),
+        row("PA", OI="fixture", ID="first", HA=points[0], HD="O 219.5", OD="10/11"),
+        row("PA", OI="fixture", ID="second", HA=points[1], HD="U 219.5", OD="10/11"),
+    ]
+    assert organize_leagues([message])["normalization_issues"][0]["type"] == "invalid_game_line_pair"

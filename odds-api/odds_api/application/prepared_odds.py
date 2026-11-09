@@ -164,6 +164,8 @@ def project_response(
     propline_collected_ttl,
     include_freshness=False,
     include_bet_links=False,
+    bet365_enabled=True,
+    bet365_collected_ttl=600,
 ):
     """Filter prepared JSON without rebuilding domain quotes or grouping prices."""
     payload = {key: value for key, value in document.items() if key not in {"_storage", "bookmakers"}}
@@ -181,6 +183,8 @@ def project_response(
         return payload
     candidates = []
     for stored_book in document["bookmakers"]:
+        if stored_book["key"] == "bet365" and not bet365_enabled:
+            continue
         for market in stored_book["markets"]:
             for outcome in market["outcomes"]:
                 metadata = outcome["_storage"]
@@ -207,7 +211,13 @@ def project_response(
         public_key = sportsbook_key(row["book_key"], row["book_title"])
         if (bookmakers and public_key not in bookmakers) or (markets and quote["market"] not in markets):
             continue
-        ttl = propline_collected_ttl if row["book_key"].startswith("propline_") else collected_ttl
+        ttl = (
+            bet365_collected_ttl
+            if row["book_key"] == "bet365"
+            else propline_collected_ttl
+            if row["book_key"].startswith("propline_")
+            else collected_ttl
+        )
         fresh = quote_is_fresh(quote, now, ttl, source_ttl)
         if fresh_only and not fresh:
             continue

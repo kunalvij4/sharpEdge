@@ -1,21 +1,32 @@
-name: odds-bet365-standalone
+name: odds-bet365-local
 services:
   bet365:
-    image: in-house-odds-bet365:standalone
+    image: in-house-odds-bet365:local
     build:
       context: .
       dockerfile: Dockerfile.bet365
     platform: linux/amd64
     init: true
     restart: unless-stopped
-    shm_size: 1gb
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: 1.0
+    pids_limit: 512
+    shm_size: 128mb
     security_opt:
       - seccomp=./docker/seccomp-browser.json
     stop_grace_period: 45s
     command: ["python", "-m", "odds_api.bet365_collector"]
     environment:
       BET365_REGION: ${BET365_REGION:-nj}
-      BET365_INTERVAL: ${BET365_INTERVAL:-90}
+      BET365_INTERVAL: ${BET365_INTERVAL:-300}
+      BET365_MAX_AGE: ${BET365_MAX_AGE:-600}
+      BET365_WAIT: ${BET365_WAIT:-4}
+      BET365_COMMAND_TIMEOUT: ${BET365_COMMAND_TIMEOUT:-180}
+      BET365_SERVER_URL: ${BET365_SERVER_URL:?Set BET365_SERVER_URL}
+      BET365_INGEST_KEY: ${BET365_INGEST_KEY:?Set BET365_INGEST_KEY}
+      COLLECTION_EXCLUDED_LEAGUES: '${COLLECTION_EXCLUDED_LEAGUES:-["mlb_baseball"]}'
+      LEAGUES_JSON: '${LEAGUES_JSON:-{"nhl_hockey":{"title":"NHL","route":"nhl"},"nba_basketball":{"title":"NBA","route":"nba"},"nfl_football":{"title":"NFL","route":"nfl"},"ncaaf_football":{"title":"NCAAF","route":"cfb"},"ncaab_basketball":{"title":"NCAAB","route":"cbb"}}}'
       BET365_OUTPUT_DIR: /app/artifacts/bet365
       TZ: America/New_York
     volumes:

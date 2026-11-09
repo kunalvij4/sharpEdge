@@ -30,7 +30,7 @@ export XAUTHORITY="$bet365_auth"
 bet365_cookie=$(python -c 'import secrets; print(secrets.token_hex(16))')
 xauth -f "$XAUTHORITY" add "$DISPLAY" . "$bet365_cookie"
 unset bet365_cookie
-Xvfb "$DISPLAY" -screen 0 1600x1100x24 -nolisten tcp -auth "$XAUTHORITY" >/tmp/bet365-xvfb.log 2>&1 &
+Xvfb "$DISPLAY" -screen 0 1280x720x24 -nolisten tcp -auth "$XAUTHORITY" >/tmp/bet365-xvfb.log 2>&1 &
 bet365_xvfb_pid=$!
 bet365_attempt=0
 while [ ! -S "/tmp/.X11-unix/X${bet365_display_number}" ]; do

@@ -106,16 +106,21 @@ For a separate retrieval-only capture, run `python -m scripts.probe_propline`.
 It makes at most five requests and saves raw JSON plus a coverage report under
 `artifacts/propline`. It never writes SQL. Historical captures remain available.
 
-## Standalone Bet365
+## Local Bet365 streaming
 
-Run `docker compose -f compose.bet365.yaml up --build -d` independently.
-This service uses `Dockerfile.bet365`, headed Edge/Xvfb, and its own artifact
-volume. It receives no SQL or provider credentials, does not connect to the main
-stack's network, and archives raw, normalized, and verification JSON for review.
-It retains the existing NBA/NFL/MLB capture jobs. Its data is excluded from the
-main API (`BET365_ENABLED=false`), including any older stored Bet365 rows.
-The earlier adapter remains available for later review; the running standalone
-service never calls its SQL ingestion function.
+Run `docker compose --env-file .env.bet365 -f compose.bet365.yaml up --build -d`
+on your local machine. See [configuration and operations](README.md) for the
+dedicated collector key and server setup. The collector runs headed Edge/Xvfb
+under a 1 GiB RAM and 1 vCPU limit, one league at a time, and sends verified HTTP
+snapshots over HTTPS. The default active leagues are NHL, NBA, NFL, NCAAF,
+and NCAAB. MLB stays paused unless explicitly configured.
+
+The server validates source records and timestamps, joins existing canonical
+events and comparable player O/U selections, and merges observations into
+the shared compressed Redis store. Canonical events and other providers'
+selections retain their identities and lifecycle. The local service has its
+own artifact volume and requires only the ingestion key. `/v1/status` exposes
+server ingestion progress; local status records browser or delivery errors.
 
 ## References
 

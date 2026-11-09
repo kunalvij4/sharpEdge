@@ -98,8 +98,6 @@ class RedisRepository:
         ]
 
     def save(self, board):
-        if board.provider == "bet365":
-            raise ValueError("Redis collection supports Propline and Unabated only")
         books = {book.id: book for book in board.books}
         grouped = {}
         for quote in board.quotes:
@@ -114,18 +112,32 @@ class RedisRepository:
                         pipe.watch(*keys)
                         previous_values = pipe.mget(keys)
                         now = self.clock.now()
-                        documents = []
+                        documents, deadlines = [], []
                         for event, old in zip(batch, previous_values):
+                            deadlines.append(event.start)
                             if event.start <= now:
-                                documents.append(None)
+                                documents.append(False if board.provider == "bet365" else None)
                                 continue
                             # Legacy flat records are upgraded in the same transaction.
-                            rows = dict(stored_rows(decode_document(old))) if old else {}
+                            previous_document = decode_document(old) if old else None
+                            # A browser capture may only enrich a canonical event that
+                            # still exists; it cannot recreate or change its lifecycle.
+                            if board.provider == "bet365" and (
+                                previous_document is None
+                                or stored_event(previous_document)["status"] != "pregame"
+                                or time_value(stored_event(previous_document)["start"]) <= now
+                            ):
+                                documents.append(False)
+                                continue
+                            rows = dict(stored_rows(previous_document)) if previous_document else {}
                             event_data = {
                                 **asdict(event),
                                 "id": event.id,
                                 "sport_title": board.league.title,
                             }
+                            if board.provider == "bet365":
+                                event_data = stored_event(previous_document)
+                                deadlines[-1] = time_value(event_data["start"])
                             for quote in grouped.get(event.id, []):
                                 selection_id = quote.selection_id
                                 previous = rows.get(selection_id)
@@ -148,14 +160,16 @@ class RedisRepository:
                             document = prepare_document(event_data, rows)
                             documents.append(compress_document(encode(document)))
                         pipe.multi()
-                        for key, event, document in zip(keys, batch, documents):
+                        for key, event, document, deadline in zip(keys, batch, documents, deadlines):
+                            if document is False:
+                                continue
                             if document is None:
                                 pipe.delete(key)
                                 continue
                             pipe.set(key, document)
-                            pipe.pexpireat(key, int(event.start.timestamp() * 1000))
+                            pipe.pexpireat(key, int(deadline.timestamp() * 1000))
                             pipe.zadd(
-                                self.key("events:" + board.league.key), {event.id: event.start.timestamp()}
+                                self.key("events:" + board.league.key), {event.id: deadline.timestamp()}
                             )
                         pipe.execute()
                         break
@@ -286,6 +300,14 @@ class RedisRepository:
 
     def heartbeat(self, now, metrics):
         self.client.set(self.key("collector"), encode({"heartbeat": now, "metrics": dict(metrics)}))
+
+    def record_bet365_ingestion(self, league, status):
+        self.client.hset(self.key("bet365:ingestion"), league, encode(status))
+
+    def bet365_ingestion_status(self):
+        return {
+            key: json.loads(value) for key, value in self.client.hgetall(self.key("bet365:ingestion")).items()
+        }
 
     def compact_event_documents(self):
         counts = {"compressed_events": 0, "bytes_before": 0, "bytes_after": 0}

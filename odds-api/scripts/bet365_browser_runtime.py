@@ -23,7 +23,9 @@ def browser_executable(playwright, channel):
     return executable
 
 
-async def launch_native_browser(playwright, channel, profile, log_path, *, no_sandbox=False):
+async def launch_native_browser(
+    playwright, channel, profile, log_path, *, no_sandbox=False, lightweight=False
+):
     from playwright.async_api import Error
 
     profile = profile.resolve()
@@ -41,9 +43,23 @@ async def launch_native_browser(playwright, channel, profile, log_path, *, no_sa
     ]
     if no_sandbox:
         command.append("--no-sandbox")
+    if lightweight:
+        command.extend(
+            [
+                "--disable-gpu",
+                "--disable-extensions",
+                "--disable-sync",
+                "--disable-background-networking",
+                "--disable-component-update",
+                "--renderer-process-limit=2",
+                "--js-flags=--max-old-space-size=192",
+                "--window-size=1280,720",
+            ]
+        )
     command.append("about:blank")
     with log_path.open("wb") as log:
-        process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=log)
+        options = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
+        process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=log, **options)
     try:
         for attempt in range(60):
             if process.poll() is not None:

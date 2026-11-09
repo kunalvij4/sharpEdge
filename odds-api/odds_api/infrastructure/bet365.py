@@ -11,6 +11,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+from odds_api.domain.college import COLLEGE_LEAGUES, player_parts, school_key
 from odds_api.domain.models import Availability, Board, Event, Quote, Sportsbook, utc
 
 BOOK = Sportsbook("bet365", "Bet365", "bet365")
@@ -54,6 +55,15 @@ MARKETS = {
         "Outs Recorded O/U": "pitcher_outs",
     },
 }
+MARKETS["NCAAB"] = MARKETS["NBA"]
+MARKETS["NCAAF"] = MARKETS["NFL"]
+MARKETS["NHL"] = {
+    "Shots on Goal O/U": "player_shots_on_goal",
+    "Points O/U": "player_points",
+    "Assists O/U": "player_assists",
+    "Goals O/U": "player_goals",
+    "Saves O/U": "player_total_saves",
+}
 
 
 def normalized(value):
@@ -62,7 +72,12 @@ def normalized(value):
     )
 
 
-def same_team(source, canonical):
+def same_team(source, canonical, league=None):
+    if not source or not canonical:
+        return False
+    if league in COLLEGE_LEAGUES:
+        left, right = school_key(source), school_key(canonical)
+        return left == right and not left.startswith("ambiguous:")
     if normalized(source) == normalized(canonical):
         return True
     # Public US boards abbreviate cities (CLE Cavaliers, PHI 76ers). Match
@@ -82,8 +97,8 @@ def match_event(source, events, now):
         for e in events
         if e["status"] == "pregame"
         and now < e["start"] < now + timedelta(days=14)
-        and same_team(source.get("home_team") or "", e["home"])
-        and same_team(source.get("away_team") or "", e["away"])
+        and same_team(source.get("home_team") or "", e["home"], e.get("league_key"))
+        and same_team(source.get("away_team") or "", e["away"], e.get("league_key"))
     ]
     # BC's timezone is unverified. Use it only to reject distant fixtures,
     # never to fabricate a kickoff timestamp or choose an ambiguous doubleheader.
@@ -140,7 +155,8 @@ def boards(report, repository, now, *, max_age=150, support_age=3600, coverage=N
                 continue
             if q.period != "full" or q.alternate:
                 continue
-            token = (q.event_id, q.market, normalized(q.description or ""), q.point, q.name.lower())
+            player = player_parts(q.description or "")[0] if key in COLLEGE_LEAGUES else q.description or ""
+            token = (q.event_id, q.market, normalized(player), q.point, q.name.lower())
             supported.setdefault(token, {})[q.player_id] = q
         quotes = {"moneyline": {}, "props": {}}
         matched_events = {}
@@ -153,23 +169,29 @@ def boards(report, repository, now, *, max_age=150, support_age=3600, coverage=N
             matched_events[eid] = Event(
                 event["source_id"], key, event["start"], event["home"], event["away"], event["status"]
             )
+            games = list(source.get("game_lines", []))
             money = source.get("moneyline")
             if money and money["type"] == "two_way_moneyline":
-                for selection in money["outcomes"]:
+                games.append({"market": "h2h", "outcomes": money["outcomes"]})
+            for game in games:
+                market = game["market"]
+                for selection in game["outcomes"]:
                     when = captured_at(selection, now, max_age)
                     side = selection.get("side")
-                    if when is None or side not in {"home", "away"}:
+                    if when is None or side not in (
+                        {"over", "under"} if market == "totals" else {"home", "away"}
+                    ):
                         counts["stale_or_invalid_selections"] += 1
                         continue
                     q = Quote(
                         eid,
                         BOOK.id,
-                        "h2h",
+                        market,
                         "full",
                         None,
-                        None,
+                        Decimal(str(selection["point"])) if "point" in selection else None,
                         False,
-                        event[side],
+                        side.title() if market == "totals" else event[side],
                         None,
                         str(selection.get("source_market_instance_id") or source["source_event_id"]),
                         str(selection["source_selection_id"]),
@@ -195,7 +217,9 @@ def boards(report, repository, now, *, max_age=150, support_age=3600, coverage=N
                     token = (
                         eid,
                         market,
-                        normalized(prop["player"]),
+                        normalized(
+                            player_parts(prop["player"])[0] if key in COLLEGE_LEAGUES else prop["player"]
+                        ),
                         Decimal(str(prop["point"])),
                         selection.get("comparison"),
                     )
@@ -216,16 +240,19 @@ def boards(report, repository, now, *, max_age=150, support_age=3600, coverage=N
                         collected_at=when,
                         source_updated_at=None,
                         deep_link=None,
+                        app_link=None,
                         expires_at=min(event["start"], when + timedelta(seconds=max_age)),
                     )
                     quotes["props"][q.selection_id] = q
         covered = (
             coverage.get(key, ())
             if coverage is not None
-            else ("h2h", *MARKETS.get(source_league["title"], {}).values())
+            else ("h2h", "spreads", "totals", *MARKETS.get(source_league["title"], {}).values())
         )
         for kind in ("moneyline", "props"):
-            markets = tuple(m for m in covered if (m == "h2h") == (kind == "moneyline"))
+            markets = tuple(
+                m for m in covered if (m in {"h2h", "spreads", "totals"}) == (kind == "moneyline")
+            )
             if not markets:
                 continue
             selected = tuple(q for q in quotes[kind].values() if q.market in markets)

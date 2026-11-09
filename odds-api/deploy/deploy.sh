@@ -29,6 +29,18 @@ flock -n 9 || die 'Another deployment is already running.'
 IFS= read -r registry_token || die 'Missing registry token on stdin.'
 redis_url=''
 IFS= read -r redis_url || true
+bet365_ingest_key=''
+IFS= read -r bet365_ingest_key || true
+if [[ -n "$bet365_ingest_key" ]]; then
+  [[ "$bet365_ingest_key" =~ ^[A-Za-z0-9_-]{32,128}$ ]] || die 'Invalid Bet365 ingestion key format.'
+  # Keep the collector credential dedicated and avoid executing .env contents.
+  bet365_env=$(mktemp "$deploy_dir/.env.bet365.XXXXXX")
+  awk '!/^[[:space:]]*(export[[:space:]]+)?BET365_(ENABLED|INGEST_KEY)[[:space:]]*=/' "$deploy_dir/.env" > "$bet365_env"
+  printf '\nBET365_ENABLED=true\nBET365_INGEST_KEY=%s\n' "$bet365_ingest_key" >> "$bet365_env"
+  chmod 600 "$bet365_env"
+  mv -- "$bet365_env" "$deploy_dir/.env"
+fi
+unset bet365_ingest_key
 local_redis=false
 compose_files=(--file "$release_dir/compose.yaml")
 # Default deployments to local Redis without executing secret configuration.

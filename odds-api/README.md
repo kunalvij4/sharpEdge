@@ -151,8 +151,36 @@ spreads, and supported player props share the same event catalog and API.
 See [PROPLINE.md](PROPLINE.md) for identity matching, freshness, quota, and operations.
 
 Bet365 runs independently through `compose.bet365.yaml` and `Dockerfile.bet365`.
-It saves captures for review and has no database connection or API integration.
-The main image contains no browser or Playwright dependencies.
+It runs on your local machine with a 1 GiB RAM / 1 vCPU hard limit and sends
+source-verified snapshots over HTTPS to `/v1/ingest/bet365`. The server matches
+existing canonical events and players and merges Bet365 into the same compressed
+Redis event documents and API responses as the other feeds. The main server
+image contains no browser or Playwright dependencies.
+
+Copy `.env.bet365.example` to the ignored `.env.bet365`. Set the API base URL
+and a dedicated random `BET365_INGEST_KEY`; configure the same key and
+`BET365_ENABLED=true` on the server. Product read keys cannot ingest odds.
+GitHub deployments accept the repository/environment secret `BET365_INGEST_KEY`
+and enable ingestion automatically when that secret is provided.
+
+```sh
+docker compose --env-file .env.bet365 -f compose.bet365.yaml up -d --build
+docker compose --env-file .env.bet365 -f compose.bet365.yaml stats --no-stream
+docker compose --env-file .env.bet365 -f compose.bet365.yaml logs --tail=30
+```
+
+The default local schedule covers NHL, NBA, NFL, NCAAF, and NCAAB, one browser
+at a time, with a five-minute delay between each league's completed captures.
+Delivery happens after each league capture, with three bounded attempts on
+transport/server failures. Source timestamps survive retries. Collection misses
+do not delete existing prices. Moneylines, spreads, totals, and comparable full-game
+player O/U props are supported; player props require an existing matching
+canonical player/market/line. Unsupported settlement types are excluded.
+`/v1/status` reports each league's last server ingestion, capture time, discard
+counts, and accepted selections. Local `status.json` additionally reports capture
+and delivery failures. Raw captures and exact failed payloads retain two runs
+per league. No Redis, product API, or upstream provider credential is needed
+on the collector. Docker Desktop must be running for local collection.
 
 ## Start with Docker Compose
 

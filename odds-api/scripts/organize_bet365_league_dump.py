@@ -6,6 +6,7 @@ reducer and are deliberately not treated as complete market tables.
 
 import argparse
 import json
+import math
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -101,6 +102,50 @@ def organize_leagues(messages, pages=(), region="nj", prop_views=()):
         if league is None:
             continue
         for (gi, group), columns in blocks(rows):
+            for column in columns:
+                market = column["fields"]
+                label = market.get("NA")
+                if market.get("SY") not in {"eo", "eb"} or label not in {"Spread", "Total"}:
+                    continue
+                pairs = defaultdict(list)
+                for ri, cell in column["cells"]:
+                    if cell.get("OI"):
+                        pairs[cell["OI"]].append((ri, cell))
+                for identifier, pair in pairs.items():
+                    target = events[league].get(identifier)
+                    if target is None or len(pair) != 2 or not all(f.get("OD") for _, f in pair):
+                        continue
+                    try:
+                        points = [float(cell.get("HA")) for _, cell in pair]
+                        if not all(math.isfinite(point) for point in points):
+                            raise ValueError("Invalid line")
+                        if label == "Spread":
+                            if points[0] != -points[1]:
+                                raise ValueError("Spread sides do not agree")
+                            sides = ("away", "home")
+                        else:
+                            sides = tuple(cell.get("HD", "").split(" ", 1)[0] for _, cell in pair)
+                            if set(sides) != {"O", "U"} or points[0] != points[1]:
+                                raise ValueError("Total sides do not agree")
+                            sides = tuple("over" if side == "O" else "under" for side in sides)
+                        selections = [
+                            {
+                                "side": side,
+                                "point": point,
+                                "price": prices(cell["OD"]),
+                                "source_selection_id": cell.get("ID"),
+                                "source_market_instance_id": cell.get("FI"),
+                                "source_suspended": cell.get("SU"),
+                                "source": source_ref(message, mi, ri),
+                            }
+                            for ((ri, cell), side, point) in zip(pair, sides, points, strict=True)
+                        ]
+                    except (TypeError, ValueError, ZeroDivisionError):
+                        issues.append({"message_index": mi, "type": "invalid_game_line_pair"})
+                        continue
+                    market_key = "spreads" if label == "Spread" else "totals"
+                    target["game_lines"] = [g for g in target["game_lines"] if g["market"] != market_key]
+                    target["game_lines"].append({"market": market_key, "outcomes": selections})
             # League Game Lines lists away/home fixtures, then paired price cells.
             for column in columns:
                 market = column["fields"]
@@ -241,12 +286,15 @@ def organize_leagues(messages, pages=(), region="nj", prop_views=()):
         bucket["both_sides_present"] = {s["comparison"] for s in bucket["selections"]} == {"over", "under"}
     for league in report["leagues"]:
         league["events"] = [
-            event for event in events[league["title"]].values() if event["moneyline"] or event["player_props"]
+            event
+            for event in events[league["title"]].values()
+            if event["moneyline"] or event["player_props"] or event["game_lines"]
         ]
         counts = Counter(
             dict.fromkeys(
                 (
                     "moneyline_events",
+                    "game_line_outcomes",
                     "moneyline_outcomes",
                     "moneyline_events_ui_price_matched",
                     "player_prop_groups",
@@ -260,6 +308,7 @@ def organize_leagues(messages, pages=(), region="nj", prop_views=()):
         )
         counts["events"] = len(league["events"])
         for target in league["events"]:
+            counts["game_line_outcomes"] += sum(len(g["outcomes"]) for g in target["game_lines"])
             moneyline = target["moneyline"]
             if moneyline:
                 outcomes = moneyline["outcomes"]

@@ -70,10 +70,16 @@ def deployment(tmp_path):
         "DOCKER_CALLS": str(calls_path),
     }
 
-    def run(*, failure="", image=IMAGE, redis_url="rediss://default:test-redis-secret@example.test:6379"):
+    def run(
+        *,
+        failure="",
+        image=IMAGE,
+        redis_url="rediss://default:test-redis-secret@example.test:6379",
+        ingest_key="",
+    ):
         result = subprocess.run(
             ["bash", str(release / "deploy/deploy.sh"), str(deploy_dir), image, "test-user", "existing-odds"],
-            input="test-registry-token\n" + redis_url + "\n",
+            input="test-registry-token\n" + redis_url + "\n" + ingest_key + "\n",
             text=True,
             capture_output=True,
             env={**env, "FAIL_AT": failure},
@@ -85,6 +91,32 @@ def deployment(tmp_path):
         return result, calls
 
     return deploy_dir, release, previous, run
+
+
+def test_deployment_enables_authenticated_ingestion_without_disclosing_key(deployment):
+    deploy_dir, _, _, run = deployment
+    original = (
+        "API_KEYS=keep-product-key\nBET365_ENABLED=false\nBET365_INGEST_KEY=old-key\nODDS_REDIS_MODE=local\n"
+    )
+    (deploy_dir / ".env").write_text(original)
+    key = "collector-key-" + "x" * 32
+    result, _ = run(ingest_key=key)
+    assert result.returncode == 0, result.stderr
+    configured = (deploy_dir / ".env").read_text()
+    assert "API_KEYS=keep-product-key" in configured
+    assert configured.count("BET365_INGEST_KEY=") == 1
+    assert "BET365_ENABLED=true" in configured
+    assert "BET365_INGEST_KEY=" + key in configured
+    assert key not in result.stdout + result.stderr
+    assert (deploy_dir / ".env").stat().st_mode & 0o777 == 0o600
+
+
+def test_invalid_ingestion_key_fails_before_mutating_configuration(deployment):
+    deploy_dir, _, _, run = deployment
+    original = (deploy_dir / ".env").read_text()
+    result, calls = run(ingest_key="untrusted'$(false)")
+    assert result.returncode != 0 and not calls
+    assert (deploy_dir / ".env").read_text() == original
 
 
 def test_deployment_preserves_project_and_pins_api_to_digest(deployment):

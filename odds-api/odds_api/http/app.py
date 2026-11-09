@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader, APIKeyQuery
 from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
+from starlette.concurrency import run_in_threadpool
 
 from odds_api.application.services import OddsQueryService, QueryError
 from odds_api.http.schemas import (
@@ -21,6 +22,7 @@ from odds_api.http.schemas import (
     StatusResponse,
     ValidationErrorResponse,
 )
+from odds_api.infrastructure.bet365_ingestion import MAX_CAPTURE_BYTES, Capture, ingest_capture
 from odds_api.infrastructure.clock import SystemClock
 from odds_api.infrastructure.config import Settings
 from odds_api.infrastructure.normalization import BET_NAMES, PERIOD_NAMES
@@ -57,6 +59,7 @@ def create_app(settings=None, repository=None, clock=None):
             for suffix in ("", *("_" + p for p in periods if p != "full"))
         }
         markets.update(public_markets())
+        markets.add("totals")
         app.state.query = OddsQueryService(
             app.state.repository,
             clock,
@@ -99,6 +102,29 @@ def create_app(settings=None, repository=None, clock=None):
 
     def queries(request: Request):
         return request.app.state.query
+
+    async def authenticate_collector(request: Request):
+        expected = settings.bet365_ingest_key.get_secret_value()
+        supplied = request.headers.get("X-Collector-Key", "")
+        if not expected or not supplied or not hmac.compare_digest(supplied.encode(), expected.encode()):
+            raise HTTPException(401, "Missing or invalid collector key")
+        if not settings.bet365_enabled:
+            raise HTTPException(503, "Bet365 ingestion is disabled")
+
+    @app.post("/v1/ingest/bet365", dependencies=[Depends(authenticate_collector)], tags=["Collection"])
+    async def bet365_ingest(request: Request):
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > MAX_CAPTURE_BYTES:
+                raise HTTPException(413, "Capture is too large")
+        try:
+            capture = Capture.model_validate_json(body)
+            return await run_in_threadpool(
+                ingest_capture, capture, request.app.state.repository, settings, clock.now()
+            )
+        except (ValueError, KeyError, TypeError, OverflowError, ZeroDivisionError):
+            raise HTTPException(422, "Invalid Bet365 capture") from None
 
     def make_filters(default_markets):
         def filters(
@@ -208,10 +234,15 @@ def create_app(settings=None, repository=None, clock=None):
         )
         bet365 = {"enabled": settings.bet365_enabled, "jobs": {}}
         if settings.bet365_enabled:
-            try:
-                bet365["jobs"] = json.loads((Path(settings.bet365_output_dir) / "status.json").read_text())
-            except (OSError, ValueError):
-                bet365["state"] = "unavailable"
+            if hasattr(request.app.state.repository, "bet365_ingestion_status"):
+                bet365["jobs"] = request.app.state.repository.bet365_ingestion_status()
+            else:
+                try:
+                    bet365["jobs"] = json.loads(
+                        (Path(settings.bet365_output_dir) / "status.json").read_text()
+                    )
+                except (OSError, ValueError):
+                    bet365["state"] = "unavailable"
         propline = {"enabled": settings.propline_enabled}
         if settings.propline_enabled:
             try:

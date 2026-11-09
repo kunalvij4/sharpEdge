@@ -88,6 +88,10 @@ repository.close()
             *common,
             "--env",
             "API_KEYS=smoke-product-key",
+            "--env",
+            "BET365_ENABLED=true",
+            "--env",
+            "BET365_INGEST_KEY=smoke-collector-key",
             args.image,
             "uvicorn",
             "odds_api.main:app",
@@ -133,6 +137,44 @@ print("two-worker API, authentication, persisted moneylines/props, and OpenAPI p
 """
         print(docker("exec", api, "python", "-c", check).stdout.strip())
         assert docker("exec", api, "id", "-u").stdout.strip() == "10001"
+
+        streaming = """
+import json, urllib.request, urllib.error
+from datetime import UTC, datetime
+from odds_api.infrastructure.config import Settings
+from odds_api.infrastructure.storage import create_repository
+repository = create_repository(Settings())
+event = repository.events("nba_basketball")[0]
+before = repository.quotes("nba_basketball")
+expiry = repository.client.pexpiretime(repository.key("event:" + event["id"]))
+def row(kind, **fields): return {"type": kind, "fields": fields}
+payload = {"version":1,"region":"nj","league":"nba_basketball","messages":[{
+    "stage":"nba_lines", "received_at":datetime.now(UTC).isoformat(),
+    "source_url":"https://www.nj.bet365.com/contentdata/matchmarketscontentapi/markets",
+    "records":[row("CL",L3="NBA"), row("MG",SY="cmx"), row("MA",SY="ef"),
+        row("PA",OI="local-capture",NA=event["away"],N2=event["home"],BC=event["start"].strftime("%Y%m%d%H%M%S")),
+        row("MA",SY="eo",NA="Money"),
+        row("PA",OI="local-capture",FI="market",ID="away",OD="7/5"),
+        row("PA",OI="local-capture",FI="market",ID="home",OD="4/7")]}]}
+base = "http://localhost:8000"
+for attempt in range(2):
+    request = urllib.request.Request(base+"/v1/ingest/bet365",data=json.dumps(payload).encode(),
+        headers={"Content-Type":"application/json","X-Collector-Key":"smoke-collector-key"})
+    with urllib.request.urlopen(request,timeout=10) as response:
+        assert json.load(response)["accepted_selections"] == 2
+assert len(repository.quotes("nba_basketball")) == len(before)+2
+assert [r for r in repository.quotes("nba_basketball") if r["book_key"]!="bet365"] == before
+assert repository.client.pexpiretime(repository.key("event:"+event["id"])) == expiry
+request = urllib.request.Request(base+"/v1/sports/nba_basketball/odds?oddsFormat=american",headers={"X-API-Key":"smoke-product-key"})
+with urllib.request.urlopen(request,timeout=10) as response:
+    event = json.load(response)[0]
+    assert len(event["bookmakers"]) == 2
+    bet365 = next(b for b in event["bookmakers"] if b["key"]=="bet365")
+    assert {o["price"] for o in bet365["markets"][0]["outcomes"]} == {140,-175}
+repository.close()
+print("Bet365 HTTP ingestion, replay deduplication, real Redis merge, and public API passed")
+"""
+        print(docker("exec", api, "python", "-c", streaming).stdout.strip())
 
         compact = """
 from redis.exceptions import OutOfMemoryError
@@ -261,7 +303,9 @@ repository = create_repository(Settings())
 expired = Event("expires-during-outage", "nba_basketball", datetime.now(UTC), "home", "away", "pregame")
 assert not repository.client.exists(repository.key("event:" + expired.id))
 assert len(repository.events("nba_basketball")) == 1
-assert len(repository.quotes("nba_basketball")) == 5
+rows = repository.quotes("nba_basketball")
+assert len([r for r in rows if r["book_key"] != "bet365"]) == 5
+assert len([r for r in rows if r["book_key"] == "bet365"]) == 2
 repository.close()
 """
         wait_for(lambda: docker("exec", api, "python", "-c", expiry_check, check=False).returncode == 0)

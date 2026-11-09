@@ -1,15 +1,15 @@
-> Historical Bet365 integration notes. Current deployment uses the separate capture-only service in `compose.bet365.yaml`; see [current collection setup](../PROPLINE.md).
+> Bet365 runs locally in the resource-limited service in `compose.bet365.yaml` and sends snapshots to the server over HTTPS; see [current collection setup](../PROPLINE.md).
 
 # Application container
 
-The API and both collectors run together using the root `Dockerfile` and
-`compose.yaml`. See [configuration, coverage, and operations](INTEGRATION.md).
+The API and API-feed collectors use `Dockerfile` and `compose.yaml`. Bet365
+uses `Dockerfile.bet365` and `compose.bet365.yaml` on your local machine.
 
 Verify headed Edge/Xvfb and protocol parsing with a synthetic local HTTP and
 WebSocket fixture:
 
 ```sh
-docker compose run --rm --no-deps api python -m scripts.smoke_bet365_container
+docker compose --env-file .env.bet365 -f compose.bet365.yaml run --rm --no-deps bet365 python -m scripts.smoke_bet365_container
 ```
 
 This check does not start collectors or contact Bet365. It confirms that Edge

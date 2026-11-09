@@ -59,7 +59,7 @@ async def smoke(output):
         with TemporaryDirectory(prefix="bet365-smoke-") as profile:
             async with async_playwright() as playwright:
                 browser, process = await launch_native_browser(
-                    playwright, "msedge", Path(profile), output / "browser.log"
+                    playwright, "msedge", Path(profile), output / "browser.log", lightweight=True
                 )
                 tasks = set()
                 try:
@@ -109,6 +109,9 @@ async def smoke(output):
                         "sandbox_disabled": False,
                         "uid": os.getuid(),
                         "http_and_websocket_capture": True,
+                        "memory_peak_bytes": int(Path("/sys/fs/cgroup/memory.peak").read_text()),
+                        "memory_limit_bytes": int(Path("/sys/fs/cgroup/memory.max").read_text()),
+                        "cpu_limit": Path("/sys/fs/cgroup/cpu.max").read_text().strip(),
                     }
                     (output / "smoke-result.json").write_text(json.dumps(result, indent=2) + "\n")
                     print(json.dumps(result), flush=True)
