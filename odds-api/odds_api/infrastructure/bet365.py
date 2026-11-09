@@ -1,7 +1,7 @@
 """Match verified public Bet365 snapshots to the existing canonical odds catalog.
 
-Only explicit full-game O/U markets are comparable. Milestones and SGP prices
-are deliberately excluded; neither their lines nor their settlement are inferred.
+Full-game O/U props and source-labeled 1+ milestones keep distinct settlement
+keys. SGP bundles are excluded; no half-point line is inferred from a milestone.
 """
 
 import re
@@ -160,12 +160,26 @@ def boards(report, repository, now, *, max_age=150, support_age=3600, coverage=N
             and prop.get("both_sides_present")
             for selection in prop["selections"]
         }
+        requested.update(
+            (prop["support_market"], player_key(prop["player"]), None, "*")
+            for event in source_league["events"]
+            for prop in event["player_props"]
+            if prop.get("offering_context") == "event_player_milestone"
+        )
         if hasattr(repository, "bet365_context"):
-            events, support_rows = repository.bet365_context(key, requested, player_key)
+
+            def prop_event_ids(events):
+                return {
+                    event["id"]
+                    for source in source_league["events"]
+                    if source["player_props"] and (event := match_event(source, events, now)) is not None
+                }
+
+            events, support_rows = repository.bet365_context(key, requested, player_key, prop_event_ids)
         else:
             events = repository.events(key)
             support_rows = repository.quotes(key) if requested else ()
-        supported = {}
+        supported, native_players = {}, {}
         for row in support_rows:
             q = row["quote"]
             if row["book_key"] == "bet365" or not q.player_id or q.state != Availability.AVAILABLE:
@@ -180,6 +194,7 @@ def boards(report, repository, now, *, max_age=150, support_age=3600, coverage=N
             player = player_parts(q.description or "")[0] if key in COLLEGE_LEAGUES else q.description or ""
             token = (q.event_id, q.market, normalized(player), q.point, q.name.lower())
             supported.setdefault(token, {})[q.player_id] = q
+            native_players.setdefault((q.event_id, normalized(player)), {})[q.player_id] = q
         quotes = {"moneyline": {}, "props": {}}
         matched_events = {}
         for source in source_league["events"]:
@@ -226,6 +241,36 @@ def boards(report, repository, now, *, max_age=150, support_age=3600, coverage=N
                     )
                     quotes["moneyline"][q.selection_id] = q
             for prop in source["player_props"]:
+                if prop.get("offering_context") == "event_player_milestone":
+                    candidates = native_players.get((eid, player_key(prop["player"])), {})
+                    for selection in prop["selections"]:
+                        when = captured_at(selection, now, max_age)
+                        if len(candidates) != 1 or when is None:
+                            counts["unshared_or_stale_props"] += 1
+                            continue
+                        template = next(iter(candidates.values()))
+                        q = replace(
+                            template,
+                            book_id=BOOK.id,
+                            market=prop["native_market"],
+                            point=None,
+                            alternate=False,
+                            name="Yes",
+                            price=selection["price"]["american"],
+                            source_market_id=str(selection["source_market_instance_id"]),
+                            source_selection_id=str(selection["source_selection_id"]),
+                            collected_at=when,
+                            source_updated_at=None,
+                            deep_link=None,
+                            app_link=None,
+                            state=Availability.SUSPENDED
+                            if selection.get("source_suspended") not in {None, "", "0"}
+                            else Availability.AVAILABLE,
+                            expires_at=min(event["start"], when + timedelta(seconds=max_age)),
+                        )
+                        quotes["props"][q.selection_id] = q
+                        counts["native_prop_selections"] += 1
+                    continue
                 market = MARKETS.get(source_league["title"], {}).get(prop["source_label"])
                 if (
                     not market
@@ -270,6 +315,11 @@ def boards(report, repository, now, *, max_age=150, support_age=3600, coverage=N
             coverage.get(key, ())
             if coverage is not None
             else ("h2h", "spreads", "totals", *MARKETS.get(source_league["title"], {}).values())
+        )
+        covered = tuple(
+            dict.fromkeys(
+                (*covered, *(q.market for q in quotes["props"].values() if q.market.endswith("_1plus")))
+            )
         )
         for kind in ("moneyline", "props"):
             markets = tuple(

@@ -54,11 +54,12 @@ class Settings(BaseSettings):
     bet365_ingest_key: SecretStr = SecretStr("")
     bet365_server_url: str = ""
     bet365_delivery_timeout: float = Field(default=120, ge=10, le=180)
+    bet365_max_prop_events: int = Field(default=3, ge=1, le=20)
     bet365_region: str = Field(default="nj", pattern="^(nj|va)$")
     bet365_interval: float = Field(default=300, ge=60, le=3600)
     bet365_max_age: float = Field(default=600, ge=60, le=3600)
     bet365_wait: float = Field(default=8, ge=1, le=30)
-    bet365_command_timeout: float = Field(default=100, ge=30, le=180)
+    bet365_command_timeout: float = Field(default=240, ge=30, le=600)
     bet365_output_dir: str = "/app/artifacts/bet365"
     unabated_bet_type_map: dict[str, str] = {}
     unabated_period_map: dict[str, str] = {}

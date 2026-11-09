@@ -171,6 +171,10 @@ docker compose --env-file .env.bet365 -f compose.bet365.yaml logs --tail=30
 
 The default local schedule covers NHL, NBA, NFL, NCAAF, and NCAAB, one browser
 at a time, with a five-minute delay between each league's completed captures.
+Each capture visits the league board and up to `BET365_MAX_PROP_EVENTS` (default
+three) published fixture pages for event-only props. Tab prices are saved after
+their source response arrives. Increase the event budget only after measuring
+the full capture duration; `BET365_COMMAND_TIMEOUT` defaults to 240 seconds.
 Delivery happens after each league capture, with three bounded attempts on
 transport/server failures. Source timestamps survive retries. Collection misses
 do not trigger overlapping browser jobs. `BET365_DELIVERY_TIMEOUT` defaults to
@@ -180,6 +184,14 @@ and skips document rewrites on identical replays. Collection misses
 do not delete existing prices. Moneylines, spreads, totals, and comparable full-game
 player O/U props are supported; player props require an existing matching
 canonical player/market/line. Unsupported settlement types are excluded.
+NHL source-labeled 1+ shots, points, and assists use distinct `*_1plus` market
+keys with a `Yes` outcome and no half-point line. They are not relabeled as
+two-sided O/U prices. The downstream two-sided EV parser continues to exclude
+these one-sided markets. Ingestion counts distinguish offered, matched, and
+native prop selections; local `props_state` distinguishes stored, unmatched,
+and not-offered scopes. An unoffered board is never reported as stored props.
+Event and bookmaker lookups use compact, kickoff-pruned metadata indexes;
+legacy documents populate those indexes lazily without loading the whole store.
 `/v1/status` reports each league's last server ingestion, capture time, discard
 counts, and accepted selections. Local `status.json` additionally reports capture
 and delivery failures. Raw captures and exact failed payloads retain two runs

@@ -28,6 +28,7 @@ from odds_api.infrastructure.config import Settings
 from odds_api.infrastructure.normalization import BET_NAMES, PERIOD_NAMES
 from odds_api.infrastructure.propline_normalization import public_markets
 from odds_api.infrastructure.storage import create_repository
+from scripts.organize_bet365_league_dump import NHL_NATIVE_MARKETS
 
 header_key = APIKeyHeader(name="X-API-Key", auto_error=False)
 query_key = APIKeyQuery(name="apiKey", auto_error=False)
@@ -60,6 +61,7 @@ def create_app(settings=None, repository=None, clock=None):
         }
         markets.update(public_markets())
         markets.add("totals")
+        markets.update(definition[1] for definition in NHL_NATIVE_MARKETS.values())
         app.state.query = OddsQueryService(
             app.state.repository,
             clock,

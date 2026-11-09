@@ -24,6 +24,13 @@ GAME_LINE_LABELS = {
     "L\u00c3\u0192\u00c2\u00adnea": "Spread",
 }
 
+# These full-game event tables expose an explicit 1+ column, not an O/U line.
+NHL_NATIVE_MARKETS = {
+    "170600": ("Shots on Goal", "player_shots_on_goal_1plus", "player_shots_on_goal"),
+    "170601": ("Points", "player_points_1plus", "player_points"),
+    "170602": ("Assists", "player_assists_1plus", "player_assists"),
+}
+
 
 def source_ref(message, message_index, record_index):
     return {
@@ -289,6 +296,78 @@ def organize_leagues(messages, pages=(), region="nj", prop_views=()):
                         "column_source": source_ref(message, mi, column["index"]),
                         "column_row_index": position,
                     }
+
+    native = {}
+    for mi, message in enumerate(messages):
+        if not message["stage"].startswith("nhl_event_"):
+            continue
+        rows = message["records"]
+        for (gi, group), columns in blocks(rows):
+            definition = NHL_NATIVE_MARKETS.get(group.get("ID"))
+            if not definition or group.get("NA") != definition[0] or group.get("SY") != "mgh":
+                continue
+            descriptor = next((c for c in columns if c["fields"].get("SY") == "dv"), None)
+            column = next((c for c in columns if c["fields"].get("SY") == "dw"), None)
+            if not descriptor or not column:
+                continue
+            target = events["NHL"].get(descriptor["fields"].get("PF"))
+            if target is None:
+                continue
+            cells, column_index = [], None
+            for ri in range(column["index"] + 1, len(rows)):
+                row = rows[ri]
+                if row["type"] in {"MA", "MG", "EV", "CL"}:
+                    break
+                if row["type"] == "CO":
+                    if column_index is not None:
+                        break
+                    if row["fields"].get("NA") == "1" and row["fields"].get("SY") == "ipg":
+                        column_index = ri
+                elif row["type"] == "PA" and column_index is not None:
+                    cells.append((ri, row["fields"]))
+            if column_index is None:
+                continue
+            players = descriptor["cells"]
+            if len(players) != len(cells) or any(
+                cell.get("OD") and player.get("ID", "").removeprefix("PC") != cell.get("ID")
+                for (_, player), (_, cell) in zip(players, cells)
+            ):
+                issues.append(
+                    {"message_index": mi, "record_index": gi, "type": "native_player_order_mismatch"}
+                )
+                continue
+            for position, ((pi, player), (ri, cell)) in enumerate(zip(players, cells, strict=True)):
+                if not cell.get("OD"):
+                    continue
+                key = (target["source_event_id"], group["ID"], player["ID"])
+                selection = {
+                    "source_selection_label": "1+",
+                    "threshold": 1,
+                    "comparison": None,
+                    "price": prices(cell["OD"]),
+                    "source_selection_id": cell["ID"],
+                    "source_market_instance_id": cell.get("FI"),
+                    "source_suspended": cell.get("SU"),
+                    "source": source_ref(message, mi, ri),
+                    "player_source": source_ref(message, mi, pi),
+                    "column_source": source_ref(message, mi, column_index),
+                    "column_row_index": position,
+                }
+                if key not in native:
+                    native[key] = {
+                        "source_label": definition[0],
+                        "native_market": definition[1],
+                        "support_market": definition[2],
+                        "source_market_type_id": group["ID"],
+                        "player": player["NA"],
+                        "source_player_descriptor_id": player["ID"],
+                        "offering_context": "event_player_milestone",
+                        "both_sides_present": False,
+                        "threshold": 1,
+                        "selections": [],
+                    }
+                    target["player_props"].append(native[key])
+                native[key]["selections"] = [selection]
 
     text = "\n".join(p["text"] for p in pages)
     for bucket in buckets.values():

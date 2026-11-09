@@ -78,6 +78,18 @@ def ingest_capture(capture: Capture, repository, settings, now: datetime):
         },
     )
     matched = perf_counter()
+    counts["offered_prop_selections"] = sum(
+        len(prop["selections"])
+        for league in report["leagues"]
+        for event in league["events"]
+        for prop in event["player_props"]
+        if (
+            prop["source_label"] in MARKETS.get(league["title"], {})
+            and prop.get("offering_context") in {"league_player_props", "event_player_props"}
+            and prop.get("both_sides_present")
+        )
+        or prop.get("offering_context") == "event_player_milestone"
+    )
     if hasattr(repository, "save_bet365"):
         repository.save_bet365([board for board in output if board.quotes])
     else:

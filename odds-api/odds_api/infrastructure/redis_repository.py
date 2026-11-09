@@ -112,9 +112,10 @@ class RedisRepository:
                         pipe.watch(*keys)
                         previous_values = pipe.mget(keys)
                         now = self.clock.now()
-                        documents, deadlines = [], []
+                        documents, deadlines, catalogs = [], [], []
                         for event, old in zip(batch, previous_values):
                             deadlines.append(event.start)
+                            catalogs.append(None)
                             if event.start <= now:
                                 documents.append(False if board.provider == "bet365" else None)
                                 continue
@@ -163,15 +164,30 @@ class RedisRepository:
                                 documents.append(False)
                                 continue
                             document = prepare_document(event_data, rows)
+                            catalogs[-1] = encode(
+                                {
+                                    **event_data,
+                                    "_books": sorted(
+                                        {
+                                            sportsbook_key(book["key"], book["title"])
+                                            for book in document["bookmakers"]
+                                        }
+                                    ),
+                                }
+                            )
                             documents.append(compress_document(encode(document)))
                         pipe.multi()
-                        for key, event, document, deadline in zip(keys, batch, documents, deadlines):
+                        for key, event, document, deadline, catalog in zip(
+                            keys, batch, documents, deadlines, catalogs
+                        ):
                             if document is False:
                                 continue
                             if document is None:
                                 pipe.delete(key)
+                                pipe.hdel(self.key("catalog:" + board.league.key), event.id)
                                 continue
                             pipe.set(key, document)
+                            pipe.hset(self.key("catalog:" + board.league.key), event.id, catalog)
                             pipe.pexpireat(key, int(deadline.timestamp() * 1000))
                             pipe.zadd(
                                 self.key("events:" + board.league.key), {event.id: deadline.timestamp()}
@@ -226,9 +242,53 @@ class RedisRepository:
         event = stored_event(document)
         return {**event, "start": datetime.fromisoformat(event["start"])}
 
+    def _catalog(self, sport):
+        """Read event/book metadata without decompressing every retained prop price."""
+        if sport not in self.configured:
+            return []
+        ids = self.client.zrangebyscore(
+            self.key("events:" + sport), "(" + str(self.clock.now().timestamp()), "+inf"
+        )
+        if not ids:
+            return []
+        catalog_key = self.key("catalog:" + sport)
+        with self.client.pipeline(transaction=False) as pipe:
+            pipe.hmget(catalog_key, ids)
+            for eid in ids:
+                pipe.exists(self.key("event:" + eid))
+            values, *exists = pipe.execute()
+        result = []
+        for eid, value, present in zip(ids, values, exists):
+            if not present:
+                continue
+            if value:
+                event = json.loads(value)
+            else:
+                # Upgrade older deployments lazily, one bounded document at a time.
+                document_value = self.client.get(self.key("event:" + eid))
+                if not document_value:
+                    continue
+                document = decode_document(document_value)
+                event = {
+                    **stored_event(document),
+                    "_books": sorted(
+                        {
+                            sportsbook_key(row["book_key"], row["book_title"])
+                            for _, row in stored_rows(document)
+                        }
+                    ),
+                }
+                self.client.hsetnx(catalog_key, eid, encode(event))
+            if event["league_key"] == sport:
+                result.append({**event, "start": time_value(event["start"])})
+        return result
+
     def events(self, sport):
         return sorted(
-            (self._event(doc) for doc in self._documents(sport)),
+            (
+                {key: value for key, value in event.items() if key != "_books"}
+                for event in self._catalog(sport)
+            ),
             key=lambda event: (event["start"], event["id"]),
         )
 
@@ -280,33 +340,39 @@ class RedisRepository:
             for _, row in stored_rows(doc)
         ]
 
-    def bet365_context(self, sport, requested, player_key):
+    def bet365_context(self, sport, requested, player_key, event_filter=None):
         """Read one event at a time and decode only props the capture can match."""
-        events, support = [], []
-        ids = self.client.zrangebyscore(
-            self.key("events:" + sport), "(" + str(self.clock.now().timestamp()), "+inf"
-        )
+        events, support = self.events(sport), []
+        if not requested:
+            return events, support
+        ids = event_filter(events) if event_filter else [event["id"] for event in events]
         markets = {token[0] for token in requested}
+        native_names = {}
+        for market, player, _, side in requested:
+            if side == "*":
+                native_names.setdefault(market, set()).add(player)
         for eid in ids:
             for document in self._documents(sport, eid):
-                events.append(self._event(document))
-                if not requested:
-                    continue
                 for _, row in stored_rows(document):
                     quote = row["quote"]
-                    if (
-                        row["book_key"] == "bet365"
-                        or quote["market"] not in markets
-                        or not quote["player_id"]
-                    ):
+                    if row["book_key"] == "bet365" or not quote["player_id"]:
                         continue
+                    native_bases = [
+                        base
+                        for base in native_names
+                        if quote["market"] == base or quote["market"].startswith(base + "_")
+                    ]
+                    if quote["market"] not in markets and not native_bases:
+                        continue
+                    name = player_key(quote["description"] or "")
+                    wildcard = any(name in native_names[base] for base in native_bases)
                     token = (
                         quote["market"],
-                        player_key(quote["description"] or ""),
+                        name,
                         Decimal(str(quote["point"])) if quote["point"] is not None else None,
                         quote["name"].lower(),
                     )
-                    if token in requested:
+                    if token in requested or wildcard:
                         support.append({**row, "quote": decode_quote(quote)})
         return events, support
 
@@ -316,27 +382,21 @@ class RedisRepository:
             self.save(replace(boards[0], quotes=tuple(q for board in boards for q in board.quotes)))
 
     def bookmakers(self):
-        books = set()
-        for sport in self.configured:
-            for document in self._documents(sport):
-                if self._event(document)["start"] <= self.clock.now():
-                    continue
-                if "quotes" in document:
-                    books.update(
-                        sportsbook_key(row["book_key"], row["book_title"])
-                        for row in document["quotes"].values()
-                    )
-                else:
-                    books.update(
-                        sportsbook_key(book["key"], book["title"]) for book in document["bookmakers"]
-                    )
-        return books
+        return {
+            book for sport in self.configured for event in self._catalog(sport) for book in event["_books"]
+        }
 
     def prune_started(self):
-        return sum(
-            self.client.zremrangebyscore(self.key("events:" + sport), "-inf", self.clock.now().timestamp())
-            for sport in self.configured
-        )
+        removed = 0
+        now = self.clock.now().timestamp()
+        for sport in self.configured:
+            ids = self.client.zrangebyscore(self.key("events:" + sport), "-inf", now)
+            if ids:
+                with self.client.pipeline() as pipe:
+                    pipe.hdel(self.key("catalog:" + sport), *ids)
+                    pipe.zremrangebyscore(self.key("events:" + sport), "-inf", now)
+                    removed += pipe.execute()[-1]
+        return removed
 
     def heartbeat(self, now, metrics):
         self.client.set(self.key("collector"), encode({"heartbeat": now, "metrics": dict(metrics)}))

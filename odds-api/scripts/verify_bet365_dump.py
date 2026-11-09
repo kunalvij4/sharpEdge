@@ -34,6 +34,15 @@ def verify(report, messages):
                         problems.append("price_mismatch")
                     if "point" in selection and float(source.get("HA")) != selection["point"]:
                         problems.append("line_mismatch")
+                    if group and group.get("offering_context") == "event_player_milestone":
+                        player = fields(selection["player_source"])
+                        column = fields(selection["column_source"])
+                        if (
+                            player.get("ID", "").removeprefix("PC") != source.get("ID")
+                            or player.get("NA") != group["player"]
+                            or column.get("NA") != "1"
+                        ):
+                            problems.append("native_milestone_context_mismatch")
                     if selection.get("comparison") in {"over", "under"}:
                         ou_checked += 1
                         if float(source.get("HA") or source.get("HD")) != selection["threshold"]:

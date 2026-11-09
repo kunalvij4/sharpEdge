@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from odds_api.application.bet_links import bet_link
 from odds_api.application.quote_merge import select_public_quotes
-from odds_api.domain.college import consolidate_rows
+from odds_api.domain.college import COLLEGE_LEAGUES, consolidate_rows
 from odds_api.domain.models import decimal_odds
 from odds_api.domain.sportsbooks import sportsbook_key, sportsbook_title
 
@@ -185,7 +185,18 @@ def project_response(
     for stored_book in document["bookmakers"]:
         if stored_book["key"] == "bet365" and not bet365_enabled:
             continue
+        # College affiliation resolution needs peer context; professional leagues
+        # can discard unrelated books and markets before constructing candidates.
+        early_filter = event["league_key"] not in COLLEGE_LEAGUES
+        if (
+            early_filter
+            and bookmakers
+            and sportsbook_key(stored_book["key"], stored_book["title"]) not in bookmakers
+        ):
+            continue
         for market in stored_book["markets"]:
+            if early_filter and markets and market["key"] not in markets:
+                continue
             for outcome in market["outcomes"]:
                 metadata = outcome["_storage"]
                 times = outcome.get("freshness", metadata)

@@ -33,6 +33,28 @@ def observed_game_lines(messages, stage, league):
     )
 
 
+def fixture_routes(messages, league):
+    """Use published league fixture links; never guess a Bet365 event route."""
+    result = {}
+    for message in messages:
+        if message["stage"] != league + "_lines":
+            continue
+        for row in message["records"]:
+            fields = row["fields"]
+            route = fields.get("PD", "")
+            if (
+                row["type"] == "PA"
+                and fields.get("FD")
+                and fields.get("L3") == league.upper()
+                and "#D19#" in route
+                and route.startswith("#AC#")
+            ):
+                identifier = fields.get("OI") or fields.get("FI")
+                if identifier:
+                    result[identifier] = route
+    return list(result.items())
+
+
 async def capture(args):
     from playwright.async_api import Error, async_playwright
 
@@ -45,6 +67,7 @@ async def capture(args):
     route_manifest = []
     homepage_request = {}
     league_request = {}
+    prop_events_attempted = []
 
     async with async_playwright() as playwright:
         cdp_process = None
@@ -183,8 +206,8 @@ async def capture(args):
             tasks.add(task)
             task.add_done_callback(tasks.discard)
 
-        async def save(label):
-            await asyncio.sleep(args.wait_seconds)
+        async def save(label, *, settled=False):
+            await asyncio.sleep(min(1, args.wait_seconds) if settled else args.wait_seconds)
             text = await page.locator("body").inner_text()
             controls = await page.get_by_text(
                 re.compile(
@@ -517,8 +540,10 @@ async def capture(args):
                         )
                     await save(stage)
                 return
-            for tab in args.tabs:
-                stage = args.league + "_" + re.sub(r"[^a-z0-9]+", "_", tab.lower()).strip("_")
+
+            async def visit_tab(tab, prefix, event_mode=False):
+                nonlocal stage
+                stage = prefix + "_" + re.sub(r"[^a-z0-9]+", "_", tab.lower()).strip("_")
                 try:
                     start_index = len(messages)
                     routes = [
@@ -532,13 +557,13 @@ async def capture(args):
                     candidates = page.get_by_text(tab, exact=True).filter(visible=True)
                     if (
                         getattr(args, "skip_unavailable_tabs", False)
-                        and not routes
+                        and (event_mode or not routes)
                         and not await candidates.count()
                     ):
                         errors.append({"stage": stage, "error_type": "market_tab_unavailable"})
-                        continue
+                        return
                     target = candidates.last if tab in {"A-Z", "Player", "Main Props"} else candidates.first
-                    if routes and not await candidates.count():
+                    if routes and not await candidates.count() and not event_mode:
                         await page.goto(
                             f"https://www.{args.region}.bet365.com/#/"
                             + routes[-1].strip("#").replace("#", "/")
@@ -546,7 +571,16 @@ async def capture(args):
                         )
                     else:
                         await target.click(timeout=8000)
-                    if routes and args.entry not in {"event", "player-props"}:
+                    if event_mode:
+                        deadline = asyncio.get_running_loop().time() + 5
+                        while not any(
+                            any(row["type"] == "PA" and row["fields"].get("OD") for row in message["records"])
+                            for message in messages[start_index:]
+                        ):
+                            if asyncio.get_running_loop().time() >= deadline:
+                                break
+                            await asyncio.sleep(0.1)
+                    if routes and not event_mode and args.entry not in {"event", "player-props"}:
                         if not await market_loaded(routes[-1], start_index, timeout=15):
                             errors.append(
                                 {
@@ -555,10 +589,36 @@ async def capture(args):
                                     "route": routes[-1],
                                 }
                             )
-                    await save(stage)
+                    await save(stage, settled=True)
                 except Error as error:
-                    errors.append({"stage": stage, "error_type": type(error).__name__})
+                    errors.append(
+                        {
+                            "stage": stage,
+                            "error_type": "prop_tab_navigation_failed"
+                            if event_mode
+                            else type(error).__name__,
+                        }
+                    )
                     print(json.dumps(errors[-1]), flush=True)
+
+            for tab in args.tabs:
+                await visit_tab(tab, args.league)
+            if args.event_props:
+                for identifier, route in fixture_routes(messages, args.league)[: args.max_prop_events]:
+                    prefix = args.league + "_event_" + re.sub(r"[^a-zA-Z0-9_-]", "_", identifier)
+                    stage = prefix
+                    prop_events_attempted.append(identifier)
+                    try:
+                        await page.goto(
+                            f"https://www.{args.region}.bet365.com/#/"
+                            + route.strip("#").replace("#", "/")
+                            + "/"
+                        )
+                        await save(stage)
+                        for tab in args.tabs:
+                            await visit_tab(tab, prefix, event_mode=True)
+                    except Error:
+                        errors.append({"stage": stage, "error_type": "prop_event_navigation_failed"})
         finally:
             unexpected_failure = sys.exc_info()[0] is not None
             page.remove_listener("response", received)
@@ -587,6 +647,7 @@ async def capture(args):
                         "browser_mode": "headed_cdp" if args.cdp else "headed_playwright",
                         "region": args.region,
                         "league": args.league,
+                        "prop_events_attempted": prop_events_attempted,
                         "resources": {
                             name: Path("/sys/fs/cgroup", name).read_text().strip()
                             for name in ("memory.peak", "memory.max", "cpu.max", "memory.events")
@@ -613,6 +674,8 @@ def main():
     parser.add_argument("--region", choices=("va", "nj"), default="va")
     parser.add_argument("--league", choices=("nba", "nfl", "mlb", "nhl", "ncaaf", "ncaab"), default="nba")
     parser.add_argument("--lightweight", action="store_true")
+    parser.add_argument("--event-props", action="store_true")
+    parser.add_argument("--max-prop-events", type=int, default=3)
     parser.add_argument("--channel", choices=("chromium", "msedge"), default="chromium")
     parser.add_argument("--reload-league", action="store_true")
     parser.add_argument("--profile-dir", type=Path)
@@ -642,6 +705,8 @@ def main():
     parser.add_argument("--wait-seconds", type=float, default=6)
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/bet365-league-discovery"))
     args = parser.parse_args()
+    if not 1 <= args.max_prop_events <= 20:
+        parser.error("--max-prop-events must be between 1 and 20")
     os.environ.setdefault(
         "PLAYWRIGHT_BROWSERS_PATH", str(Path(__file__).resolve().parents[1] / ".cache/ms-playwright")
     )

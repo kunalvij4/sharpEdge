@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from odds_api.infrastructure.bet365 import MARKETS
 from odds_api.infrastructure.bet365_ingestion import MAX_CAPTURE_BYTES, Capture
 from odds_api.infrastructure.bet365_runtime import command, prune_runs, write_json
 from odds_api.infrastructure.config import Settings
@@ -19,14 +20,8 @@ from scripts.organize_bet365_league_dump import organize_leagues
 from scripts.verify_bet365_dump import verify
 
 log = logging.getLogger(__name__)
-TABS = {
-    "nhl": ["Shots on Goal O/U", "Points O/U", "Assists O/U", "Saves O/U"],
-    "nba": ["Points O/U", "Rebounds O/U", "Assists O/U", "Threes Made O/U"],
-    "nfl": ["Pass Yds O/U", "Passing TDs O/U", "Receiving Yds O/U", "Rush Yds O/U"],
-    "ncaaf": ["Pass Yds O/U", "Passing TDs O/U", "Receiving Yds O/U", "Rush Yds O/U"],
-    "ncaab": ["Points O/U", "Rebounds O/U", "Assists O/U"],
-    "mlb": ["Pitcher Strikeouts O/U", "Pitcher Outs O/U", "Hits O/U"],
-}
+TABS = {title.lower(): list(markets) for title, markets in MARKETS.items()}
+TABS["nhl"] = ["Shots", "Points", "Assists", "Goalie", *TABS["nhl"]]
 
 
 def jobs(settings):
@@ -114,6 +109,9 @@ async def collect_once(settings, name, league, root, client, url, states):
                 "msedge",
                 "--cdp",
                 "--lightweight",
+                "--event-props",
+                "--max-prop-events",
+                str(settings.bet365_max_prop_events),
                 "--wait-seconds",
                 str(settings.bet365_wait),
                 "--output-dir",
@@ -136,6 +134,13 @@ async def collect_once(settings, name, league, root, client, url, states):
             state="success" if result["accepted_selections"] else "no_matching_prices",
             last_delivery=datetime.now(UTC).isoformat(),
             **result,
+        )
+        state["props_state"] = (
+            "stored"
+            if result["counts"].get("props_selections")
+            else "unmatched"
+            if result["counts"].get("offered_prop_selections")
+            else "not_offered"
         )
     except Exception as error:
         state.update(state="failed", error_type=type(error).__name__)
