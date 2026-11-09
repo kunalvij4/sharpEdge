@@ -165,7 +165,7 @@ async def run():
             pass
     async with httpx.AsyncClient(
         headers={"X-Collector-Key": settings.bet365_ingest_key.get_secret_value()},
-        timeout=30,
+        timeout=httpx.Timeout(settings.bet365_delivery_timeout, connect=10),
         follow_redirects=False,
         trust_env=False,
     ) as client:

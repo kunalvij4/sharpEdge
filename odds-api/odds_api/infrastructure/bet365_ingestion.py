@@ -1,6 +1,7 @@
 """Bounded, source-verified HTTP snapshots from the user's local collector."""
 
 from datetime import datetime
+from time import perf_counter
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -43,6 +44,7 @@ class Capture(BaseModel):
 
 
 def ingest_capture(capture: Capture, repository, settings, now: datetime):
+    started = perf_counter()
     if capture.league not in settings.collection_leagues:
         raise ValueError("League is not enabled for collection")
     messages = capture.model_dump(mode="json")["messages"]
@@ -63,6 +65,7 @@ def ingest_capture(capture: Capture, repository, settings, now: datetime):
     if not verification["source_checks_passed"] or report["normalization_issues"]:
         raise ValueError("Bet365 source validation failed")
     report["leagues"] = [league for league in report["leagues"] if league["key"] == capture.league]
+    normalized = perf_counter()
     output, counts = boards(
         report,
         repository,
@@ -74,11 +77,23 @@ def ingest_capture(capture: Capture, repository, settings, now: datetime):
             for league in report["leagues"]
         },
     )
-    for board in output:
-        if board.quotes:
-            repository.save(board)
+    matched = perf_counter()
+    if hasattr(repository, "save_bet365"):
+        repository.save_bet365([board for board in output if board.quotes])
+    else:
+        for board in output:
+            if board.quotes:
+                repository.save(board)
     accepted = sum(len(board.quotes) for board in output)
-    result = {"accepted_selections": accepted, "counts": counts}
+    result = {
+        "accepted_selections": accepted,
+        "counts": counts,
+        "timings": {
+            "normalize_seconds": round(normalized - started, 3),
+            "match_seconds": round(matched - normalized, 3),
+            "write_seconds": round(perf_counter() - matched, 3),
+        },
+    }
     if hasattr(repository, "record_bet365_ingestion"):
         repository.record_bet365_ingestion(
             capture.league,

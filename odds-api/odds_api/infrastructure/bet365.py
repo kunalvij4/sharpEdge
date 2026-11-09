@@ -142,9 +142,31 @@ def boards(report, repository, now, *, max_age=150, support_age=3600, coverage=N
         if key not in leagues:
             continue
         league = leagues[key]
-        events = repository.events(key)
+
+        def player_key(value):
+            return normalized(player_parts(value)[0] if key in COLLEGE_LEAGUES else value)
+
+        requested = {
+            (
+                MARKETS[source_league["title"]][prop["source_label"]],
+                player_key(prop["player"]),
+                Decimal(str(prop["point"])),
+                selection.get("comparison"),
+            )
+            for event in source_league["events"]
+            for prop in event["player_props"]
+            if prop["source_label"] in MARKETS.get(source_league["title"], {})
+            and prop.get("offering_context") in {"league_player_props", "event_player_props"}
+            and prop.get("both_sides_present")
+            for selection in prop["selections"]
+        }
+        if hasattr(repository, "bet365_context"):
+            events, support_rows = repository.bet365_context(key, requested, player_key)
+        else:
+            events = repository.events(key)
+            support_rows = repository.quotes(key) if requested else ()
         supported = {}
-        for row in repository.quotes(key):
+        for row in support_rows:
             q = row["quote"]
             if row["book_key"] == "bet365" or not q.player_id or q.state != Availability.AVAILABLE:
                 continue

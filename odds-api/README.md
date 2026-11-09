@@ -173,6 +173,10 @@ The default local schedule covers NHL, NBA, NFL, NCAAF, and NCAAB, one browser
 at a time, with a five-minute delay between each league's completed captures.
 Delivery happens after each league capture, with three bounded attempts on
 transport/server failures. Source timestamps survive retries. Collection misses
+do not trigger overlapping browser jobs. `BET365_DELIVERY_TIMEOUT` defaults to
+120 seconds to allow large server-side document merges to finish before retrying.
+The server reads one event at a time, decodes only requested supporting props,
+and skips document rewrites on identical replays. Collection misses
 do not delete existing prices. Moneylines, spreads, totals, and comparable full-game
 player O/U props are supported; player props require an existing matching
 canonical player/market/line. Unsupported settlement types are excluded.

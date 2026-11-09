@@ -3,7 +3,7 @@
 import base64
 import json
 import zlib
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timedelta
 from decimal import Decimal
 from itertools import batched
@@ -102,7 +102,7 @@ class RedisRepository:
         grouped = {}
         for quote in board.quotes:
             grouped.setdefault(quote.event_id, []).append(quote)
-        for batch in batched(board.events, 16):
+        for batch in batched(board.events, 1 if board.provider == "bet365" else 16):
             keys = [self.key("event:" + event.id) for event in batch]
             # One bounded transaction avoids three network round trips per event.
             # Watching every key preserves concurrent updates to either provider.
@@ -138,6 +138,7 @@ class RedisRepository:
                             if board.provider == "bet365":
                                 event_data = stored_event(previous_document)
                                 deadlines[-1] = time_value(event_data["start"])
+                            changed = False
                             for quote in grouped.get(event.id, []):
                                 selection_id = quote.selection_id
                                 previous = rows.get(selection_id)
@@ -157,6 +158,10 @@ class RedisRepository:
                                     "book_key": book.key,
                                     "book_title": book.title,
                                 }
+                                changed = True
+                            if board.provider == "bet365" and not changed:
+                                documents.append(False)
+                                continue
                             document = prepare_document(event_data, rows)
                             documents.append(compress_document(encode(document)))
                         pipe.multi()
@@ -274,6 +279,41 @@ class RedisRepository:
             if self._event(doc)["start"] > (now or self.clock.now())
             for _, row in stored_rows(doc)
         ]
+
+    def bet365_context(self, sport, requested, player_key):
+        """Read one event at a time and decode only props the capture can match."""
+        events, support = [], []
+        ids = self.client.zrangebyscore(
+            self.key("events:" + sport), "(" + str(self.clock.now().timestamp()), "+inf"
+        )
+        markets = {token[0] for token in requested}
+        for eid in ids:
+            for document in self._documents(sport, eid):
+                events.append(self._event(document))
+                if not requested:
+                    continue
+                for _, row in stored_rows(document):
+                    quote = row["quote"]
+                    if (
+                        row["book_key"] == "bet365"
+                        or quote["market"] not in markets
+                        or not quote["player_id"]
+                    ):
+                        continue
+                    token = (
+                        quote["market"],
+                        player_key(quote["description"] or ""),
+                        Decimal(str(quote["point"])) if quote["point"] is not None else None,
+                        quote["name"].lower(),
+                    )
+                    if token in requested:
+                        support.append({**row, "quote": decode_quote(quote)})
+        return events, support
+
+    def save_bet365(self, boards):
+        if boards:
+            # Game lines and props share an event document: rewrite it once.
+            self.save(replace(boards[0], quotes=tuple(q for board in boards for q in board.quotes)))
 
     def bookmakers(self):
         books = set()

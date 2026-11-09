@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     bet365_enabled: bool = False
     bet365_ingest_key: SecretStr = SecretStr("")
     bet365_server_url: str = ""
+    bet365_delivery_timeout: float = Field(default=120, ge=10, le=180)
     bet365_region: str = Field(default="nj", pattern="^(nj|va)$")
     bet365_interval: float = Field(default=300, ge=60, le=3600)
     bet365_max_age: float = Field(default=600, ge=60, le=3600)

@@ -201,7 +201,9 @@ def test_spreads_and_totals_join_the_same_canonical_fixture(stream):
     assert {o["name"]: o["point"] for o in markets["totals"]} == {"Over": 219.5, "Under": 219.5}
 
 
-def test_explicit_props_stream_with_canonical_player_identity_and_no_inherited_links(stream, clock):
+def test_explicit_props_stream_with_canonical_player_identity_and_no_inherited_links(
+    stream, clock, monkeypatch
+):
     repo, _, client, seed, _ = stream
     board, payload = seed()
     template = board.quotes[0]
@@ -225,8 +227,14 @@ def test_explicit_props_stream_with_canonical_player_identity_and_no_inherited_l
         FI="source-fixture", NA="Away @ Home", BC=board.events[0].start.strftime("%Y%m%d%H%M%S")
     )
     payload["messages"].append(message)
-    result = post(client, payload)
-    assert result.status_code == 200 and result.json()["accepted_selections"] == 4
+    with monkeypatch.context() as context:
+
+        def full_league_decode_is_unnecessary(*args, **kwargs):
+            raise AssertionError("Ingestion must only decode requested supporting props")
+
+        context.setattr(repo, "quotes", full_league_decode_is_unnecessary)
+        result = post(client, payload)
+        assert result.status_code == 200 and result.json()["accepted_selections"] == 4
     quotes = [
         r["quote"]
         for r in repo.quotes(board.league.key)
@@ -238,6 +246,20 @@ def test_explicit_props_stream_with_canonical_player_identity_and_no_inherited_l
         f"/v1/events/{board.events[0].id}/props?bookmakers=bet365", headers={"X-API-Key": "product-key"}
     ).json()
     assert data["bookmakers"][0]["markets"][0]["key"] == "player_points"
+
+
+def test_replaying_a_capture_does_not_rebuild_or_rewrite_large_event_documents(stream, monkeypatch):
+    repo, _, client, seed, _ = stream
+    board, payload = seed()
+    assert post(client, payload).status_code == 200
+    original = repo.client.get(repo.key("event:" + board.events[0].id))
+
+    def no_rebuild(*args, **kwargs):
+        raise AssertionError("An identical replay must be an inexpensive no-op")
+
+    monkeypatch.setattr("odds_api.infrastructure.redis_repository.prepare_document", no_rebuild)
+    assert post(client, payload).status_code == 200
+    assert repo.client.get(repo.key("event:" + board.events[0].id)) == original
 
 
 @pytest.mark.parametrize("change", ["deleted", "final", "rescheduled"])
