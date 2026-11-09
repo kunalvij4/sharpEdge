@@ -183,3 +183,32 @@ def test_invalid_game_line_pairs_are_rejected(label, points):
         row("PA", OI="fixture", ID="second", HA=points[1], HD="U 219.5", OD="10/11"),
     ]
     assert organize_leagues([message])["normalization_issues"][0]["type"] == "invalid_game_line_pair"
+
+
+@pytest.mark.parametrize("spread_label", ["Línea", "LÃ\u00adnea"])
+def test_observed_spanish_nhl_labels_normalize_without_changing_source_evidence(spread_label):
+    from scripts.capture_bet365_league import observed_game_lines
+
+    message = capture()
+    message["stage"] = "nhl_lines"
+    message["records"] = [
+        row("CL", L3="NHL"),
+        row("MG", SY="cmx"),
+        row("MA", SY="ef"),
+        row("PA", OI="fixture", NA="Away", N2="Home"),
+        row("MA", SY="eb", NA="Ganador"),
+        row("PA", OI="fixture", ID="away", FI="money", OD="7/5"),
+        row("PA", OI="fixture", ID="home", FI="money", OD="4/7"),
+        row("MA", SY="eb", NA=spread_label),
+        row("PA", OI="fixture", ID="away-spread", FI="spread", HA="-1.5", OD="10/11"),
+        row("PA", OI="fixture", ID="home-spread", FI="spread", HA="1.5", OD="10/11"),
+    ]
+    original = deepcopy(message)
+    assert observed_game_lines([message], "nhl_lines", "nhl")
+    assert not observed_game_lines([message], "nhl_lines", "nba")
+    report = organize_leagues([message])
+    league = next(league for league in report["leagues"] if league["title"] == "NHL")
+    assert league["summary"]["moneyline_outcomes"] == 2
+    assert league["summary"]["game_line_outcomes"] == 2
+    assert verify(report, [message])["source_checks_passed"]
+    assert message == original

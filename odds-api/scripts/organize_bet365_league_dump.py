@@ -14,6 +14,15 @@ from urllib.parse import urlsplit
 
 from scripts.organize_bet365_dump import event_data, organize, prices
 
+GAME_LINE_LABELS = {
+    "Money": "Money",
+    "Spread": "Spread",
+    "Total": "Total",
+    "Ganador": "Money",
+    "Línea": "Spread",
+    "LÃ\u00adnea": "Spread",
+}
+
 
 def source_ref(message, message_index, record_index):
     return {
@@ -104,7 +113,7 @@ def organize_leagues(messages, pages=(), region="nj", prop_views=()):
         for (gi, group), columns in blocks(rows):
             for column in columns:
                 market = column["fields"]
-                label = market.get("NA")
+                label = GAME_LINE_LABELS.get(market.get("NA"))
                 if market.get("SY") not in {"eo", "eb"} or label not in {"Spread", "Total"}:
                     continue
                 pairs = defaultdict(list)
@@ -149,7 +158,7 @@ def organize_leagues(messages, pages=(), region="nj", prop_views=()):
             # League Game Lines lists away/home fixtures, then paired price cells.
             for column in columns:
                 market = column["fields"]
-                if market.get("SY") not in {"eo", "eb"} or market.get("NA") != "Money":
+                if market.get("SY") not in {"eo", "eb"} or GAME_LINE_LABELS.get(market.get("NA")) != "Money":
                     continue
                 pairs = defaultdict(list)
                 for ri, cell in column["cells"]:

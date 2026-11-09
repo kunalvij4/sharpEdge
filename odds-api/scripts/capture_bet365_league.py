@@ -13,6 +13,24 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 from odds_api.infrastructure.bet365_runtime import safe_text, safe_url
 from scripts.bet365_browser_runtime import close_native_browser, launch_native_browser
 from scripts.capture_bet365_markets import records
+from scripts.organize_bet365_league_dump import GAME_LINE_LABELS
+
+
+def observed_game_lines(messages, stage, league):
+    """Localized UI labels are not evidence that a valid source board is missing."""
+    return any(
+        message["stage"] == stage
+        and "/contentdata/" in message["source_url"]
+        and any(row["fields"].get("L3") == league.upper() for row in message["records"])
+        and any(
+            row["type"] == "MA"
+            and row["fields"].get("SY") in {"eo", "eb"}
+            and row["fields"].get("NA") in GAME_LINE_LABELS
+            for row in message["records"]
+        )
+        and any(row["type"] == "PA" and row["fields"].get("OD") for row in message["records"])
+        for message in messages
+    )
 
 
 async def capture(args):
@@ -329,7 +347,9 @@ async def capture(args):
                 stage = args.league + "_lines_reload"
                 await page.reload(wait_until="domcontentloaded")
                 await save(stage)
-            if not await page.get_by_text("Game Lines", exact=True).count():
+            if not await page.get_by_text("Game Lines", exact=True).count() and not observed_game_lines(
+                messages, stage, args.league
+            ):
                 errors.append({"stage": stage, "error_type": "league_content_unavailable"})
                 if args.fetch_coupon:
                     stage = args.league + "_coupon_request"
