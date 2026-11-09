@@ -340,3 +340,42 @@ def test_real_redis_client_uses_tls_verification_and_bounded_timeouts():
     finally:
         client.close()
         cache._get_client.cache_clear()
+
+
+def test_each_slate_publishes_exact_selection_links_to_s3_and_redis(runtime):
+    app, api, s3, snapshots, _ = runtime
+    original_odds, original_props = api.get_odds.side_effect, api.get_event_odds.side_effect
+
+    def attach(document):
+        for book in document["bookmakers"]:
+            for market in book["markets"]:
+                for outcome in market["outcomes"]:
+                    provider = "propline" if book["title"] == "DraftKings" else "unabated"
+                    outcome["bet_link"] = {"provider": provider, "url": (
+                        f"https://book.example/{document['id']}/{book['title']}/{market['key']}/"
+                        f"{outcome['name']}/{outcome.get('point', '_')}"
+                    )}
+                    if provider == "propline":
+                        outcome["bet_link"]["app_url"] = f"https://app.example/{document['id']}/{book['title']}"
+        return document
+
+    api.get_odds.side_effect = lambda *args, **kwargs: [attach(d) for d in original_odds(*args, **kwargs)]
+    api.get_event_odds.side_effect = lambda *args, **kwargs: attach(original_props(*args, **kwargs))
+    summary = app.lambda_handler({}, None)
+    assert summary["status"] == "complete"
+    assert summary["bet_links"]["provided"] + summary["bet_links"]["event"] == summary["ev_bets_found"]
+    assert summary["bet_links"]["event"] > 0
+    objects = s3_results(s3)
+    for league in LEAGUES:
+        for category in ("moneyline", "spreads", "totals", "props"):
+            rows = snapshots["EV", f"{league}/{category}"]["opportunities"]
+            assert rows == objects[f"ev/{league}/{category}_ev.json"]
+            for row in rows:
+                assert row["bet_link"]["status"] == ("event_support" if row["book"] == "DraftKings" else "provided")
+                if row["book"] == "DraftKings":
+                    assert row["bet_link"]["app_url"] == f"https://app.example/{row['event_id']}/DraftKings"
+                path = row["bet_link"]["url"]
+                assert f"/{row['event_id']}/" in path
+                assert f"/{row['bet']}/" in path
+                if row["line"] is not None:
+                    assert path.endswith(f"/{row['line']}")

@@ -95,6 +95,8 @@ def calculate(league, games):
                 "line1": first["line"], "line2": second["line"],
                 "player": first["player"], "line": identity[-1],
                 "arb_margin": round((1 - inverse_total) * 100, 3),
+                **({"bet_link1": dict(first["bet_link"])} if first.get("bet_link") else {}),
+                **({"bet_link2": dict(second["bet_link"])} if second.get("bet_link") else {}),
             })
 
         try:
@@ -112,7 +114,8 @@ def calculate(league, games):
                     continue
                 opposite_quote = by_side[opposite][0]
                 others = [
-                    {"book": other["book"], "odds": other["odds"]}
+                    {"book": other["book"], "odds": other["odds"],
+                     **({"bet_link": dict(other["bet_link"])} if other.get("bet_link") else {})}
                     for other in by_side[side] if other["book"] != quote["book"]
                 ]
                 opposite_books = [
@@ -127,6 +130,8 @@ def calculate(league, games):
                     "kelly": kelly(probability, quote["odds"]), "fair_prob": probability,
                     "other_books": others,
                 }
+                if quote.get("bet_link"):
+                    result["bet_link"] = dict(quote["bet_link"])
                 if category == "moneyline" and side == "home":
                     same_book_away = next((other for other in by_side[opposite] if other["book"] == quote["book"]), opposite_quote)
                     result.update(away_odds=same_book_away["odds"], away_other_books=opposite_books)

@@ -19,6 +19,10 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
     Description: Reserve one execution only when the regional Lambda quota allows it.
+  UnabatedPartnerCode:
+    Type: String
+    Default: sharpedge
+    Description: Public campaign code added to returned Unabated Gambly odds links.
 
 Conditions:
   ReserveConcurrency: !Equals [!Ref EnableReservedConcurrency, 'true']
@@ -42,6 +46,7 @@ Resources:
           ODDS_API_BASE_URL: !Ref OddsApiBaseUrl
           RESULTS_BUCKET: !Ref OddsCacheBucket
           REDIS_URL: !Ref RedisUrl
+          UNABATED_PARTNER_CODE: !Ref UnabatedPartnerCode
       Policies:
         - S3WritePolicy:
             BucketName: !Ref OddsCacheBucket

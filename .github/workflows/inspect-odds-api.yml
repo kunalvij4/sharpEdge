@@ -83,6 +83,42 @@ jobs:
               "configured_leagues": list(settings.leagues),
               "collection_leagues": list(getattr(settings, "collection_leagues", settings.leagues)),
           }
+          # Inspect only stored odds and our local API; never call a provider.
+          import urllib.request
+          from urllib.parse import parse_qs, urlsplit
+          from odds_api.application.prepared_odds import stored_rows
+          from odds_api.infrastructure.redis_repository import decode_document
+
+          link_counts = Counter()
+          headers = {"X-API-Key": settings.api_keys.get_secret_value().split(",")[0].strip()}
+          if settings.storage_backend == "redis":
+              for league in settings.collection_leagues:
+                  ids = repository.client.zrangebyscore(
+                      repository.key("events:" + league), datetime.now(UTC).timestamp() + 1200, "+inf", start=0, num=2,
+                  )
+                  for eid in ids:
+                      value = repository.client.get(repository.key("event:" + eid))
+                      if not value:
+                          continue
+                      for _, row in stored_rows(decode_document(value)):
+                          quote = row["quote"]
+                          link_counts["stored_web_links"] += bool(quote.get("deep_link"))
+                          link_counts["stored_app_links"] += bool(quote.get("app_link"))
+                      path = f"http://localhost:8000/v1/events/{eid}/odds?markets=all_props&includeBetLinks=true"
+                      with urllib.request.urlopen(urllib.request.Request(path, headers=headers), timeout=60) as response:
+                          payload = json.load(response)
+                      for book in payload["bookmakers"]:
+                          for market in book["markets"]:
+                              for outcome in market["outcomes"]:
+                                  link = outcome.get("bet_link") or {}
+                                  link_counts["public_web_links"] += bool(link.get("url"))
+                                  link_counts["public_app_links"] += bool(link.get("app_url"))
+                                  if link.get("app_url", "").startswith("courtside:"):
+                                      link_counts["courtside_native_links"] += 1
+                                  url = urlsplit(link.get("url") or "")
+                                  if url.hostname in {"gambly.com", "www.gambly.com"}:
+                                      link_counts["attributed_unabated_links"] += parse_qs(url.query).get("utm_campaign") == ["sharpedge"]
+          result["returned_links"] = dict(link_counts)
           if settings.storage_backend == "redis":
               result["collector"] = json.loads(repository.client.get(repository.key("collector")) or "{}")
               result["failures"] = repository.client.hgetall(repository.key("failures"))

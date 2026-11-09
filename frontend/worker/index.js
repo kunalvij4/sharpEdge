@@ -100,6 +100,27 @@ function flatten(value, inherited = {}, result = []) {
   }
   return result;
 }
+function selectionURL(link) {
+  if (!link || (link.status && !['provided', 'full_support', 'event_support'].includes(link.status))) return null;
+  if (typeof link.url !== 'string' || link.url.length > 4096) return null;
+  try {
+    const url = new URL(link.url);
+    if (['gambly.com', 'www.gambly.com'].includes(url.hostname) && url.pathname.startsWith('/deeplink/odds/')) {
+      url.searchParams.set('utm_campaign', 'sharpedge');
+    }
+    return url.protocol === 'https:' && !url.username && !url.password ? url.href : null;
+  } catch { return null; }
+}
+function applicationURL(link, book) {
+  if (!link || (link.status && !['provided', 'full_support', 'event_support'].includes(link.status))) return null;
+  if (typeof link.app_url !== 'string' || link.app_url.length > 4096) return null;
+  try {
+    const url = new URL(link.app_url);
+    if (url.username || url.password) return null;
+    const native = {Courtside:'courtside:', ProphetX:'prophetx:'};
+    return url.protocol === 'https:' || url.protocol === native[book] ? url.href : null;
+  } catch { return null; }
+}
 function normalizeEv(row, id) {
   const offered = decimalOdds(row.odds ?? row.best_odds ?? row.odds_decimal ?? row.decimal_odds ?? row.price);
   const p = probability(row.fair_probability ?? row.model_probability ?? row.fair_prob ?? row.win_probability ?? row.true_probability)
@@ -112,17 +133,17 @@ function normalizeEv(row, id) {
   const label = marketLabel(row.market);
   const bet = /\b(?:Over|Under)\s+\d/i.test(display) && label && !display.toLowerCase().includes(label.toLowerCase()) ? `${display} ${label}` : display;
   const book = canonicalBook(row.book ?? row.sportsbook ?? row.app ?? 'Unknown');
-  const quotes = [{ book, odds: offered }, ...(Array.isArray(row.other_books) ? row.other_books.map(q => ({ book: canonicalBook(q.book), odds: decimalOdds(q.odds) })) : [])]
+  const quotes = [{ book, odds: offered, betUrl: selectionURL(row.bet_link), appUrl: applicationURL(row.bet_link, book) }, ...(Array.isArray(row.other_books) ? row.other_books.map(q => ({ book: canonicalBook(q.book), odds: decimalOdds(q.odds), betUrl: selectionURL(q.bet_link), appUrl: applicationURL(q.bet_link, canonicalBook(q.book)) })) : [])]
     .filter(q => q.book && q.odds).sort((a, b) => b.odds - a.odds)
-    .map(q => ({ book: q.book, odds: american(q.odds) }));
-  return { id, sourceId: row.id ?? null, ev, kellyFull: fullKelly, modelP: p, name: clean(row.player ?? display.split(/\s+(?:Over|Under)\s/i)[0] ?? ''), bet, game: clean(row.match ?? row.event ?? ''), league: clean(row.league ?? row.sport ?? ''), book, odds: offered ? american(offered) : '—', fair: p ? american(1 / p) : '—', quotes, time: clean(row.time ?? ''), live: Boolean(row.live ?? row.is_live ?? row.in_play), market: clean(row.market ?? ''), updatedAt: row.updated_at ?? null };
+    .map(q => ({ book: q.book, odds: american(q.odds), betUrl: q.betUrl, appUrl: q.appUrl }));
+  return { id, sourceId: row.id ?? null, ev, kellyFull: fullKelly, modelP: p, name: clean(row.player ?? display.split(/\s+(?:Over|Under)\s/i)[0] ?? ''), bet, game: clean(row.match ?? row.event ?? ''), league: clean(row.league ?? row.sport ?? ''), book, odds: offered ? american(offered) : '—', fair: p ? american(1 / p) : '—', quotes, betUrl: selectionURL(row.bet_link), appUrl: applicationURL(row.bet_link, book), time: clean(row.time ?? ''), live: Boolean(row.live ?? row.is_live ?? row.in_play), market: clean(row.market ?? ''), updatedAt: row.updated_at ?? null };
 }
 function normalizeArb(row, id) {
   const d1 = decimalOdds(row.odds1), d2 = decimalOdds(row.odds2);
   if (!d1 || !d2) return null;
   const market = clean(row.market ?? '');
   const prop = row.line == null ? marketLabel(market) : `${clean(row.line)} ${marketLabel(market)}`;
-  return { id, sourceId: row.id ?? null, name: clean(row.player ?? row.side1 ?? 'Market'), prop, market, game: clean(row.match ?? ''), league: clean(row.league ?? row.sport ?? ''), left: canonicalBook(row.book1 ?? ''), right: canonicalBook(row.book2 ?? ''), side1: clean(row.side1 ?? 'Side A'), side2: clean(row.side2 ?? 'Side B'), line1:row.line1, line2:row.line2, a: american(d1), b: american(d2), ev: number(row.arb_margin) ?? (1 / (1 / d1 + 1 / d2) - 1) * 100, kellyFull: suppliedKelly(row), time: clean(row.time ?? ''), updatedAt: row.updated_at ?? null };
+  return { id, sourceId: row.id ?? null, name: clean(row.player ?? row.side1 ?? 'Market'), prop, market, game: clean(row.match ?? ''), league: clean(row.league ?? row.sport ?? ''), left: canonicalBook(row.book1 ?? ''), right: canonicalBook(row.book2 ?? ''), side1: clean(row.side1 ?? 'Side A'), side2: clean(row.side2 ?? 'Side B'), line1:row.line1, line2:row.line2, betUrl1:selectionURL(row.bet_link1), betUrl2:selectionURL(row.bet_link2), appUrl1:applicationURL(row.bet_link1,canonicalBook(row.book1)), appUrl2:applicationURL(row.bet_link2,canonicalBook(row.book2)), a: american(d1), b: american(d2), ev: number(row.arb_margin) ?? (1 / (1 / d1 + 1 / d2) - 1) * 100, kellyFull: suppliedKelly(row), time: clean(row.time ?? ''), updatedAt: row.updated_at ?? null };
 }
 function permitted(book, state) {
   if (!state) return true;

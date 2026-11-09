@@ -5,6 +5,7 @@ import logging
 import os
 
 from odds_pipeline.collect import fetch_and_attach_player_props
+from odds_pipeline.bet_links import BetLinkEnricher
 from odds_pipeline.engine import calculate
 from odds_pipeline.leagues import ACTIVE_LEAGUE_SPORT_KEYS
 from odds_pipeline.results import ResultsPublisher
@@ -21,10 +22,12 @@ def utc_now():
 def lambda_handler(event, context):
     api = OddsAPI(os.environ["ODDS_API_KEY"], os.environ["ODDS_API_BASE_URL"])
     publisher = ResultsPublisher()
+    links = BetLinkEnricher.from_env()
     summary = {
         "status": "complete", "events_fetched": 0,
         "ev_bets_found": 0, "arbitrage_found": 0, "failed_leagues": [],
         "props_failed_events": {}, "publish_failures": [],
+        "bet_links": {"provided": 0, "event": 0, "unavailable": 0},
     }
 
     for league, sport_key in ACTIVE_LEAGUE_SPORT_KEYS.items():
@@ -43,6 +46,9 @@ def lambda_handler(event, context):
             if failures:
                 summary["props_failed_events"][league] = failures
             ev, arbitrage = calculate(league, games)
+            for key, value in links.enrich(ev).items():
+                summary["bet_links"][key] += value
+            links.attach_related(ev, arbitrage)
             summary["ev_bets_found"] += sum(map(len, ev.values()))
             summary["arbitrage_found"] += sum(map(len, arbitrage.values()))
             summary["publish_failures"].extend(publisher.publish(

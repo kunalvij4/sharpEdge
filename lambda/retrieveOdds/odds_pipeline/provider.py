@@ -39,7 +39,7 @@ class OddsAPI:
     def _get(self, path, markets=None, bookmakers=None, odds_format="decimal", fresh_only=False):
         params = {}
         if markets is not None:
-            params.update({"markets": markets, "oddsFormat": odds_format})
+            params.update({"markets": markets, "oddsFormat": odds_format, "includeBetLinks": "true"})
         if bookmakers:
             params["bookmakers"] = bookmakers
         if fresh_only:
@@ -81,6 +81,8 @@ class OddsAPI:
                             outcome = outcomes.get(game[f"{side}_team"])
                             if outcome is not None:
                                 prices[f"{side}_odds"] = outcome.get("price")
+                                if outcome.get("bet_link"):
+                                    prices[f"{side}_bet_link"] = outcome["bet_link"]
                                 if kind == "spreads":
                                     prices[f"{side}_point"] = outcome.get("point")
                     else:
@@ -88,6 +90,8 @@ class OddsAPI:
                             outcome = outcomes.get(side.title())
                             if outcome is not None:
                                 prices[f"{side}_odds"] = outcome.get("price")
+                                if outcome.get("bet_link"):
+                                    prices[f"{side}_bet_link"] = outcome["bet_link"]
                                 prices[f"{side}_point"] = outcome.get("point")
                     if prices:
                         game["markets"][category]["odds_data"][book] = prices

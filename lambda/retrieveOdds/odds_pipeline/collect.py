@@ -67,6 +67,8 @@ def fetch_and_attach_player_props(api, sport_key, games, failed_events=None):
                         continue
                     books = structured.setdefault(stat, {}).setdefault(player, {}).setdefault(format(line, ".15g"), {})
                     books.setdefault(book_name, {})[f"{side}_odds"] = price
+                    if outcome.get("bet_link"):
+                        books[book_name][f"{side}_bet_link"] = outcome["bet_link"]
         return structured
 
     with ThreadPoolExecutor(max_workers=4) as executor:

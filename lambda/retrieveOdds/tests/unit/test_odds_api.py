@@ -27,7 +27,7 @@ def test_get_odds_calls_in_house_endpoint_with_header_auth(api_class, sport, pub
 
     api.session.get.assert_called_once_with(
         f"https://odds.example.com/v1/sports/{public_key}/odds",
-        params={"markets": "h2h,spreads", "oddsFormat": "decimal"},
+        params={"markets": "h2h,spreads", "oddsFormat": "decimal", "includeBetLinks": "true"},
         headers={"X-API-Key": "product-key"},
         timeout=20,
     )
@@ -46,7 +46,7 @@ def test_get_event_odds_uses_in_house_event_route(api_class):
 
     api.session.get.assert_called_once_with(
         "http://localhost:8000/v1/events/event-123/odds",
-        params={"markets": "all_props", "oddsFormat": "decimal", "freshOnly": "true"},
+        params={"markets": "all_props", "oddsFormat": "decimal", "freshOnly": "true", "includeBetLinks": "true"},
         headers={"X-API-Key": "product-key"},
         timeout=20,
     )

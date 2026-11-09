@@ -48,6 +48,46 @@ with `stored: false`.
 Every EV and arbitrage record contains **`event_id`**. EV `id` remains a stable
 identifier for the event, market, player, line, bookmaker, and selection.
 
+### Sportsbook links from the odds pull
+
+The Lambda requests `includeBetLinks=true` from the in-house API. Deploy the
+odds service with this option before deploying the Lambda. Ordinary odds API
+responses keep their existing shape unless this option is supplied.
+
+Links come entirely from the original odds pulls. The Propline bulk collector
+already requests `includeLinks=true` and `includeBookIds=true`; no additional
+requests, `/deeplink` calls, per-bet lookups, or link cache are used.
+Propline's optional `app_link` is preserved separately as `bet_link.app_url`
+through storage, API responses, the Lambda, and website feed. Mobile devices
+prefer that returned app link; desktop uses the web event link. App-only
+Courtside links retain their `courtside://` scheme. The odds service's SQL
+backend requires `alembic upgrade head` (migration `0003`); existing Redis
+documents without an app-link field remain readable.
+
+Each eligible EV record carries `bet_link.url` and its provider. Unabated's
+returned selection links use `status: provided`; generic Gambly odds links get
+`utm_campaign=sharpedge`, preserving the path, exact points, and other query
+parameters. Reprocessing replaces attribution instead of duplicating it.
+Propline's returned bookmaker `link` is retained with `status: event_support`:
+it opens the correct event page, which may require selecting the wager there.
+An optional returned selection-level `bet_link` takes precedence when present.
+
+The website's Place bet button opens the supplied link directly, including
+Propline event links. It falls back to that sportsbook's public website when
+no valid URL is supplied. Comparison quotes and arbitrage legs retain their
+own book/side links. Links never inherit from another selection or alternate.
+Opening a link does not place a wager or transfer the suggested stake.
+
+The Lambda requires only its existing in-house odds API key, with no upstream
+Unabated key or tier setting. The public campaign code defaults to `sharpedge`
+in SAM, the odds collector, and GitHub deployment; the optional repository
+variable `UNABATED_PARTNER_CODE` overrides it. The local odds API `.env` and
+example environments use the supplied code too. The run summary's `bet_links`
+counts provided selection links, event links, and records without a link.
+
+Contracts: [Unabated links](https://docs.unabated.com/guides/deep-links),
+[Propline bulk odds](https://prop-line.com/docs).
+
 The existing fair-odds models and book weights are retained. Two-way markets are
 compared only when their event, player, and complementary lines match. Arbitrage
 is calculated directly from raw prices, independently of positive-EV eligibility.

@@ -65,7 +65,35 @@ def test_sam_provisions_no_dynamodb_resources_permissions_or_settings():
     assert function["Policies"] == [{"S3WritePolicy": {"BucketName": "OddsCacheBucket"}}]
     assert set(function["Environment"]["Variables"]) == {
         "ODDS_API_KEY", "ODDS_API_BASE_URL", "RESULTS_BUCKET", "REDIS_URL",
+        "UNABATED_PARTNER_CODE",
     }
     assert "ExistingClosingOddsTableName" not in template["Parameters"]
     local_settings = json.loads((pipeline / "env.example.json").read_text())
     assert "CLOSING_ODDS_TABLE" not in local_settings["RetrieveOddsFunction"]
+
+
+@pytest.mark.parametrize("summary, error", [
+    ({"status": "complete", "events_fetched": 2, "ev_bets_found": 1, "bet_links": {"event": 1}}, False),
+    ({"status": "complete", "events_fetched": 2, "ev_bets_found": 0}, False),
+    ({"status": "partial", "events_fetched": 2}, True),
+    ({"status": "complete", "events_fetched": 0}, True),
+    ({"status": "complete", "events_fetched": 2, "ev_bets_found": 1, "bet_links": {}}, True),
+])
+def test_deployment_verification_checks_real_pipeline_summary(monkeypatch, summary, error):
+    import io
+
+    module = importlib.import_module("scripts.verify_deployment")
+    cloudformation, runtime = Mock(), Mock()
+    cloudformation.describe_stack_resource.return_value = {"StackResourceDetail": {"PhysicalResourceId": "actual-function"}}
+    runtime.invoke.return_value = {"Payload": io.BytesIO(json.dumps(summary).encode())}
+    client = Mock(side_effect=lambda service, **kwargs: {"cloudformation": cloudformation, "lambda": runtime}[service])
+    monkeypatch.setattr(module.boto3, "client", client)
+    monkeypatch.setattr("sys.argv", ["verify_deployment.py", "--stack-name", STACK])
+    if error:
+        with pytest.raises(RuntimeError):
+            module.main()
+    else:
+        module.main()
+    runtime.invoke.assert_called_once_with(
+        FunctionName="actual-function", InvocationType="RequestResponse", Payload=b'{"deployment_verification":true}',
+    )
