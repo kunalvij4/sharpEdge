@@ -12,11 +12,13 @@ const scope = {uid:'alice', project:env.FIREBASE_PROJECT_ID, database:'(default)
 const root = `projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents`;
 const future = Math.floor(Date.now() / 1000) + 30 * 86400;
 const expiry = new Date(future * 1000).toISOString();
-let documents, calls, subscriptions, sessions, revision, failStripe, conflicts;
+let documents, calls, subscriptions, sessions, customers, schedules, invoices, revision, failStripe, conflicts, failUpgrade, upgradeCharges;
+const priceAmounts = {price_gold:1499, price_plus:1999, price_fantasy:2999, price_fantasy_plus:4999, price_platinum:9999};
 function reset() {
   documents = new Map([['users/alice', {name:`${root}/users/alice`, updateTime:'version-0', fields:{plan:{stringValue:'guest'}, expiresAt:{nullValue:null},
     bankroll:{integerValue:'2500'}, betHistory:{arrayValue:{values:[{stringValue:'journal-to-preserve'}]}}, signupDate:{timestampValue:'2026-01-01T00:00:00Z'}}}]]);
   calls = []; subscriptions = new Map(); sessions = new Map(); revision = 0; failStripe = false; conflicts = 0;
+  customers = new Map(); schedules = new Map(); invoices = []; failUpgrade = false; upgradeCharges = 0;
 }
 const getField = (path, name) => documents.get(path)?.fields[name];
 const basicFirebase = firebaseMock({token, plan:'guest'});
@@ -60,15 +62,67 @@ globalThis.fetch = async (input, options = {}) => {
     const path = url.pathname.slice(4), params = new URLSearchParams(options.body);
     calls.push({path, params, headers:options.headers});
     if (failStripe) return Response.json({error:{message:'sensitive upstream detail', key:env.STRIPE_SECRET_KEY}}, {status:500});
-    if (path === 'customers') return Response.json({id:'cus_alice'});
-    if (path === 'subscriptions') return Response.json({data:[...subscriptions.values()], has_more:false});
+    if (path === 'customers/search') return Response.json({data:[...customers.values()], has_more:false});
+    if (path === 'customers') {
+      const customer = {id:'cus_alice',metadata:scope,email:'alice@example.test',name:'Alice',address:{line1:'123 Test St',city:'Test City'}, invoice_settings:{default_payment_method:{card:{brand:'visa',last4:'4242',exp_month:12,exp_year:2030}}}};
+      customers.set(customer.id,customer);
+      return Response.json(customer);
+    }
+    if (path.startsWith('customers/')) {
+      const customer = customers.get(path.slice('customers/'.length));
+      return customer ? Response.json(customer) : Response.json({}, {status:404});
+    }
+    if (path.startsWith('prices/')) {
+      const id = path.slice('prices/'.length);
+      return Response.json({id, active:true, currency:'usd',unit_amount:priceAmounts[id],recurring:{interval:'month',interval_count:1},product:'prod_'+id});
+    }
+    if (path === 'invoices/create_preview') return Response.json({amount_due:priceAmounts[params.get('subscription_details[items][0][price]')],currency:'usd'});
+    if (path === 'invoices') return Response.json({data:invoices.filter(invoice=>invoice.customer===url.searchParams.get('customer')),has_more:false});
+    if (/^invoices\/[^/]+\/void$/.test(path)) {
+      const subscription=[...subscriptions.values()].find(row=>row.latest_invoice?.id===path.split('/')[1]);
+      subscription.pending_update=null; subscription.latest_invoice.status='void';
+      return Response.json(subscription.latest_invoice);
+    }
+    if (path === 'subscriptions') return Response.json({data:[...subscriptions.values()].filter(subscription=>subscription.customer===url.searchParams.get('customer')), has_more:false});
     if (path.startsWith('subscriptions/')) {
       const sub = subscriptions.get(path.slice('subscriptions/'.length));
+      if (sub && options.method === 'POST') {
+        if (params.has('cancel_at_period_end')) sub.cancel_at_period_end = params.get('cancel_at_period_end') === 'true';
+        if (params.has('items[0][price]')) {
+          upgradeCharges++;
+          const price = params.get('items[0][price]');
+          if (failUpgrade) {
+            sub.pending_update={subscription_items:[{price}]};
+            sub.latest_invoice={id:'in_upgrade',status:'open',hosted_invoice_url:'https://invoice.stripe.com/i/upgrade'};
+          } else {
+            sub.items.data[0].price={id:price};
+            sub.items.data[0].current_period_end=future+86400;
+            sub.latest_invoice={id:'in_upgrade',status:'paid'};
+            sub.pending_update=null;
+          }
+        }
+      }
       return sub ? Response.json(sub) : Response.json({}, {status:404});
+    }
+    if (path === 'subscription_schedules') {
+      const subscription=subscriptions.get(params.get('from_subscription'));
+      const schedule={id:'sub_sched_'+schedules.size,customer:subscription.customer,subscription:subscription.id,status:'active',current_phase:{start_date:subscription.items.data[0].current_period_start,end_date:subscription.items.data[0].current_period_end},phases:[]};
+      schedules.set(schedule.id,schedule); subscription.schedule=schedule;
+      return Response.json(schedule);
+    }
+    if (path.startsWith('subscription_schedules/')) {
+      const [,id,action]=path.split('/'),schedule=schedules.get(id);
+      if (!schedule) return Response.json({}, {status:404});
+      if (action==='release') { schedule.status='released';subscriptions.get(schedule.subscription).schedule=null; }
+      else if (options.method==='POST') {
+        schedule.phases=[0,1].map(index=>({start_date:Number(params.get(`phases[${index}][start_date]`)),end_date:Number(params.get(`phases[${index}][end_date]`))||undefined,items:[{price:params.get(`phases[${index}][items][0][price]`),quantity:1}]}));
+      }
+      return Response.json(schedule);
     }
     if (path === 'checkout/sessions') return Response.json({id:'cs_test_created', url:'https://checkout.stripe.com/c/pay/cs_test_created'});
     if (path.startsWith('checkout/sessions/')) return Response.json(sessions.get(path.slice('checkout/sessions/'.length)));
     if (path === 'billing_portal/sessions') return Response.json({url:'https://billing.stripe.com/p/session/test'});
+    if (path === 'billing_portal/configurations') return Response.json({id:'bpc_explicit',active:true});
   }
   throw new Error('Unexpected network request: '+url.origin+url.pathname);
 };
@@ -76,7 +130,7 @@ const request = (path, options = {}, config = env) => worker.fetch(new Request(o
 const signed = (path, options = {}, config) => request(path, {...options, headers:{authorization:`Bearer ${token}`, origin, ...options.headers}}, config);
 const choose = (plan = 'gold', config) => signed('/api/billing/checkout', {method:'POST', body:JSON.stringify({plan, price:'price_attacker', uid:'bob', success_url:'https://evil.test'})}, config);
 const currentSubscription = (patch = {}) => ({id:'sub_alice', customer:'cus_alice', metadata:scope, status:'active',
-  latest_invoice:{id:'in_paid', status:'paid'}, items:{data:[{id:'si_alice', price:{id:'price_gold'}, current_period_end:future}]}, ...patch});
+  cancel_at_period_end:false,collection_method:'charge_automatically',latest_invoice:{id:'in_paid', status:'paid'}, items:{data:[{id:'si_alice', quantity:1,price:{id:'price_gold'}, current_period_start:future-30*86400,current_period_end:future}]}, ...patch});
 function webhook(type, object, {timestamp = Math.floor(Date.now() / 1000), secret = env.STRIPE_WEBHOOK_SECRET, alterBody = false, rotate = false} = {}) {
   let body = JSON.stringify({id:'evt_test', type, data:{object}});
   const digest = createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex');
@@ -131,12 +185,19 @@ subscriptions.set('sub_alice', currentSubscription());
 calls = [];
 assert.equal((await choose('plus')).status, 200);
 assert.equal(calls.some(call => call.path === 'checkout/sessions'), false, 'Existing subscriptions do not create duplicate subscriptions');
-const portal = calls.find(call => call.path === 'billing_portal/sessions');
-assert.equal(portal.params.get('flow_data[subscription_update_confirm][items][0][price]'), 'price_plus');
-assert.equal(portal.params.get('flow_data[subscription_update_confirm][subscription]'), 'sub_alice');
-assert.equal((await choose('fantasyplus')).status, 200);
-assert.equal(calls.at(-1).params.get('flow_data[subscription_update_confirm][items][0][price]'), 'price_fantasy_plus');
+assert.ok(calls.some(call=>call.path==='invoices/create_preview'), 'Existing subscribers get an exact upgrade quote');
+const fantasyQuote = await (await choose('fantasyplus')).json();
+assert.equal(fantasyQuote.change.plan, 'fantasyplus');
+assert.equal(fantasyQuote.change.amountDue,4999);
 assert.equal((await signed('/api/billing/portal', {method:'POST'})).status, 200);
+const portal = calls.find(call=>call.path==='billing_portal/sessions');
+assert.equal(portal.params.get('configuration'),'bpc_explicit');
+const configuration = calls.find(call=>call.path==='billing_portal/configurations');
+assert.equal(configuration.params.get('features[subscription_cancel][mode]'),'at_period_end');
+assert.equal(configuration.params.get('features[invoice_history][enabled]'),'true');
+assert.equal(configuration.params.get('features[customer_update][enabled]'),'true');
+assert.equal(configuration.params.get('features[payment_method_update][enabled]'),'true');
+assert.match(configuration.params.get('business_profile[headline]'),/non-refundable/);
 
 reset();
 await prepareCustomer();
@@ -201,4 +262,145 @@ assert.equal((await webhook('checkout.session.completed', {mode:'subscription', 
 assert.equal(getField('users/alice', 'plan').stringValue, 'fantasyplus', 'A paid Fantasy+ price activates the matching Firestore plan');
 assert.equal(getField('users/alice', 'expiresAt').timestampValue, expiry);
 assert.equal(getField('billingAccounts/alice', 'subscriptionId').stringValue, 'sub_alice');
+
+const confirm = quote => signed('/api/billing/change',{method:'POST',body:JSON.stringify({quote})});
+const accountBilling = () => signed('/api/billing/account');
+const cancel = value => signed('/api/billing/cancel',{method:'POST',body:JSON.stringify({cancel:value})});
+for (const path of ['/api/billing/account','/api/billing/change','/api/billing/cancel','/api/billing/schedule']) {
+  const method=path.endsWith('/account')?'GET':path.endsWith('/schedule')?'DELETE':'POST';
+  assert.equal((await request(path,{method,headers:{origin},...(method==='POST'?{body:'{}'}:{})})).status,401);
+  if (method!=='GET') assert.equal((await signed(path,{method,headers:{origin:'https://evil.test'},...(method==='POST'?{body:'{}'}:{})})).status,403);
+}
+
+reset();await prepareCustomer();subscriptions.set('sub_alice',currentSubscription());
+const upgradedQuote=await (await choose('platinum')).json();
+assert.equal(upgradedQuote.change.kind,'upgrade');
+assert.equal(upgradedQuote.change.amountDue,9999,'Upgrade quotes charge a full new month');
+assert.equal(upgradeCharges,0,'Choosing a plan only previews a charge');
+const upgraded=await confirm(upgradedQuote.change.quote);
+assert.equal(upgraded.status,200);
+assert.equal((await upgraded.json()).status,'updated');
+const upgradeCall=calls.find(call=>call.path==='subscriptions/sub_alice' && call.params.has('items[0][price]'));
+assert.equal(upgradeCall.params.get('billing_cycle_anchor[type]'),'now','An upgrade starts a new billing month');
+assert.equal(upgradeCall.params.get('proration_behavior'),'none','Upgrades do not credit unused old-plan time');
+assert.equal(upgradeCall.params.get('payment_behavior'),'pending_if_incomplete','Unpaid upgrades cannot change the plan');
+assert.equal(getField('users/alice','plan').stringValue,'platinum');
+assert.equal(getField('users/alice','expiresAt').timestampValue,new Date((future+86400)*1000).toISOString());
+await confirm(upgradedQuote.change.quote);
+assert.equal(upgradeCharges,1,'A retried confirmation never charges twice');
+
+reset();await prepareCustomer();subscriptions.set('sub_alice',currentSubscription());
+const failedQuote=(await (await choose('plus')).json()).change.quote;
+failUpgrade=true;
+const declined=await (await confirm(failedQuote)).json();
+assert.equal(declined.status,'payment_required');
+assert.equal(declined.paymentUrl,'https://invoice.stripe.com/i/upgrade');
+assert.equal(getField('users/alice','plan').stringValue,'gold');
+assert.equal(getField('users/alice','expiresAt').timestampValue,expiry,'Card failures preserve the old paid term');
+await confirm(failedQuote);
+assert.equal(upgradeCharges,1,'Repeated confirmation of a pending invoice reuses the invoice');
+assert.equal((await cancel(true)).status,200,'An unpaid upgrade can be abandoned when cancelling renewal');
+assert.equal(subscriptions.get('sub_alice').pending_update,null);
+assert.equal(subscriptions.get('sub_alice').cancel_at_period_end,true);
+assert.equal(getField('users/alice','plan').stringValue,'gold');
+assert.equal(getField('users/alice','expiresAt').timestampValue,expiry);
+
+reset();await prepareCustomer();
+const premium=currentSubscription();premium.items.data[0].price={id:'price_platinum'};
+subscriptions.set('sub_alice',premium);
+const downgrade=await (await choose('gold')).json();
+assert.equal(downgrade.change.kind,'downgrade');
+assert.equal(downgrade.change.amountDue,0);
+assert.equal((await (await confirm(downgrade.change.quote)).json()).status,'scheduled');
+assert.equal(subscriptions.get('sub_alice').items.data[0].price.id,'price_platinum','A downgrade preserves the current Stripe plan');
+assert.equal(getField('users/alice','plan').stringValue,'platinum','The user keeps paid premium access until renewal');
+assert.equal(getField('billingAccounts/alice','scheduledPlan').stringValue,'gold');
+assert.equal(getField('billingAccounts/alice','scheduledAt').stringValue,expiry);
+const scheduleCall=calls.find(call=>call.path.startsWith('subscription_schedules/') && call.params.has('phases[1][items][0][price]'));
+assert.equal(scheduleCall.params.get('phases[0][items][0][price]'),'price_platinum');
+assert.equal(scheduleCall.params.get('phases[1][items][0][price]'),'price_gold');
+assert.equal(Number(scheduleCall.params.get('phases[1][start_date]')),future);
+assert.equal(scheduleCall.params.get('phases[1][proration_behavior]'),'none');
+assert.equal(upgradeCharges,0);
+let details=await (await accountBilling()).json();
+assert.equal(details.subscription.scheduledChange.plan,'gold');
+assert.equal(details.subscription.monthlyAmount,9999);
+assert.equal((await signed('/api/billing/schedule',{method:'DELETE'})).status,200);
+assert.equal(getField('billingAccounts/alice','scheduledPlan').stringValue,'');
+assert.equal(subscriptions.get('sub_alice').schedule,null);
+const newDowngrade=(await (await choose('plus')).json()).change.quote;
+await confirm(newDowngrade);
+assert.equal((await cancel(true)).status,200);
+assert.equal(subscriptions.get('sub_alice').schedule,null,'Cancellation removes any upcoming downgrade');
+assert.equal(subscriptions.get('sub_alice').cancel_at_period_end,true);
+assert.equal(getField('users/alice','plan').stringValue,'platinum');
+assert.equal(getField('users/alice','expiresAt').timestampValue,expiry);
+assert.equal(getField('billingAccounts/alice','cancelAtPeriodEnd').stringValue,'true');
+assert.equal(calls.some(call=>/refund/.test(call.path)),false,'No operation creates a refund');
+assert.equal((await cancel(false)).status,200);
+assert.equal(subscriptions.get('sub_alice').cancel_at_period_end,false);
+
+reset();await prepareCustomer();
+const renewing=currentSubscription();renewing.items.data[0].price={id:'price_platinum'};
+subscriptions.set('sub_alice',renewing);
+await confirm((await (await choose('gold')).json()).change.quote);
+renewing.items.data[0].price={id:'price_gold'};
+renewing.items.data[0].current_period_start=future;
+renewing.items.data[0].current_period_end=future+30*86400;
+renewing.latest_invoice={id:'in_renewal',status:'open'};
+renewing.status='past_due';
+documents.get('users/alice').fields.expiresAt={timestampValue:'2020-01-01T00:00:00Z'};
+await webhook('invoice.payment_failed',{subscription:'sub_alice'});
+assert.equal(getField('users/alice','plan').stringValue,'guest','An unpaid downgrade renewal cannot extend access');
+renewing.latest_invoice.status='paid';renewing.status='active';
+await webhook('invoice.paid',{subscription:'sub_alice'});
+assert.equal(getField('users/alice','plan').stringValue,'gold','The lower plan activates after its renewal is paid');
+assert.equal(getField('users/alice','expiresAt').timestampValue,new Date((future+30*86400)*1000).toISOString());
+assert.equal(getField('billingAccounts/alice','scheduledPlan').stringValue,'');
+
+reset();await prepareCustomer();subscriptions.set('sub_alice',currentSubscription());
+const secureQuote=(await (await choose('plus')).json()).change.quote;
+const [quoteBody,quoteSignature]=secureQuote.split('.');
+assert.equal((await confirm(quoteBody+'.'+quoteSignature.slice(0,-2)+'zz')).status,409);
+const makeQuote=payload=>{const body=Buffer.from(JSON.stringify(payload)).toString('base64url');return body+'.'+createHmac('sha256',env.STRIPE_WEBHOOK_SECRET).update(body).digest('base64url')};
+const payload=JSON.parse(Buffer.from(quoteBody,'base64url'));
+assert.equal((await confirm(makeQuote({...payload,uid:'bob'}))).status,409);
+assert.equal((await confirm(makeQuote({...payload,expiresAt:1}))).status,409);
+assert.equal(upgradeCharges,0);
+subscriptions.get('sub_alice').items.data[0].current_period_end++;
+assert.equal((await confirm(secureQuote)).status,409,'A changed billing period requires a fresh quote');
+
+reset();await prepareCustomer();subscriptions.set('sub_alice',currentSubscription());
+documents.delete('billingAccounts/alice');
+invoices=[{id:'in_alice',number:'INV-1',customer:'cus_alice',created:future-86400,total:1499,amount_remaining:0,currency:'usd',status:'paid',hosted_invoice_url:'https://invoice.stripe.com/i/one',invoice_pdf:'https://pay.stripe.com/invoice/one/pdf'},
+  {id:'in_bob',customer:'cus_bob',total:9999,status:'paid'}];
+details=await (await accountBilling()).json();
+assert.equal(details.account.plan,'gold','Stripe recovers a paid membership when its Firestore billing link is missing');
+assert.equal(getField('billingAccounts/alice','customerId').stringValue,'cus_alice');
+assert.equal(details.customer.paymentMethod.last4,'4242');
+assert.equal(details.customer.address.line1,'123 Test St');
+assert.deepEqual(details.invoices.map(invoice=>invoice.id),['in_alice'],'Billing never returns another customer invoice');
+assert.equal((await signed('/api/billing/portal',{method:'POST'})).status,200);
+documents.delete('billingAccounts/alice');
+assert.equal((await webhook('customer.subscription.updated',{id:'sub_alice'})).status,200,'Signed webhooks can recover missing billing links too');
+assert.equal(getField('users/alice','plan').stringValue,'gold');
+
+documents.get('billingAccounts/alice').fields.subscriptionId={stringValue:'sub_missing'};
+assert.equal((await (await accountBilling()).json()).account.plan,'gold','A stale stored subscription ID is reconciled to the real active subscription');
+assert.equal(getField('billingAccounts/alice','subscriptionId').stringValue,'sub_alice');
+documents.get('billingAccounts/alice').fields.customerId={stringValue:'cus_missing'};
+assert.equal((await (await accountBilling()).json()).account.plan,'gold','A missing Stripe customer ID is recovered without creating another customer');
+assert.equal(getField('billingAccounts/alice','customerId').stringValue,'cus_alice');
+assert.equal(calls.filter(call=>call.path==='customers').length,0,'Recovery reuses the existing customer');
+
+reset();
+documents.get('users/alice').fields.plan={stringValue:'gold'};
+documents.get('users/alice').fields.expiresAt={timestampValue:expiry};
+details=await (await accountBilling()).json();
+assert.equal(details.account.plan,'gold','An administratively managed plan is still recognized without a Stripe customer');
+assert.equal(details.customer,null);
+customers.set('cus_other',{id:'cus_other',email:'alice@example.test',metadata:{...scope,uid:'bob'}});
+details=await (await accountBilling()).json();
+assert.equal(details.customer,null,'Matching email cannot claim another user billing account');
+assert.equal(documents.has('billingAccounts/alice'),false);
 console.log('Billing tests passed: authenticated plan checkout, server prices, customer reuse, portal changes, signed webhooks, renewals, cancellation, retries and verified returns.');

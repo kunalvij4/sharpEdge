@@ -1,8 +1,8 @@
 # Stripe Checkout setup
 
-The pricing buttons now send signed-in users to Stripe's hosted Checkout for monthly subscriptions. Gold, Gold Plus, Fantasy Package, Fantasy+ and Platinum are supported. Existing Stripe subscribers selecting another plan enter a billing portal confirmation flow instead of starting another subscription. My account → Manage billing opens the portal for invoices, payment methods and cancellation.
+The pricing buttons send new subscribers to Stripe Checkout. Gold, Gold Plus, Fantasy Package, Fantasy+ and Platinum are supported. Existing subscribers review a plan-change quote in the app. Upgrades charge the full new monthly price immediately and start a new billing month after payment succeeds, with no credit for unused previous-plan time. Downgrades preserve the current plan until renewal, when the lower plan and price begin. My account → Manage billing shows membership status, scheduled changes, billing details and invoices, and supports cancellation at the end of the paid term.
 
-Stripe keys, prices and a Firebase billing service account must be configured before payments can open. No real Stripe account, products, payments or webhook endpoint were created by these source changes.
+Stripe keys, prices and a Firebase billing service account must be configured before payments can open. Tests use disposable Stripe test-mode objects and an in-memory Firestore; they do not modify real user records.
 
 ## 1. Create test products and monthly prices
 
@@ -45,7 +45,11 @@ The implementation uses the [Firestore REST API with service account authorizati
 
 ## 3. Configure the billing portal
 
-In Stripe's [customer portal settings](https://dashboard.stripe.com/test/settings/billing/portal), enable payment method updates, invoices, cancellation and subscription updates. Add all five products and prices as allowed plan changes, including Fantasy+. Configure plan changes to collect any prorated amount immediately. Choose and publish your cancellation and refund terms, and use matching portal settings. Plan changes require this portal configuration; they cannot be enabled just by setting API keys.
+The application creates and selects its own Stripe portal configuration for billing details, payment methods, invoice history and cancellation. Cancellation uses `at_period_end` with no proration. The portal displays the no-refund policy and links to the application's billing policy. The API key must allow portal configuration creation as well as portal sessions.
+
+Plan changes are handled by the application's confirmation flow rather than the Dashboard's default portal configuration. This supports prices across separate Stripe products: an upgrade uses `billing_cycle_anchor[type]=now`, `proration_behavior=none` and `payment_behavior=pending_if_incomplete`, while a downgrade creates a two-phase subscription schedule. Only successful upgrade payment grants the higher plan. A failed or authentication-required payment leaves the existing paid access in place and exposes the invoice in Manage billing. Cancelling renewal also voids an unpaid upgrade and removes any scheduled downgrade.
+
+The app recovers missing customer links by matching Stripe's server-controlled Firebase UID, project and database metadata. Matching email alone never grants billing access. Firestore continues to store the currently paid plan and expiration on `users/<UID>`; `billingAccounts/<UID>` also records cancellation and scheduled plan-change details. Opening Manage billing reconciles Stripe and Firestore and refreshes a stale browser membership.
 
 ## 4. Forward webhooks while developing
 
@@ -60,7 +64,7 @@ stripe.cmd login
 Then forward events from one terminal. On Windows, use `stripe.cmd` in place of `stripe` in this command:
 
 ```sh
-stripe listen --events checkout.session.completed,checkout.session.async_payment_succeeded,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed --forward-to localhost:4173/api/billing/webhook
+stripe listen --events checkout.session.completed,checkout.session.async_payment_succeeded,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,customer.subscription.pending_update_applied,customer.subscription.pending_update_expired,subscription_schedule.updated,subscription_schedule.released,subscription_schedule.completed,invoice.paid,invoice.payment_failed --forward-to localhost:4173/api/billing/webhook
 ```
 
 Copy the printed `whsec_...` into `STRIPE_WEBHOOK_SECRET`. Restart the frontend after editing `.env`:
@@ -80,10 +84,12 @@ In production, create a Stripe webhook destination at `https://YOUR_APP_HOST/api
 2. Complete test Checkout using Stripe's [test card details](https://docs.stripe.com/testing), such as `4242 4242 4242 4242`, a future expiry and any valid test CVC. Never use real card details in test mode.
 3. Confirm the return message says the membership is active, the matching tools open, and `users/<UID>` has the correct plan and a Firestore Timestamp expiration. `billingAccounts/<UID>` should contain Stripe customer and subscription IDs.
 4. Cancel Checkout before paying and confirm the user remains Guest. Check that a failed or missing configuration shows an error and lets the user retry.
-5. Open My account → Manage billing. Test cancellation at period end, changes between the configured plans and payment method updates. Period-end cancellation retains paid access until expiration; immediate Stripe cancellation revokes access. Failed renewals do not extend the last verified paid period.
+5. Open My account → Manage billing. Confirm billing details, invoices and the no-refund policy are visible. An upgrade must show and charge the full new monthly price, reset the renewal date and grant higher access only after payment succeeds. A downgrade must show its future start date and preserve current access until renewal. Cancelling renewal must keep access until the current expiration and remove scheduled downgrades. Failed renewals do not extend the last verified paid period.
 6. Check webhook deliveries in Stripe and test renewals with a Stripe test clock. Merely opening Checkout or changing a return URL never grants a membership.
 
-Run `npm test` from `frontend` for automated checks. They mock Stripe/Firebase network calls, verify real HMAC/RSA signatures with test keys, and cover authentication, server-selected prices, redirects, portal changes, duplicate webhook delivery, renewal/cancellation handling and account ownership. They do not replace a real Stripe test-mode purchase, hosted webhook delivery or a Google OAuth test.
+Run `npm test` from `frontend` for automated checks. They mock Stripe/Firebase network calls, verify real HMAC/RSA signatures with test keys, and cover authentication, signed plan-change quotes, full-price upgrades, scheduled downgrades, cancellation, billing-link recovery, invoices and account ownership.
+
+For an explicit Stripe integration check, run `npm run test:stripe`. It requires test keys and the configured test prices, creates a disposable test customer and subscription, verifies upgrades, schedules, cancellation and portal features against Stripe, and cleans up those objects. Firestore is simulated in memory, and live keys/prices are refused. It does not validate a real Google OAuth exchange or hosted webhook delivery.
 
 When restoring Firestore into another database, reconcile billing records and update the subscriptions' server-controlled `database` metadata to the new ID before relying on webhooks. Metadata from a different Firebase project/database is intentionally ignored.
 

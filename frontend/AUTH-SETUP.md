@@ -49,7 +49,7 @@ After Google authenticates the user, the app creates `users/<Firebase UID>` in a
 
 Once the profile is saved and the verified session is established, new users are sent to `/#pricing`. A Google account created during an earlier failed attempt is still treated as new if its Firestore profile is missing. Returning members keep their plan, expiration, signup date and journal, and can return to the tool they requested. Returning Guests normally go to pricing; a direct journal return path remains available.
 
-Choosing a monthly plan opens an authenticated Stripe Checkout session. Signed-out users return to their chosen plan after Google sign-in. Only a server-verified paid subscription activates `plan` and `expiresAt`; selecting a plan cannot grant access. Existing subscribers use Stripe's billing portal to change plans. Follow [STRIPE-SETUP.md](STRIPE-SETUP.md) to configure prices, secrets, portal settings and webhooks.
+Choosing a monthly plan opens an authenticated Stripe Checkout session for new subscribers or a plan-change confirmation for existing subscribers. Signed-out users return to their chosen plan after Google sign-in. Only a server-verified paid subscription activates `plan` and `expiresAt`; selecting a plan cannot grant access. Upgrades charge the full new monthly price and start a new term after successful payment. Downgrades start at renewal. Follow [STRIPE-SETUP.md](STRIPE-SETUP.md) to configure prices, secrets and webhooks.
 
 **Publish the updated `firestore.rules` before testing this flow.** The earlier profile rules do not allow these new fields and will reject profile creation. Restart the development server after source changes because it builds its assets at startup. If Google succeeds but profile storage fails, the app reports that step specifically, and the browser console records the stage and Firebase error code without logging tokens or profile data. `permission-denied` usually requires checking the deployed rules and selected database; a session-stage error instead concerns the application's server request.
 
@@ -96,7 +96,7 @@ Firestore backups cover Firestore records. Firebase Authentication users and OAu
 
 ## Memberships
 
-Google sign-in creates a Guest profile automatically. Guests have a journal and account settings; market tools keep their membership restrictions. The pricing selector opens Stripe Checkout, and the server verifies payment before activating membership. My account → Manage billing opens Stripe's portal.
+Google sign-in creates a Guest profile automatically. Guests have a journal and account settings; market tools keep their membership restrictions. The pricing selector opens Checkout or a plan-change confirmation, and the server verifies payment before activating membership. My account → Manage billing shows billing details, invoices, scheduled changes and end-of-term cancellation. Payment details can be updated securely in Stripe's portal. This page also reconciles missing customer links and stale account membership against Stripe's verified records.
 
 After the first Google sign-in, locate `users/<UID>` in Firestore and update its membership fields through the console or a trusted billing backend:
 

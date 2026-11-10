@@ -36,7 +36,10 @@ async function requestMembership(p) {
   billingBusy = true; billingError = ''; billingNotice = '';
   render();
   try {
-    await window.sharpAuth.selectPlan(p);
+    const result = await window.sharpAuth.selectPlan(p);
+    if (currentAccount?.uid !== uid) return;
+    if (result?.change) showPlanChange(result.change);
+    else if (result?.status === 'unchanged') notify('Your current membership is already on this plan.');
   } catch (error) {
     if (currentAccount?.uid !== uid) return;
     billingError = error.message || 'The payment page could not be opened. Please try again.';
@@ -44,12 +47,12 @@ async function requestMembership(p) {
   } finally { if (currentAccount?.uid === uid) { billingBusy = false; render(); } }
 }
 async function manageBilling(button) {
-  if (billingBusy) return;
-  billingBusy = true;
-  if (button) button.disabled = true;
-  try { await window.sharpAuth.manageBilling(); }
-  catch (error) { notify(error.message || 'Billing is temporarily unavailable. Please try again.'); }
-  finally { billingBusy = false; if (button) button.disabled = false; }
+  if (!currentAccount) {
+    location.href = '/signin?next=' + encodeURIComponent('/#account-billing');
+    return;
+  }
+  $('#modal').close();
+  go('account-billing');
 }
 async function handleBillingReturn() {
   if (billingReturnHandled || !currentAccount || authLoading) return;
@@ -126,6 +129,7 @@ function authChanged(state) {
   if (!currentAccount || currentAccount.uid !== previousUID) {
     tracked = []; bankroll = 1000;
     billingBusy = false; billingError = ''; billingNotice = '';
+    window.resetBillingView?.();
   }
   if (!currentAccount || currentAccount.uid !== previousUID || plan !== previousPlan) {
     legs = []; payoutOverride = null; legProbOverrides = {};

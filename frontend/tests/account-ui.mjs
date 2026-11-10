@@ -18,12 +18,16 @@ const context = vm.createContext({
   console, Intl, URLSearchParams, Map, Set
 });
 vm.runInContext(fs.readFileSync(new URL('../web/account-ui.js',import.meta.url),'utf8'), context);
+vm.runInContext(fs.readFileSync(new URL('../web/billing-ui.js',import.meta.url),'utf8'), context);
 vm.runInContext(fs.readFileSync(new URL('../web/app.js',import.meta.url),'utf8'), context);
 assert.equal(vm.runInContext("can('ev')",context),false);
 assert.match(element('#app').innerHTML, /Connecting to your account/);
+vm.runInContext("location.hash='#account-billing';render()",context);
+assert.match(element('#app').innerHTML,/Connecting to your account/);
 context.state = {ready:true,available:true,account:null,saved:{},error:''};
 vm.runInContext('authChanged(state)',context);
 assert.match(element('#app').innerHTML, /Continue with Google/);
+vm.runInContext("location.hash='';",context);
 context.state = {ready:true, account:{uid:'alice',email:'alice@example.test',displayName:'Alice',plan:'gold',membershipExpiresAt:new Date(Date.now()+86400000).toISOString()},saved:{bankroll:2500,tracked:JSON.stringify([{uid:1,name:'<img onerror="alert(1)">',bet:'Over 5.5',book:'FanDuel',odds:'+110',stake:10,close:null}])}};
 vm.runInContext('authChanged(state)', context);
 assert.equal(vm.runInContext('bankroll',context),2500);

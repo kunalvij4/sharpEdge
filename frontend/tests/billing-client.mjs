@@ -43,6 +43,23 @@ vm.runInContext("location.search='?next='+encodeURIComponent('/?plan=fantasyplus
 assert.equal(vm.runInContext("safeNext({plan:'guest'},true)", context), '/?plan=fantasyplus#pricing', 'Fantasy+ survives first-time Google sign-in');
 vm.runInContext("location.search='?next='+encodeURIComponent('https://evil.test/?plan=plus#pricing')", context);
 assert.equal(vm.runInContext("safeNext({plan:'guest'},true)", context), '/#pricing');
+vm.runInContext("location.search='?next='+encodeURIComponent('/#account-billing')",context);
+assert.equal(vm.runInContext("safeNext({plan:'guest'},true)",context),'/#account-billing','Billing remains reachable when the browser has a stale Guest plan');
+
+response=()=>Response.json({change:{quote:'signed',plan:'plus',kind:'upgrade'},account:{uid:'alice',plan:'gold'}});
+const review=await vm.runInContext("authState.selectPlan('plus')",context);
+assert.equal(review.change.quote,'signed');
+assert.equal(vm.runInContext('authState.account.plan',context),'gold','Plan review refreshes a stale browser membership');
+response=()=>Response.json({account:{uid:'alice',plan:'gold'},invoices:[{id:'in_alice'}]});
+assert.equal((await vm.runInContext('authState.getBilling()',context)).invoices[0].id,'in_alice');
+response=()=>Response.json({status:'scheduled',account:{uid:'alice',plan:'gold'}});
+await vm.runInContext("authState.changePlan('signed')",context);
+assert.equal(requests.at(-1).path,'/api/billing/change');
+assert.deepEqual(JSON.parse(requests.at(-1).options.body),{quote:'signed'});
+await vm.runInContext('authState.setCancellation(true)',context);
+assert.deepEqual(JSON.parse(requests.at(-1).options.body),{cancel:true});
+await vm.runInContext('authState.removeScheduledChange()',context);
+assert.equal(requests.at(-1).options.method,'DELETE');
 
 response = () => Response.json({status:'paid', account:{uid:'alice', plan:'gold', membershipExpiresAt:'2099-01-01T00:00:00Z'}});
 await vm.runInContext("authState.confirmCheckout('cs_test_paid')", context);

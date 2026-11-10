@@ -51,6 +51,7 @@ async function sessionFor(user) {
 }
 function safeNext(account = authState.account, isNewProfile = false) {
   const next = new URLSearchParams(location.search).get('next');
+  if (next === '/#account-billing') return next;
   if (/^\/\?plan=(gold|plus|fantasy|fantasyplus|platinum)#pricing$/.test(next || '')) return next;
   if (isNewProfile || (account?.plan === 'guest' && next !== '/analysis')) return '/#pricing';
   return ['/ev', '/arbitrage', '/parlay', '/analysis', '/#pricing'].includes(next) ? next : '/ev';
@@ -201,20 +202,43 @@ async function billingRequest(path, options = {}) {
   return result;
 }
 async function openBilling(path, body) {
-  const user = authState.user, current = revision;
+  const user = authState.user;
   if (!user || !authState.account || !authState.ready || authState.signingOut) throw new Error('Sign in before choosing a plan.');
   const result = await billingRequest(path, {method:'POST', headers:{'content-type':'application/json'}, ...(body ? {body:JSON.stringify(body)} : {})});
-  if (current !== revision || authState.signingOut || authState.account?.uid !== user.uid) throw new Error('Your account changed. Choose your plan again.');
+  if (authState.signingOut || auth.currentUser?.uid !== user.uid || authState.account?.uid !== user.uid) throw new Error('Your account changed. Choose your plan again.');
+  if (result.account) {
+    if (result.account.uid !== user.uid) throw new Error('Your billing account could not be verified. Please try again.');
+    authState.account = result.account;
+    update();
+  }
+  if (result.change || result.status === 'unchanged') return result;
   let destination;
   try { destination = new URL(result.url); } catch { throw new Error('The payment page could not be opened. Please try again.'); }
   if (destination.protocol !== 'https:' || !['checkout.stripe.com', 'billing.stripe.com'].includes(destination.hostname)) throw new Error('The payment page could not be opened. Please try again.');
   location.assign(destination.href);
+  return result;
 }
 authState.selectPlan = async plan => {
   if (!['gold', 'plus', 'fantasy', 'fantasyplus', 'platinum'].includes(plan)) throw new Error('Choose an available plan.');
   return openBilling('/api/billing/checkout', {plan});
 };
 authState.manageBilling = () => openBilling('/api/billing/portal');
+async function accountBillingRequest(path, options = {}) {
+  const user = authState.user;
+  if (!user || !authState.account || !authState.ready || authState.signingOut) throw new Error('Sign in to manage your billing.');
+  const result = await billingRequest(path, options);
+  if (authState.signingOut || auth.currentUser?.uid !== user.uid || authState.account?.uid !== user.uid) throw new Error('Your account changed. Open billing again.');
+  if (result.account) {
+    if (result.account.uid !== user.uid) throw new Error('Your billing account could not be verified. Please try again.');
+    authState.account = result.account;
+    update();
+  }
+  return result;
+}
+authState.getBilling = () => accountBillingRequest('/api/billing/account');
+authState.changePlan = quote => accountBillingRequest('/api/billing/change', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({quote})});
+authState.setCancellation = cancel => accountBillingRequest('/api/billing/cancel', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({cancel})});
+authState.removeScheduledChange = () => accountBillingRequest('/api/billing/schedule', {method:'DELETE'});
 authState.confirmCheckout = async sessionID => {
   const user = authState.user, current = revision;
   if (!user || !authState.ready || authState.signingOut) throw new Error('Sign in to check your payment.');

@@ -5,6 +5,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "node scripts/dev.mjs",
-    "test": "npm run build && node tests/auth.mjs && node tests/auth-client.mjs && node tests/signup.mjs && node tests/account-ui.mjs && node tests/billing.mjs && node tests/billing-client.mjs && node tests/parlay-feed.mjs && node tests/seasonal-leagues.mjs && node tests/sportsbook-view.mjs && node tests/bet-links.mjs"
+    "test": "npm run build && node tests/auth.mjs && node tests/auth-client.mjs && node tests/signup.mjs && node tests/account-ui.mjs && node tests/billing.mjs && node tests/billing-client.mjs && node tests/billing-ui.mjs && node tests/parlay-feed.mjs && node tests/seasonal-leagues.mjs && node tests/sportsbook-view.mjs && node tests/bet-links.mjs",
+    "test:stripe": "node --env-file=.env tests/stripe-sandbox.mjs"
   }
 }

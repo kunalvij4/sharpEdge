@@ -1,6 +1,6 @@
 // Generated asset map is inserted by scripts/build.mjs. Credentials exist only in env.
 import { AuthError, firebaseConfig, sessionCookie, sameOrigin, authenticate, membershipFor, publicAccount, authorizeFeed, PAID_PLANS } from './auth.js';
-import { createCheckout, createPortal, checkoutStatus, stripeWebhook } from './billing.js';
+import { createCheckout, createPortal, checkoutStatus, stripeWebhook, billingAccount, changePlan, setCancellation, removeScheduledChange } from './billing.js';
 const assets = __ASSETS__;
 const inactiveLeagues = new Set(['MLB']);
 const headers = { 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' };
@@ -223,6 +223,21 @@ export default {
       if (path === 'api/billing/webhook') {
         if (request.method !== 'POST') return json({error:'Method not allowed'}, 405, {allow:'POST'});
         return json(await stripeWebhook(request, env));
+      }
+      if (path === 'api/billing/account') {
+        if (request.method !== 'GET') return json({error:'Method not allowed'}, 405, {allow:'GET'});
+        return json(await billingAccount(env, await authenticate(request, env)));
+      }
+      if (['api/billing/change', 'api/billing/cancel', 'api/billing/schedule'].includes(path)) {
+        const method = path.endsWith('/schedule') ? 'DELETE' : 'POST';
+        if (request.method !== method) return json({error:'Method not allowed'}, 405, {allow:method});
+        sameOrigin(request);
+        const user = await authenticate(request, env);
+        if (path.endsWith('/schedule')) return json(await removeScheduledChange(env, user));
+        let body;
+        try { body = await request.json(); }
+        catch { throw new AuthError(400, 'The billing request could not be read. Please try again.', 'BILLING_INVALID_REQUEST'); }
+        return json(path.endsWith('/change') ? await changePlan(env, user, body?.quote) : await setCancellation(env, user, body?.cancel));
       }
       if (path === 'api/billing/checkout' || path === 'api/billing/portal') {
         const methods = path.endsWith('/checkout') ? ['GET', 'POST'] : ['POST'];
